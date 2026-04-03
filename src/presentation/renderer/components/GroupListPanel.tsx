@@ -1,22 +1,30 @@
 import type { GroupDetail } from '@shared/types/preload'
 
 interface GroupListPanelProps {
+  title: string
+  description: string
   groups: GroupDetail[]
   selectedGroupId?: string
+  hoveredGroupId?: string
   onSelectGroup?: (groupId: string) => void
+  onHoverGroup?: (groupId?: string) => void
 }
 
 export function GroupListPanel({
+  title,
+  description,
   groups,
   selectedGroupId,
-  onSelectGroup
+  hoveredGroupId,
+  onSelectGroup,
+  onHoverGroup
 }: GroupListPanelProps) {
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900">그룹 패널</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         <p className="text-xs text-slate-500">
-          지도에 표시된 대표 그룹 요약입니다.
+          {description}
         </p>
       </div>
 
@@ -39,9 +47,13 @@ export function GroupListPanel({
                 key={group.id}
                 className={`rounded-xl border p-4 shadow-sm transition ${
                   selectedGroupId === group.id
-                    ? 'border-blue-300 bg-blue-50 shadow-blue-100'
+                    ? 'border-blue-400 bg-blue-50 shadow-blue-100 ring-1 ring-blue-200'
+                    : hoveredGroupId === group.id
+                      ? 'border-sky-300 bg-sky-50 shadow-sky-100'
                     : 'border-slate-200 bg-white'
                 }`}
+                onMouseEnter={() => onHoverGroup?.(group.id)}
+                onMouseLeave={() => onHoverGroup?.(undefined)}
               >
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-3">
@@ -60,6 +72,10 @@ export function GroupListPanel({
                     <p>
                       <span className="font-medium text-slate-700">대표 사진</span>{' '}
                       {group.representativePhotoId ? '선택됨' : '없음'}
+                    </p>
+                    <p>
+                      <span className="font-medium text-slate-700">위치</span>{' '}
+                      {group.representativeGps ? '지도 가능' : 'GPS 없음'}
                     </p>
                   </div>
                   <div className="pt-1">

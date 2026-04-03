@@ -107,7 +107,9 @@ function toLibraryIndexView(index: LibraryIndex): LibraryIndexView {
         title: group.title,
         photoCount: group.photoIds.length,
         latitude: group.representativeGps!.latitude,
-        longitude: group.representativeGps!.longitude
+        longitude: group.representativeGps!.longitude,
+        representativeThumbnailRelativePath:
+          group.representativeThumbnailRelativePath
       }))
   }
 }

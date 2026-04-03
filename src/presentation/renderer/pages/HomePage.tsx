@@ -3,6 +3,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { GroupDetailPanel } from '@presentation/renderer/components/GroupDetailPanel'
 import { GroupListPanel } from '@presentation/renderer/components/GroupListPanel'
 import { GroupsMap } from '@presentation/renderer/components/GroupsMap'
+import {
+  buildGroupExplorerViewModel,
+  type GroupSortOption
+} from '@presentation/renderer/view-models/groupExplorer'
 import type {
   AppInfo,
   LibraryIndexView,
@@ -56,10 +60,17 @@ export function HomePage() {
   const [summary, setSummary] = useState<ScanPhotoLibrarySummary | null>(null)
   const [libraryIndex, setLibraryIndex] = useState<LibraryIndexView | null>(null)
   const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>()
+  const [hoveredGroupId, setHoveredGroupId] = useState<string | undefined>()
+  const [groupSortOption, setGroupSortOption] = useState<GroupSortOption>('recent')
 
   const selectedGroup = useMemo(
     () => libraryIndex?.groups.find((group) => group.id === selectedGroupId),
     [libraryIndex?.groups, selectedGroupId]
+  )
+  const explorerViewModel = useMemo(
+    () =>
+      buildGroupExplorerViewModel(libraryIndex?.groups ?? [], groupSortOption),
+    [groupSortOption, libraryIndex?.groups]
   )
 
   useEffect(() => {
@@ -78,6 +89,7 @@ export function HomePage() {
     if (!outputRoot) {
       setLibraryIndex(null)
       setSelectedGroupId(undefined)
+      setHoveredGroupId(undefined)
       return
     }
 
@@ -89,10 +101,12 @@ export function HomePage() {
       .then((loadedIndex) => {
         setLibraryIndex(loadedIndex)
         setSelectedGroupId(loadedIndex?.groups[0]?.id)
+        setHoveredGroupId(undefined)
       })
       .catch((error) => {
         setLibraryIndex(null)
         setSelectedGroupId(undefined)
+        setHoveredGroupId(undefined)
         setErrorMessage(
           error instanceof Error
             ? error.message
@@ -147,6 +161,7 @@ export function HomePage() {
       setSummary(nextSummary)
       setLibraryIndex(nextLibraryIndex)
       setSelectedGroupId(nextLibraryIndex?.groups[0]?.id)
+      setHoveredGroupId(undefined)
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
@@ -181,6 +196,7 @@ export function HomePage() {
 
       setLibraryIndex(updatedIndex)
       setSelectedGroupId(selectedGroup.id)
+      setHoveredGroupId(undefined)
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : '그룹 저장에 실패했습니다.'
@@ -322,17 +338,63 @@ export function HomePage() {
                 저장된 `index.json`을 기준으로 그룹을 다시 불러오고 편집합니다.
               </p>
             </div>
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
+                지도 가능 그룹 {explorerViewModel.mappedGroups.length}
+              </div>
+              <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
+                GPS 없는 그룹 {explorerViewModel.unmappedGroups.length}
+              </div>
+              <label className="ml-auto flex items-center gap-2 text-sm text-slate-600">
+                정렬
+                <select
+                  value={groupSortOption}
+                  onChange={(event) =>
+                    setGroupSortOption(event.target.value as GroupSortOption)
+                  }
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900"
+                >
+                  <option value="recent">최근 촬영 순</option>
+                  <option value="photo-count">사진 많은 순</option>
+                  <option value="title">제목 순</option>
+                </select>
+              </label>
+            </div>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)_minmax(360px,1fr)]">
               <GroupsMap
-                groups={libraryIndex?.mapGroups ?? []}
+                groups={explorerViewModel.mappedGroups
+                  .map((group) =>
+                    libraryIndex?.mapGroups.find(
+                      (mapGroup) => mapGroup.id === group.id
+                    )
+                  )
+                  .filter((group) => group !== undefined)}
+                outputRoot={libraryIndex?.outputRoot}
                 selectedGroupId={selectedGroupId}
+                hoveredGroupId={hoveredGroupId}
                 onSelectGroup={setSelectedGroupId}
+                onHoverGroup={setHoveredGroupId}
               />
-              <GroupListPanel
-                groups={libraryIndex?.groups ?? []}
-                selectedGroupId={selectedGroupId}
-                onSelectGroup={setSelectedGroupId}
-              />
+              <div className="space-y-4">
+                <GroupListPanel
+                  title="지도 그룹"
+                  description="GPS가 있는 그룹입니다. hover와 선택이 지도와 연동됩니다."
+                  groups={explorerViewModel.mappedGroups}
+                  selectedGroupId={selectedGroupId}
+                  hoveredGroupId={hoveredGroupId}
+                  onSelectGroup={setSelectedGroupId}
+                  onHoverGroup={setHoveredGroupId}
+                />
+                <GroupListPanel
+                  title="GPS 없는 그룹"
+                  description="지도에는 보이지 않지만 상세 패널에서 편집할 수 있습니다."
+                  groups={explorerViewModel.unmappedGroups}
+                  selectedGroupId={selectedGroupId}
+                  hoveredGroupId={hoveredGroupId}
+                  onSelectGroup={setSelectedGroupId}
+                  onHoverGroup={setHoveredGroupId}
+                />
+              </div>
               <GroupDetailPanel
                 group={selectedGroup}
                 outputRoot={libraryIndex?.outputRoot}

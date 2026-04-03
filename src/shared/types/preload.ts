@@ -32,6 +32,7 @@ export interface MapGroupSummary {
   photoCount: number
   latitude: number
   longitude: number
+  representativeThumbnailRelativePath?: string
 }
 
 export interface GroupPhotoSummary {

@@ -6,8 +6,17 @@ import type { MapGroupSummary } from '@shared/types/preload'
 
 interface GroupsMapProps {
   groups: MapGroupSummary[]
+  outputRoot?: string
   selectedGroupId?: string
+  hoveredGroupId?: string
   onSelectGroup?: (groupId: string) => void
+  onHoverGroup?: (groupId?: string) => void
+}
+
+interface MapMarkerBinding {
+  groupId: string
+  marker: maplibregl.Marker
+  element: HTMLButtonElement
 }
 
 const DEFAULT_CENTER: [number, number] = [127.0, 37.5]
@@ -36,16 +45,45 @@ const MAP_STYLE: StyleSpecification = {
 
 export function GroupsMap({
   groups,
+  outputRoot,
   selectedGroupId,
-  onSelectGroup
+  hoveredGroupId,
+  onSelectGroup,
+  onHoverGroup
 }: GroupsMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
-  const markersRef = useRef<maplibregl.Marker[]>([])
+  const markersRef = useRef<MapMarkerBinding[]>([])
   const popupByGroupIdRef = useRef(new Map<string, maplibregl.Popup>())
 
   const hasGroups = groups.length > 0
   const mapGroups = useMemo(() => groups, [groups])
+
+  function toFileUrl(relativePath?: string): string | undefined {
+    if (!outputRoot || !relativePath) {
+      return undefined
+    }
+
+    return encodeURI(
+      `file:///${`${outputRoot}/${relativePath}`.replace(/\\/g, '/').replace(/^\/+/, '')}`
+    )
+  }
+
+  function updateMarkerStyles(): void {
+    for (const binding of markersRef.current) {
+      const isSelected = binding.groupId === selectedGroupId
+      const isHovered = binding.groupId === hoveredGroupId
+
+      binding.element.className = [
+        'h-4 w-4 rounded-full border-2 border-white shadow transition-all',
+        isSelected
+          ? 'scale-125 bg-blue-700 ring-4 ring-blue-200'
+          : isHovered
+            ? 'scale-110 bg-sky-500 ring-2 ring-sky-100'
+            : 'bg-blue-600'
+      ].join(' ')
+    }
+  }
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -63,8 +101,8 @@ export function GroupsMap({
     mapRef.current.addControl(new maplibregl.NavigationControl(), 'top-right')
 
     return () => {
-      for (const marker of markersRef.current) {
-        marker.remove()
+      for (const binding of markersRef.current) {
+        binding.marker.remove()
       }
 
       markersRef.current = []
@@ -80,8 +118,8 @@ export function GroupsMap({
       return
     }
 
-    for (const marker of markersRef.current) {
-      marker.remove()
+    for (const binding of markersRef.current) {
+      binding.marker.remove()
     }
 
     markersRef.current = []
@@ -102,12 +140,37 @@ export function GroupsMap({
     for (const group of mapGroups) {
       const markerElement = document.createElement('button')
       markerElement.type = 'button'
-      markerElement.className =
-        'h-4 w-4 rounded-full border-2 border-white bg-blue-600 shadow'
       markerElement.setAttribute('aria-label', group.title)
+      markerElement.addEventListener('mouseenter', () => {
+        onHoverGroup?.(group.id)
+      })
+      markerElement.addEventListener('mouseleave', () => {
+        onHoverGroup?.(undefined)
+      })
 
-      const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
-        `<strong>${group.title}</strong><br/>사진 ${group.photoCount}장`
+      const popupContainer = document.createElement('div')
+      popupContainer.className = 'space-y-2'
+
+      const thumbnailUrl = toFileUrl(group.representativeThumbnailRelativePath)
+
+      if (thumbnailUrl) {
+        const image = document.createElement('img')
+        image.src = thumbnailUrl
+        image.alt = group.title
+        image.className = 'h-24 w-40 rounded-lg object-cover'
+        popupContainer.appendChild(image)
+      }
+
+      const titleElement = document.createElement('strong')
+      titleElement.textContent = group.title
+      popupContainer.appendChild(titleElement)
+
+      const metaElement = document.createElement('div')
+      metaElement.textContent = `사진 ${group.photoCount}장`
+      popupContainer.appendChild(metaElement)
+
+      const popup = new maplibregl.Popup({ offset: 16 }).setDOMContent(
+        popupContainer
       )
 
       markerElement.addEventListener('click', () => {
@@ -119,10 +182,16 @@ export function GroupsMap({
         .setPopup(popup)
         .addTo(map)
 
-      markersRef.current.push(marker)
+      markersRef.current.push({
+        groupId: group.id,
+        marker,
+        element: markerElement
+      })
       popupByGroupIdRef.current.set(group.id, popup)
       bounds.extend([group.longitude, group.latitude])
     }
+
+    updateMarkerStyles()
 
     if (mapGroups.length === 1) {
       const singleGroup = mapGroups[0]
@@ -142,9 +211,14 @@ export function GroupsMap({
 
     map.fitBounds(bounds, {
       padding: 48,
-      duration: 500
+      duration: 500,
+      maxZoom: 10
     })
-  }, [mapGroups, onSelectGroup])
+  }, [mapGroups, onHoverGroup, onSelectGroup, outputRoot])
+
+  useEffect(() => {
+    updateMarkerStyles()
+  }, [hoveredGroupId, selectedGroupId])
 
   useEffect(() => {
     const map = mapRef.current
@@ -161,7 +235,10 @@ export function GroupsMap({
 
     map.easeTo({
       center: [selectedGroup.longitude, selectedGroup.latitude],
-      zoom: Math.max(map.getZoom(), 9),
+      zoom: Math.min(
+        11,
+        Math.max(8, selectedGroup.photoCount >= 12 ? 8 : 9)
+      ),
       duration: 500
     })
 
