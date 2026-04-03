@@ -12,6 +12,7 @@ import type {
 } from '@application/ports/PhotoMetadataReaderPort'
 import type { PhotoPreviewPort } from '@application/ports/PhotoPreviewPort'
 import type { RegionResolverPort } from '@application/ports/RegionResolverPort'
+import { buildFallbackNearbyGroupTitleSuggestions } from '@application/services/buildFallbackNearbyGroupTitleSuggestions'
 import { buildNearbyGroupTitleSuggestions } from '@application/services/buildNearbyGroupTitleSuggestions'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
 import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
@@ -94,7 +95,8 @@ export class PreviewPendingOrganizationUseCase {
     const existingOutputHashes = await this.createExistingOutputHashes(
       existingOutputSnapshot
     )
-    const existingIndex = await this.loadExistingIndex(outputRoot, existingOutputSnapshot)
+    const storedIndex = await this.loadStoredLibraryIndexSafely(outputRoot)
+    const existingIndex = this.buildExistingIndex(existingOutputSnapshot, storedIndex)
     const listedPhotoPaths = await this.dependencies.fileSystem.listPhotoFiles(sourceRoot)
     const candidatePhotos: Photo[] = []
     const canonicalCandidates: Photo[] = []
@@ -141,27 +143,57 @@ export class PreviewPendingOrganizationUseCase {
     const photosById = new Map(canonicalCandidates.map((photo) => [photo.id, photo]))
 
     const groups = await Promise.all(
-      previewGroups.map(async (group) => ({
-        groupKey: group.groupKey,
-        displayTitle: group.displayTitle,
-        suggestedTitles: buildNearbyGroupTitleSuggestions(group, existingIndex?.groups ?? []),
-        photoCount: group.photoIds.length,
-        representativeGps: group.representativeGps,
-        representativePhotos: await Promise.all(
-          group.photoIds
-            .map((photoId) => photosById.get(photoId))
-            .filter((photo): photo is Photo => photo !== undefined)
-            .slice(0, 3)
-            .map(async (photo) => ({
-              id: photo.id,
-              sourcePath: photo.sourcePath,
-              sourceFileName: photo.sourceFileName,
-              capturedAtIso: photo.capturedAt?.iso,
-              hasGps: Boolean(photo.gps),
-              previewDataUrl: await this.createPreviewDataUrlSafely(photo.sourcePath)
-            }))
+      previewGroups.map(async (group) => {
+        const representativePhoto = group.representativePhotoId
+          ? photosById.get(group.representativePhotoId)
+          : undefined
+        const sameGroupTitle = this.resolveSameGroupTitle(group.groupKey, storedIndex)
+        const primarySuggestions = buildNearbyGroupTitleSuggestions(
+          group,
+          existingIndex?.groups ?? []
         )
-      }))
+        const fallbackSuggestions =
+          sameGroupTitle || primarySuggestions.length > 0
+            ? []
+            : await buildFallbackNearbyGroupTitleSuggestions({
+                currentGroup: group,
+                currentCapturedAtIso: representativePhoto?.capturedAt?.iso,
+                existingOutputPhotos: existingOutputSnapshot.photos,
+                existingIndex,
+                titleSourceIndex: storedIndex ?? existingIndex,
+                metadataReader: this.dependencies.metadataReader
+              })
+
+        return {
+          groupKey: group.groupKey,
+          displayTitle: group.displayTitle,
+          suggestedTitles: Array.from(
+            new Set(
+              [
+                sameGroupTitle,
+                ...primarySuggestions,
+                ...fallbackSuggestions
+              ].filter((title): title is string => Boolean(title))
+            )
+          ),
+          photoCount: group.photoIds.length,
+          representativeGps: group.representativeGps,
+          representativePhotos: await Promise.all(
+            group.photoIds
+              .map((photoId) => photosById.get(photoId))
+              .filter((photo): photo is Photo => photo !== undefined)
+              .slice(0, 3)
+              .map(async (photo) => ({
+                id: photo.id,
+                sourcePath: photo.sourcePath,
+                sourceFileName: photo.sourceFileName,
+                capturedAtIso: photo.capturedAt?.iso,
+                hasGps: Boolean(photo.gps),
+                previewDataUrl: await this.createPreviewDataUrlSafely(photo.sourcePath)
+              }))
+          )
+        }
+      })
     )
 
     return {
@@ -170,6 +202,16 @@ export class PreviewPendingOrganizationUseCase {
       skippedExistingCount,
       groups
     }
+  }
+
+  private resolveSameGroupTitle(
+    groupKey: string,
+    storedIndex: LibraryIndex | null
+  ): string | undefined {
+    const sameGroup = storedIndex?.groups.find((group) => group.groupKey === groupKey)
+    const title = sameGroup?.title.trim()
+
+    return title && title.length > 0 ? title : undefined
   }
 
   private async prepareCandidatePhoto(
@@ -281,12 +323,12 @@ export class PreviewPendingOrganizationUseCase {
     }
   }
 
-  private async loadExistingIndex(
-    outputRoot: string,
+  private buildExistingIndex(
     existingOutputSnapshot: Parameters<
       typeof rebuildLibraryIndexFromExistingOutput
-    >[0]
-  ): Promise<LibraryIndex | null> {
+    >[0],
+    storedIndex: LibraryIndex | null
+  ): LibraryIndex | null {
     const rebuiltIndex = rebuildLibraryIndexFromExistingOutput(
       existingOutputSnapshot
     )
@@ -295,12 +337,16 @@ export class PreviewPendingOrganizationUseCase {
       return null
     }
 
-    try {
-      const storedIndex = await this.dependencies.libraryIndexStore.load(outputRoot)
+    return mergeStoredLibraryMetadata(rebuiltIndex, storedIndex)
+  }
 
-      return mergeStoredLibraryMetadata(rebuiltIndex, storedIndex)
+  private async loadStoredLibraryIndexSafely(
+    outputRoot: string
+  ): Promise<LibraryIndex | null> {
+    try {
+      return await this.dependencies.libraryIndexStore.load(outputRoot)
     } catch {
-      return rebuiltIndex
+      return null
     }
   }
 }
