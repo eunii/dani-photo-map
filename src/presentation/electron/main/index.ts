@@ -5,6 +5,8 @@ import { ScanPhotoLibraryUseCase } from '@application/usecases/ScanPhotoLibraryU
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import { ExifrPhotoMetadataReader } from '@infrastructure/exif/ExifrPhotoMetadataReader'
 import { NodePhotoLibraryFileSystem } from '@infrastructure/filesystem/NodePhotoLibraryFileSystem'
+import { CachedRegionResolver } from '@infrastructure/geo/CachedRegionResolver'
+import { CuratedRegionResolver } from '@infrastructure/geo/CuratedRegionResolver'
 import { FallbackRegionResolver } from '@infrastructure/geo/FallbackRegionResolver'
 import { NodePhotoHasher } from '@infrastructure/hashing/NodePhotoHasher'
 import { JsonLibraryIndexStore } from '@infrastructure/storage/JsonLibraryIndexStore'
@@ -25,12 +27,17 @@ function createScanPhotoLibraryUseCase(command: ScanPhotoLibraryRequest) {
     command.outputRoot,
     rules.outputThumbnailsRelativePath
   )
+  const regionResolver = new CachedRegionResolver(
+    new CuratedRegionResolver(
+      new FallbackRegionResolver(rules.unknownRegionLabel)
+    )
+  )
 
   return new ScanPhotoLibraryUseCase({
     fileSystem: new NodePhotoLibraryFileSystem(),
     metadataReader: new ExifrPhotoMetadataReader(),
     hasher: new NodePhotoHasher(),
-    regionResolver: new FallbackRegionResolver(rules.unknownRegionLabel),
+    regionResolver,
     thumbnailGenerator: new SharpThumbnailGenerator(thumbnailsRootPath),
     libraryIndexStore: new JsonLibraryIndexStore(rules.outputIndexRelativePath),
     rules
