@@ -17,6 +17,7 @@
     "index.html",
     "src/domain/**/*.ts",
     "src/application/**/*.ts",
+    "src/presentation/common/**/*.ts",
     "src/presentation/renderer/**/*.ts",
     "src/presentation/renderer/**/*.tsx",
     "src/shared/**/*.ts",

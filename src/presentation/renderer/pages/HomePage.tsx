@@ -7,6 +7,7 @@ import {
   buildGroupExplorerViewModel,
   type GroupSortOption
 } from '@presentation/renderer/view-models/groupExplorer'
+import { buildGroupTitleSuggestions } from '@presentation/renderer/view-models/groupTitleSuggestions'
 import type {
   AppInfo,
   LibraryIndexView,
@@ -71,6 +72,10 @@ export function HomePage() {
     () =>
       buildGroupExplorerViewModel(libraryIndex?.groups ?? [], groupSortOption),
     [groupSortOption, libraryIndex?.groups]
+  )
+  const titleSuggestions = useMemo(
+    () => buildGroupTitleSuggestions(selectedGroup, libraryIndex?.groups ?? []),
+    [libraryIndex?.groups, selectedGroup]
   )
 
   useEffect(() => {
@@ -397,6 +402,7 @@ export function HomePage() {
               </div>
               <GroupDetailPanel
                 group={selectedGroup}
+                titleSuggestions={titleSuggestions}
                 outputRoot={libraryIndex?.outputRoot}
                 isSaving={isSavingGroup}
                 onSave={handleSaveGroup}

@@ -4,7 +4,6 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { LoadLibraryIndexUseCase } from '@application/usecases/LoadLibraryIndexUseCase'
 import { ScanPhotoLibraryUseCase } from '@application/usecases/ScanPhotoLibraryUseCase'
 import { UpdatePhotoGroupUseCase } from '@application/usecases/UpdatePhotoGroupUseCase'
-import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import { ExifrPhotoMetadataReader } from '@infrastructure/exif/ExifrPhotoMetadataReader'
 import { NodePhotoLibraryFileSystem } from '@infrastructure/filesystem/NodePhotoLibraryFileSystem'
@@ -14,12 +13,11 @@ import { FallbackRegionResolver } from '@infrastructure/geo/FallbackRegionResolv
 import { NodePhotoHasher } from '@infrastructure/hashing/NodePhotoHasher'
 import { JsonLibraryIndexStore } from '@infrastructure/storage/JsonLibraryIndexStore'
 import { SharpThumbnailGenerator } from '@infrastructure/thumbnails/SharpThumbnailGenerator'
+import { toLibraryIndexView } from '@presentation/common/mappers/toLibraryIndexView'
 import type {
   DirectorySelectionOptions,
-  LibraryIndexView,
   LoadLibraryIndexRequest,
-  ScanPhotoLibraryRequest
-  ,
+  ScanPhotoLibraryRequest,
   UpdatePhotoGroupRequest
 } from '@shared/types/preload'
 
@@ -62,56 +60,11 @@ function createLoadLibraryIndexUseCase(): LoadLibraryIndexUseCase {
 }
 
 function createUpdatePhotoGroupUseCase(): UpdatePhotoGroupUseCase {
-  return new UpdatePhotoGroupUseCase(createLibraryIndexStore())
-}
-
-function toLibraryIndexView(index: LibraryIndex): LibraryIndexView {
-  const photosById = new Map(index.photos.map((photo) => [photo.id, photo]))
-
-  return {
-    generatedAt: index.generatedAt,
-    outputRoot: index.outputRoot,
-    groups: index.groups.map((group) => {
-      const groupPhotos = group.photoIds
-        .map((photoId) => photosById.get(photoId))
-        .filter((photo) => photo !== undefined)
-
-      return {
-        id: group.id,
-        groupKey: group.groupKey,
-        title: group.title,
-        displayTitle: group.displayTitle,
-        photoCount: group.photoIds.length,
-        photoIds: group.photoIds,
-        representativePhotoId: group.representativePhotoId,
-        representativeThumbnailRelativePath:
-          group.representativeThumbnailRelativePath,
-        representativeGps: group.representativeGps,
-        companions: group.companions,
-        notes: group.notes,
-        photos: groupPhotos.map((photo) => ({
-          id: photo.id,
-          sourceFileName: photo.sourceFileName,
-          capturedAtIso: photo.capturedAt?.iso,
-          capturedAtSource: photo.capturedAtSource,
-          thumbnailRelativePath: photo.thumbnailRelativePath,
-          outputRelativePath: photo.outputRelativePath,
-          hasGps: Boolean(photo.gps)
-        }))
-      }
-    }),
-    mapGroups: index.groups
-      .filter((group) => group.representativeGps)
-      .map((group) => ({
-        id: group.id,
-        title: group.title,
-        photoCount: group.photoIds.length,
-        latitude: group.representativeGps!.latitude,
-        longitude: group.representativeGps!.longitude,
-        representativeThumbnailRelativePath:
-          group.representativeThumbnailRelativePath
-      }))
-  }
+  return new UpdatePhotoGroupUseCase(
+    createLibraryIndexStore(),
+    new NodePhotoLibraryFileSystem(),
+    defaultOrganizationRules
+  )
 }
 
 function registerIpcHandlers(): void {

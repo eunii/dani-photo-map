@@ -22,6 +22,7 @@ import {
   defaultOrganizationRules,
   type OrganizationRules
 } from '@domain/policies/OrganizationRules'
+import { selectCanonicalDuplicatePhoto } from '@domain/services/DuplicatePhotoPolicy'
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import { buildPhotoOutputRelativePath } from '@domain/services/PhotoNamingService'
 import {
@@ -57,6 +58,11 @@ interface ScanPhotoContext {
   sourceFileName: string
 }
 
+interface PreparedPhotoRecord {
+  photo: Photo
+  context: ScanPhotoContext
+}
+
 export class ScanPhotoLibraryUseCase {
   private readonly rules: OrganizationRules
 
@@ -72,28 +78,31 @@ export class ScanPhotoLibraryUseCase {
     const photoPaths = await this.dependencies.fileSystem.listPhotoFiles(
       paths.sourceRoot
     )
-    const seenHashes = new Set<string>()
-    const photos: Photo[] = []
+    const preparedPhotoRecords: PreparedPhotoRecord[] = []
 
     await this.prepareOutputDirectories(paths.outputRoot)
 
     for (const [index, listedPhotoPath] of photoPaths.entries()) {
       const sourcePath = normalizePathSeparators(listedPhotoPath)
-      const photo = await this.processPhoto(
+      const preparedPhotoRecord = await this.preparePhotoRecord(
         {
           photoId: `photo-${index + 1}`,
           sourcePath,
           sourceFileName: getPathBaseName(sourcePath)
         },
-        paths.outputRoot,
-        seenHashes,
         issues
       )
 
-      if (photo) {
-        photos.push(photo)
+      if (preparedPhotoRecord) {
+        preparedPhotoRecords.push(preparedPhotoRecord)
       }
     }
+
+    const photos = await this.finalizePreparedPhotos(
+      preparedPhotoRecords,
+      paths.outputRoot,
+      issues
+    )
 
     const groups = createPhotoGroups(photos)
     const index: LibraryIndex = {
@@ -147,24 +156,16 @@ export class ScanPhotoLibraryUseCase {
     }
   }
 
-  private async processPhoto(
+  private async preparePhotoRecord(
     context: ScanPhotoContext,
-    outputRoot: string,
-    seenHashes: Set<string>,
     issues: ScanPhotoLibraryIssue[]
-  ): Promise<Photo | null> {
+  ): Promise<PreparedPhotoRecord | null> {
     const metadata = await this.readMetadataSafely(context, issues)
     const metadataIssues = [...(metadata.metadataIssues ?? [])]
     const sha256 = await this.createSha256Safely(context, issues)
 
     if (!sha256) {
       return null
-    }
-
-    const isDuplicate = seenHashes.has(sha256)
-
-    if (!isDuplicate) {
-      seenHashes.add(sha256)
     }
 
     const regionName = await this.resolveRegionNameSafely(
@@ -186,14 +187,88 @@ export class ScanPhotoLibraryUseCase {
       sourcePath: context.sourcePath,
       sourceFileName: context.sourceFileName,
       sha256,
+      duplicateOfPhotoId: undefined,
       capturedAt: metadata.capturedAt,
       capturedAtSource: metadata.capturedAtSource,
       gps: metadata.gps,
       regionName,
       outputRelativePath,
-      isDuplicate,
+      isDuplicate: false,
       metadataIssues
     }
+
+    return {
+      photo,
+      context
+    }
+  }
+
+  private async finalizePreparedPhotos(
+    preparedPhotoRecords: PreparedPhotoRecord[],
+    outputRoot: string,
+    issues: ScanPhotoLibraryIssue[]
+  ): Promise<Photo[]> {
+    const canonicalPhotoIdByHash = this.createCanonicalPhotoIdByHash(
+      preparedPhotoRecords.map((record) => record.photo)
+    )
+    const finalizedPhotos: Photo[] = []
+
+    for (const preparedPhotoRecord of preparedPhotoRecords) {
+      const finalizedPhoto = await this.finalizePreparedPhoto(
+        preparedPhotoRecord,
+        outputRoot,
+        canonicalPhotoIdByHash,
+        issues
+      )
+
+      if (finalizedPhoto) {
+        finalizedPhotos.push(finalizedPhoto)
+      }
+    }
+
+    return finalizedPhotos
+  }
+
+  private createCanonicalPhotoIdByHash(photos: Photo[]): Map<string, string> {
+    const photosByHash = new Map<string, Photo[]>()
+
+    for (const photo of photos) {
+      if (!photo.sha256) {
+        continue
+      }
+
+      const duplicateSet = photosByHash.get(photo.sha256) ?? []
+
+      duplicateSet.push(photo)
+      photosByHash.set(photo.sha256, duplicateSet)
+    }
+
+    return new Map(
+      Array.from(photosByHash.entries())
+        .map(([sha256, duplicateSet]) => {
+          const canonicalPhoto = selectCanonicalDuplicatePhoto(duplicateSet)
+
+          return canonicalPhoto ? ([sha256, canonicalPhoto.id] as const) : null
+        })
+        .filter((entry): entry is readonly [string, string] => entry !== null)
+    )
+  }
+
+  private async finalizePreparedPhoto(
+    preparedPhotoRecord: PreparedPhotoRecord,
+    outputRoot: string,
+    canonicalPhotoIdByHash: Map<string, string>,
+    issues: ScanPhotoLibraryIssue[]
+  ): Promise<Photo | null> {
+    const photo = {
+      ...preparedPhotoRecord.photo
+    }
+    const canonicalPhotoId = photo.sha256
+      ? canonicalPhotoIdByHash.get(photo.sha256)
+      : undefined
+
+    photo.isDuplicate = Boolean(canonicalPhotoId && canonicalPhotoId !== photo.id)
+    photo.duplicateOfPhotoId = photo.isDuplicate ? canonicalPhotoId : undefined
 
     if (!photo.isDuplicate && photo.outputRelativePath) {
       const copySucceeded = await this.copyPhotoToOutput(outputRoot, photo, issues)
@@ -203,8 +278,8 @@ export class ScanPhotoLibraryUseCase {
       }
 
       photo.thumbnailRelativePath = await this.generateThumbnailSafely(
-        context,
-        metadataIssues,
+        preparedPhotoRecord.context,
+        photo.metadataIssues,
         issues
       )
     }
@@ -345,9 +420,11 @@ export class ScanPhotoLibraryUseCase {
     issues: ScanPhotoLibraryIssue[]
   ): Promise<string | undefined> {
     try {
-      return await this.dependencies.thumbnailGenerator.generateForPhoto(
+      const thumbnailPath = await this.dependencies.thumbnailGenerator.generateForPhoto(
         context.sourcePath
       )
+
+      return joinPathSegments(this.rules.outputThumbnailsRelativePath, thumbnailPath)
     } catch (error) {
       const issue = this.createIssue({
         code: 'thumbnail-generation-failed',

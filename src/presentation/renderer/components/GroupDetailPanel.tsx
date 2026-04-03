@@ -4,6 +4,7 @@ import type { GroupDetail } from '@shared/types/preload'
 
 interface GroupDetailPanelProps {
   group?: GroupDetail
+  titleSuggestions?: string[]
   outputRoot?: string
   isSaving?: boolean
   onSave?: (nextGroup: {
@@ -26,16 +27,19 @@ function toFileUrl(outputRoot: string, relativePath?: string): string | undefine
 
 export function GroupDetailPanel({
   group,
+  titleSuggestions = [],
   outputRoot,
   isSaving = false,
   onSave
 }: GroupDetailPanelProps) {
+  const [thumbnailLoadFailed, setThumbnailLoadFailed] = useState(false)
   const [title, setTitle] = useState('')
   const [companionsText, setCompanionsText] = useState('')
   const [notes, setNotes] = useState('')
   const [representativePhotoId, setRepresentativePhotoId] = useState('')
 
   useEffect(() => {
+    setThumbnailLoadFailed(false)
     setTitle(group?.title ?? '')
     setCompanionsText(group?.companions.join(', ') ?? '')
     setNotes(group?.notes ?? '')
@@ -88,11 +92,12 @@ export function GroupDetailPanel({
           <div className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-[160px_minmax(0,1fr)]">
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                {representativeThumbnailUrl ? (
+                {representativeThumbnailUrl && !thumbnailLoadFailed ? (
                   <img
                     src={representativeThumbnailUrl}
                     alt={group.title}
                     className="h-40 w-full object-cover"
+                    onError={() => setThumbnailLoadFailed(true)}
                   />
                 ) : (
                   <div className="flex h-40 items-center justify-center text-sm text-slate-500">
@@ -124,6 +129,28 @@ export function GroupDetailPanel({
             </div>
 
             <div className="grid gap-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-sm font-medium text-slate-900">추천 그룹명</p>
+                {titleSuggestions.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {titleSuggestions.map((suggestedTitle) => (
+                      <button
+                        key={suggestedTitle}
+                        type="button"
+                        className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
+                        onClick={() => setTitle(suggestedTitle)}
+                      >
+                        {suggestedTitle}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-500">
+                    가까운 GPS 그룹에서 추천할 제목이 없어서 직접 입력합니다.
+                  </p>
+                )}
+              </div>
+
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-800">제목</span>
                 <input
@@ -188,6 +215,9 @@ export function GroupDetailPanel({
               </div>
 
               <div className="flex justify-end">
+                <p className="mr-auto text-xs text-slate-500">
+                  저장하면 그룹 메타데이터와 함께 출력 파일명이 그룹 제목 기준으로 재정리됩니다.
+                </p>
                 <button
                   type="button"
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"

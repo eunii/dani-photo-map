@@ -30,6 +30,7 @@ export const photoSchema = z.object({
   sourcePath: z.string().min(1),
   sourceFileName: z.string().min(1),
   sha256: z.string().min(1).optional(),
+  duplicateOfPhotoId: z.string().min(1).optional(),
   capturedAt: photoTimestampSchema.optional(),
   capturedAtSource: z.enum(photoCapturedAtSources).optional(),
   gps: geoPointSchema.optional(),

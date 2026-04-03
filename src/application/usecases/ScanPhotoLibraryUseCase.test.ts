@@ -12,8 +12,10 @@ function createUseCaseDependencies() {
     dependencies: {
       fileSystem: {
         listPhotoFiles: vi.fn<() => Promise<string[]>>(),
+        listDirectoryFileNames: vi.fn<() => Promise<string[]>>(),
         ensureDirectory: vi.fn<() => Promise<void>>(),
-        copyFile: vi.fn<() => Promise<void>>()
+        copyFile: vi.fn<() => Promise<void>>(),
+        moveFile: vi.fn<() => Promise<void>>()
       },
       metadataReader: {
         read: vi.fn()
@@ -112,5 +114,134 @@ describe('ScanPhotoLibraryUseCase', () => {
     })
     expect(getSavedIndex()?.photos).toHaveLength(1)
     expect(getSavedIndex()?.photos[0]?.sourceFileName).toBe('IMG_0002.JPG')
+  })
+
+  it('marks later files as duplicates when hashes match', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_0001.JPG',
+      'C:\\source\\IMG_0002.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: []
+    })
+    dependencies.hasher.createSha256.mockResolvedValue('same-hash')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output'
+    })
+
+    expect(result.duplicateCount).toBe(1)
+    expect(result.keptCount).toBe(1)
+    expect(getSavedIndex()?.photos.map((photo) => photo.isDuplicate)).toEqual([
+      false,
+      true
+    ])
+    expect(getSavedIndex()?.photos[1]?.duplicateOfPhotoId).toBe('photo-1')
+    expect(getSavedIndex()?.photos[0]?.thumbnailRelativePath).toBe(
+      '.photo-organizer/thumbnails/thumb.webp'
+    )
+    expect(dependencies.fileSystem.copyFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the older duplicate as the canonical photo even when it appears later', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_0002.JPG',
+      'C:\\source\\IMG_0001.JPG'
+    ])
+    dependencies.metadataReader.read
+      .mockResolvedValueOnce({
+        capturedAt: {
+          iso: '2026-04-03T10:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '100000'
+        },
+        capturedAtSource: 'exif-date-time-original',
+        metadataIssues: []
+      })
+      .mockResolvedValueOnce({
+        capturedAt: {
+          iso: '2026-04-03T08:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '080000'
+        },
+        capturedAtSource: 'exif-date-time-original',
+        metadataIssues: []
+      })
+    dependencies.hasher.createSha256.mockResolvedValue('same-hash')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output'
+    })
+
+    expect(result.duplicateCount).toBe(1)
+    expect(result.keptCount).toBe(1)
+    expect(getSavedIndex()?.photos).toMatchObject([
+      {
+        id: 'photo-1',
+        sourceFileName: 'IMG_0002.JPG',
+        isDuplicate: true,
+        duplicateOfPhotoId: 'photo-2'
+      },
+      {
+        id: 'photo-2',
+        sourceFileName: 'IMG_0001.JPG',
+        isDuplicate: false
+      }
+    ])
+    expect(dependencies.fileSystem.copyFile).toHaveBeenCalledWith(
+      'C:/source/IMG_0001.JPG',
+      'C:/output/2026/04/location-unknown/2026-04-03_080000_IMG_0001.JPG'
+    )
+  })
+
+  it('records a region resolve warning and falls back to unknown region', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_0001.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      gps: {
+        latitude: 37.5665,
+        longitude: 126.978
+      }
+    })
+    dependencies.hasher.createSha256.mockResolvedValue('hash-1')
+    dependencies.regionResolver.resolveName.mockRejectedValue(
+      new Error('resolver unavailable')
+    )
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output'
+    })
+
+    expect(result.warningCount).toBe(1)
+    expect(result.issues[0]).toMatchObject({
+      code: 'region-resolve-failed',
+      severity: 'warning',
+      stage: 'region-resolve'
+    })
+    expect(getSavedIndex()?.photos[0]).toMatchObject({
+      regionName: 'location-unknown',
+      metadataIssues: ['region-resolve-failed']
+    })
   })
 })

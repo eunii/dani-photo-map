@@ -45,7 +45,7 @@ function createLibraryIndex(outputRoot: string): LibraryIndex {
         },
         regionName: 'seoul',
         outputRelativePath: '2026/04/seoul/2026-04-03_101112_IMG_0001.JPG',
-        thumbnailRelativePath: 'thumb-1.webp',
+        thumbnailRelativePath: '.photo-organizer/thumbnails/thumb-1.webp',
         isDuplicate: false,
         metadataIssues: []
       }
@@ -62,7 +62,7 @@ function createLibraryIndex(outputRoot: string): LibraryIndex {
           latitude: 37.5665,
           longitude: 126.978
         },
-        representativeThumbnailRelativePath: 'thumb-1.webp',
+        representativeThumbnailRelativePath: '.photo-organizer/thumbnails/thumb-1.webp',
         companions: ['Alice'],
         notes: 'sample note'
       }

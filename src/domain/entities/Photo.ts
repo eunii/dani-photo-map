@@ -14,6 +14,7 @@ export interface Photo {
   sourcePath: string
   sourceFileName: string
   sha256?: string
+  duplicateOfPhotoId?: string
   capturedAt?: PhotoTimestamp
   capturedAtSource?: PhotoCapturedAtSource
   gps?: GeoPoint

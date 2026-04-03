@@ -1,5 +1,5 @@
 import { constants } from 'node:fs'
-import { copyFile, mkdir, readdir } from 'node:fs/promises'
+import { access, copyFile, mkdir, readdir, rename } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
 import {
@@ -30,6 +30,29 @@ export class NodePhotoLibraryFileSystem implements PhotoLibraryFileSystemPort {
       .sort()
   }
 
+  async listDirectoryFileNames(directoryPath: string): Promise<string[]> {
+    try {
+      const entries = await readdir(normalize(directoryPath), {
+        withFileTypes: true
+      })
+
+      return entries
+        .filter((entry) => entry.isFile())
+        .map((entry) => entry.name)
+        .sort()
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ENOENT'
+      ) {
+        return []
+      }
+
+      throw error
+    }
+  }
+
   async ensureDirectory(path: string): Promise<void> {
     await mkdir(normalize(path), { recursive: true })
   }
@@ -52,6 +75,33 @@ export class NodePhotoLibraryFileSystem implements PhotoLibraryFileSystemPort {
 
       throw error
     }
+  }
+
+  async moveFile(sourcePath: string, destinationPath: string): Promise<void> {
+    const normalizedSourcePath = normalize(sourcePath)
+    const normalizedDestinationPath = normalize(destinationPath)
+
+    if (normalizedSourcePath === normalizedDestinationPath) {
+      return
+    }
+
+    try {
+      await access(normalizedDestinationPath)
+      throw new PhotoFileConflictError(destinationPath)
+    } catch (error) {
+      if (
+        error instanceof PhotoFileConflictError ||
+        !(
+          error instanceof Error &&
+          'code' in error &&
+          error.code === 'ENOENT'
+        )
+      ) {
+        throw error
+      }
+    }
+
+    await rename(normalizedSourcePath, normalizedDestinationPath)
   }
 
   private async collectPhotoFiles(

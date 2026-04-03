@@ -16,6 +16,7 @@
     "vitest.setup.ts",
     "src/domain/**/*.ts",
     "src/application/**/*.ts",
+    "src/presentation/common/**/*.ts",
     "src/presentation/electron/**/*.ts",
     "src/infrastructure/**/*.ts",
     "src/shared/**/*.ts"

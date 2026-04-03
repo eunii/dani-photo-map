@@ -6,6 +6,16 @@ import {
 } from '@domain/entities/LibraryIndex'
 import { UpdatePhotoGroupUseCase } from '@application/usecases/UpdatePhotoGroupUseCase'
 
+function createFileSystem() {
+  return {
+    listPhotoFiles: vi.fn(),
+    listDirectoryFileNames: vi.fn().mockResolvedValue([]),
+    ensureDirectory: vi.fn().mockResolvedValue(undefined),
+    copyFile: vi.fn(),
+    moveFile: vi.fn().mockResolvedValue(undefined)
+  }
+}
+
 function createLibraryIndex(): LibraryIndex {
   return {
     version: LIBRARY_INDEX_VERSION,
@@ -77,13 +87,14 @@ function createLibraryIndex(): LibraryIndex {
 describe('UpdatePhotoGroupUseCase', () => {
   it('updates editable group fields and syncs representative metadata', async () => {
     const savedIndexes: LibraryIndex[] = []
+    const fileSystem = createFileSystem()
     const store = {
       load: vi.fn().mockResolvedValue(createLibraryIndex()),
       save: vi.fn(async (index: LibraryIndex) => {
         savedIndexes.push(index)
       })
     }
-    const useCase = new UpdatePhotoGroupUseCase(store)
+    const useCase = new UpdatePhotoGroupUseCase(store, fileSystem)
 
     const updatedIndex = await useCase.execute({
       outputRoot: 'C:\\photos\\output',
@@ -105,15 +116,23 @@ describe('UpdatePhotoGroupUseCase', () => {
       },
       representativeThumbnailRelativePath: '.photo-organizer/thumbnails/photo-2.webp'
     })
+    expect(updatedIndex.photos[0]?.outputRelativePath).toBe(
+      '2026/04/seoul/2026-04-03_0800_부산_당일치기_001.JPG'
+    )
+    expect(updatedIndex.photos[1]?.outputRelativePath).toBe(
+      '2026/04/busan/2026-04-03_0900_부산_당일치기_001.JPG'
+    )
+    expect(fileSystem.moveFile).toHaveBeenCalled()
     expect(savedIndexes).toHaveLength(1)
   })
 
   it('falls back to displayTitle when the edited title is blank', async () => {
+    const fileSystem = createFileSystem()
     const store = {
       load: vi.fn().mockResolvedValue(createLibraryIndex()),
       save: vi.fn()
     }
-    const useCase = new UpdatePhotoGroupUseCase(store)
+    const useCase = new UpdatePhotoGroupUseCase(store, fileSystem)
 
     const updatedIndex = await useCase.execute({
       outputRoot: 'C:/photos/output',
@@ -127,5 +146,31 @@ describe('UpdatePhotoGroupUseCase', () => {
       title: '2026-04-03 seoul',
       notes: undefined
     })
+  })
+
+  it('starts from the highest conflicting sequence number plus one', async () => {
+    const fileSystem = createFileSystem()
+    fileSystem.listDirectoryFileNames
+      .mockResolvedValueOnce([
+        '2026-04-03_0800_부산_당일치기_001.JPG',
+        '2026-04-03_0800_부산_당일치기_003.JPG'
+      ])
+      .mockResolvedValueOnce([])
+    const store = {
+      load: vi.fn().mockResolvedValue(createLibraryIndex()),
+      save: vi.fn()
+    }
+    const useCase = new UpdatePhotoGroupUseCase(store, fileSystem)
+
+    const updatedIndex = await useCase.execute({
+      outputRoot: 'C:/photos/output',
+      groupId: 'group-1',
+      title: '부산 당일치기',
+      companions: []
+    })
+
+    expect(updatedIndex.photos[0]?.outputRelativePath).toBe(
+      '2026/04/seoul/2026-04-03_0800_부산_당일치기_004.JPG'
+    )
   })
 })

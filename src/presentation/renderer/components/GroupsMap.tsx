@@ -158,6 +158,9 @@ export function GroupsMap({
         image.src = thumbnailUrl
         image.alt = group.title
         image.className = 'h-24 w-40 rounded-lg object-cover'
+        image.addEventListener('error', () => {
+          image.remove()
+        })
         popupContainer.appendChild(image)
       }
 
