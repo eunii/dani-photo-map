@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
+import { GroupDetailPanel } from '@presentation/renderer/components/GroupDetailPanel'
 import { GroupListPanel } from '@presentation/renderer/components/GroupListPanel'
 import { GroupsMap } from '@presentation/renderer/components/GroupsMap'
 import type {
   AppInfo,
+  LibraryIndexView,
   ScanPhotoLibrarySummary
 } from '@shared/types/preload'
 
@@ -48,9 +50,17 @@ export function HomePage() {
     readStoredPath(STORAGE_KEYS.outputRoot)
   )
   const [isScanning, setIsScanning] = useState(false)
+  const [isLoadingIndex, setIsLoadingIndex] = useState(false)
+  const [isSavingGroup, setIsSavingGroup] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [summary, setSummary] = useState<ScanPhotoLibrarySummary | null>(null)
+  const [libraryIndex, setLibraryIndex] = useState<LibraryIndexView | null>(null)
   const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>()
+
+  const selectedGroup = useMemo(
+    () => libraryIndex?.groups.find((group) => group.id === selectedGroupId),
+    [libraryIndex?.groups, selectedGroupId]
+  )
 
   useEffect(() => {
     void window.photoApp.getAppInfo().then(setAppInfo)
@@ -64,6 +74,36 @@ export function HomePage() {
     persistPath(STORAGE_KEYS.outputRoot, outputRoot)
   }, [outputRoot])
 
+  useEffect(() => {
+    if (!outputRoot) {
+      setLibraryIndex(null)
+      setSelectedGroupId(undefined)
+      return
+    }
+
+    setIsLoadingIndex(true)
+    setErrorMessage(null)
+
+    void window.photoApp
+      .loadLibraryIndex({ outputRoot })
+      .then((loadedIndex) => {
+        setLibraryIndex(loadedIndex)
+        setSelectedGroupId(loadedIndex?.groups[0]?.id)
+      })
+      .catch((error) => {
+        setLibraryIndex(null)
+        setSelectedGroupId(undefined)
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : '저장된 index.json을 불러오지 못했습니다.'
+        )
+      })
+      .finally(() => {
+        setIsLoadingIndex(false)
+      })
+  }, [outputRoot])
+
   async function selectSourceRoot(): Promise<void> {
     const selectedPath = await window.photoApp.selectDirectory(
       SOURCE_DIALOG_OPTIONS
@@ -72,7 +112,6 @@ export function HomePage() {
     if (selectedPath) {
       setSourceRoot(selectedPath)
       setSummary(null)
-      setSelectedGroupId(undefined)
       setErrorMessage(null)
     }
   }
@@ -85,7 +124,6 @@ export function HomePage() {
     if (selectedPath) {
       setOutputRoot(selectedPath)
       setSummary(null)
-      setSelectedGroupId(undefined)
       setErrorMessage(null)
     }
   }
@@ -104,9 +142,11 @@ export function HomePage() {
         sourceRoot,
         outputRoot
       })
+      const nextLibraryIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
 
       setSummary(nextSummary)
-      setSelectedGroupId(nextSummary.mapGroups[0]?.id)
+      setLibraryIndex(nextLibraryIndex)
+      setSelectedGroupId(nextLibraryIndex?.groups[0]?.id)
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
@@ -116,9 +156,43 @@ export function HomePage() {
     }
   }
 
+  async function handleSaveGroup(nextGroup: {
+    title: string
+    companions: string[]
+    notes?: string
+    representativePhotoId?: string
+  }): Promise<void> {
+    if (!outputRoot || !selectedGroup) {
+      return
+    }
+
+    setIsSavingGroup(true)
+    setErrorMessage(null)
+
+    try {
+      const updatedIndex = await window.photoApp.updatePhotoGroup({
+        outputRoot,
+        groupId: selectedGroup.id,
+        title: nextGroup.title,
+        companions: nextGroup.companions,
+        notes: nextGroup.notes,
+        representativePhotoId: nextGroup.representativePhotoId
+      })
+
+      setLibraryIndex(updatedIndex)
+      setSelectedGroupId(selectedGroup.id)
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '그룹 저장에 실패했습니다.'
+      )
+    } finally {
+      setIsSavingGroup(false)
+    }
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
-      <section className="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-10 shadow-sm">
+      <section className="w-full max-w-7xl rounded-2xl border border-slate-200 bg-white p-10 shadow-sm">
         <div className="space-y-8">
           <div className="space-y-3">
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
@@ -222,6 +296,18 @@ export function HomePage() {
                       {summary.groupCount}
                     </p>
                   </div>
+                  <div className="rounded-lg bg-white px-4 py-3">
+                    <p className="text-xs text-slate-500">경고 수</p>
+                    <p className="text-xl font-semibold text-slate-900">
+                      {summary.warningCount}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-white px-4 py-3">
+                    <p className="text-xs text-slate-500">실패 수</p>
+                    <p className="text-xl font-semibold text-slate-900">
+                      {summary.failureCount}
+                    </p>
+                  </div>
                 </div>
               </div>
             </section>
@@ -230,24 +316,35 @@ export function HomePage() {
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-900">
-                지도 및 그룹 개요
+                그룹 탐색 및 편집
               </h2>
               <p className="text-xs text-slate-500">
-                스캔 결과 중 GPS가 있는 대표 그룹을 우선 확인합니다.
+                저장된 `index.json`을 기준으로 그룹을 다시 불러오고 편집합니다.
               </p>
             </div>
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)]">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)_minmax(360px,1fr)]">
               <GroupsMap
-                groups={summary?.mapGroups ?? []}
+                groups={libraryIndex?.mapGroups ?? []}
                 selectedGroupId={selectedGroupId}
                 onSelectGroup={setSelectedGroupId}
               />
               <GroupListPanel
-                groups={summary?.mapGroups ?? []}
+                groups={libraryIndex?.groups ?? []}
                 selectedGroupId={selectedGroupId}
                 onSelectGroup={setSelectedGroupId}
               />
+              <GroupDetailPanel
+                group={selectedGroup}
+                outputRoot={libraryIndex?.outputRoot}
+                isSaving={isSavingGroup}
+                onSave={handleSaveGroup}
+              />
             </div>
+            {isLoadingIndex ? (
+              <p className="text-sm text-slate-500">
+                저장된 인덱스를 불러오는 중입니다...
+              </p>
+            ) : null}
           </section>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">

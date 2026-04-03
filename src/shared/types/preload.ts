@@ -13,12 +13,60 @@ export interface ScanPhotoLibraryRequest {
   outputRoot: string
 }
 
+export interface LoadLibraryIndexRequest {
+  outputRoot: string
+}
+
+export interface UpdatePhotoGroupRequest {
+  outputRoot: string
+  groupId: string
+  title: string
+  companions: string[]
+  notes?: string
+  representativePhotoId?: string
+}
+
 export interface MapGroupSummary {
   id: string
   title: string
   photoCount: number
   latitude: number
   longitude: number
+}
+
+export interface GroupPhotoSummary {
+  id: string
+  sourceFileName: string
+  capturedAtIso?: string
+  capturedAtSource?: string
+  thumbnailRelativePath?: string
+  outputRelativePath?: string
+  hasGps: boolean
+}
+
+export interface GroupDetail {
+  id: string
+  groupKey: string
+  title: string
+  displayTitle: string
+  photoCount: number
+  photoIds: string[]
+  representativePhotoId?: string
+  representativeThumbnailRelativePath?: string
+  representativeGps?: {
+    latitude: number
+    longitude: number
+  }
+  companions: string[]
+  notes?: string
+  photos: GroupPhotoSummary[]
+}
+
+export interface LibraryIndexView {
+  generatedAt: string
+  outputRoot: string
+  groups: GroupDetail[]
+  mapGroups: MapGroupSummary[]
 }
 
 export type ScanPhotoLibraryIssueSeverity = 'warning' | 'error'
@@ -58,7 +106,13 @@ export interface PreloadBridge {
   selectDirectory: (
     options: DirectorySelectionOptions
   ) => Promise<string | null>
+  loadLibraryIndex: (
+    request: LoadLibraryIndexRequest
+  ) => Promise<LibraryIndexView | null>
   scanPhotoLibrary: (
     request: ScanPhotoLibraryRequest
   ) => Promise<ScanPhotoLibrarySummary>
+  updatePhotoGroup: (
+    request: UpdatePhotoGroupRequest
+  ) => Promise<LibraryIndexView>
 }

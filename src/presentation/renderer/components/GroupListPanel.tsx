@@ -1,7 +1,7 @@
-import type { MapGroupSummary } from '@shared/types/preload'
+import type { GroupDetail } from '@shared/types/preload'
 
 interface GroupListPanelProps {
-  groups: MapGroupSummary[]
+  groups: GroupDetail[]
   selectedGroupId?: string
   onSelectGroup?: (groupId: string) => void
 }
@@ -28,7 +28,7 @@ export function GroupListPanel({
                 아직 그룹이 없습니다.
               </p>
               <p className="text-sm text-slate-600">
-                GPS가 있는 사진을 정리하면 그룹 카드가 여기에 표시됩니다.
+                정리된 `index.json`이 있으면 그룹 카드가 여기에 표시됩니다.
               </p>
             </div>
           </div>
@@ -54,12 +54,12 @@ export function GroupListPanel({
                   </div>
                   <div className="grid gap-2 text-sm text-slate-600">
                     <p>
-                      <span className="font-medium text-slate-700">위도</span>{' '}
-                      {group.latitude.toFixed(5)}
+                      <span className="font-medium text-slate-700">기본 제목</span>{' '}
+                      {group.displayTitle}
                     </p>
                     <p>
-                      <span className="font-medium text-slate-700">경도</span>{' '}
-                      {group.longitude.toFixed(5)}
+                      <span className="font-medium text-slate-700">대표 사진</span>{' '}
+                      {group.representativePhotoId ? '선택됨' : '없음'}
                     </p>
                   </div>
                   <div className="pt-1">
@@ -68,7 +68,7 @@ export function GroupListPanel({
                       className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-blue-300 hover:text-blue-700"
                       onClick={() => onSelectGroup?.(group.id)}
                     >
-                      지도에서 보기
+                      상세 보기
                     </button>
                   </div>
                 </div>
