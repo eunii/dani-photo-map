@@ -35,6 +35,12 @@ function createUseCaseDependencies() {
           savedIndex = index
         })
       },
+      existingOutputScanner: {
+        scan: vi.fn().mockResolvedValue({
+          outputRoot: 'C:/output',
+          photos: []
+        })
+      },
       rules: defaultOrganizationRules
     },
     getSavedIndex() {
@@ -64,6 +70,8 @@ describe('ScanPhotoLibraryUseCase', () => {
 
     expect(result.scannedCount).toBe(1)
     expect(result.keptCount).toBe(1)
+    expect(result.copiedCount).toBe(1)
+    expect(result.skippedExistingCount).toBe(0)
     expect(result.failureCount).toBe(0)
     expect(result.warningCount).toBe(2)
     expect(result.issues.map((issue) => issue.code)).toEqual([
@@ -76,7 +84,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     ])
   })
 
-  it('skips a photo when copy destination already exists and records a structured failure', async () => {
+  it('records a structured failure when a unique photo cannot be copied', async () => {
     const { dependencies, getSavedIndex } = createUseCaseDependencies()
 
     dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
@@ -104,6 +112,8 @@ describe('ScanPhotoLibraryUseCase', () => {
 
     expect(result.scannedCount).toBe(2)
     expect(result.keptCount).toBe(1)
+    expect(result.copiedCount).toBe(1)
+    expect(result.skippedExistingCount).toBe(0)
     expect(result.failureCount).toBe(1)
     expect(result.warningCount).toBe(0)
     expect(result.issues[0]).toMatchObject({
@@ -137,11 +147,9 @@ describe('ScanPhotoLibraryUseCase', () => {
 
     expect(result.duplicateCount).toBe(1)
     expect(result.keptCount).toBe(1)
-    expect(getSavedIndex()?.photos.map((photo) => photo.isDuplicate)).toEqual([
-      false,
-      true
-    ])
-    expect(getSavedIndex()?.photos[1]?.duplicateOfPhotoId).toBe('photo-1')
+    expect(result.copiedCount).toBe(1)
+    expect(getSavedIndex()?.photos).toHaveLength(1)
+    expect(getSavedIndex()?.photos[0]?.isDuplicate).toBe(false)
     expect(getSavedIndex()?.photos[0]?.thumbnailRelativePath).toBe(
       '.photo-organizer/thumbnails/thumb.webp'
     )
@@ -191,12 +199,6 @@ describe('ScanPhotoLibraryUseCase', () => {
     expect(result.keptCount).toBe(1)
     expect(getSavedIndex()?.photos).toMatchObject([
       {
-        id: 'photo-1',
-        sourceFileName: 'IMG_0002.JPG',
-        isDuplicate: true,
-        duplicateOfPhotoId: 'photo-2'
-      },
-      {
         id: 'photo-2',
         sourceFileName: 'IMG_0001.JPG',
         isDuplicate: false
@@ -243,5 +245,58 @@ describe('ScanPhotoLibraryUseCase', () => {
       regionName: 'location-unknown',
       metadataIssues: ['region-resolve-failed']
     })
+  })
+
+  it('skips copying when the same SHA-256 already exists anywhere in the output', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_0003.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      gps: {
+        latitude: 37.5665,
+        longitude: 126.978
+      }
+    })
+    dependencies.existingOutputScanner.scan.mockResolvedValue({
+      outputRoot: 'C:/output',
+      photos: [
+        {
+          id: 'fallback-photo-a',
+          sourcePath: 'C:/output/2026/04/busan/2026-04-01_090000_IMG_9999.JPG',
+          sourceFileName: '2026-04-01_090000_IMG_9999.JPG',
+          capturedAt: {
+            iso: '2026-04-01T09:00:00.000Z',
+            year: '2026',
+            month: '04',
+            day: '01',
+            time: '090000'
+          },
+          regionName: 'busan',
+          outputRelativePath: '2026/04/busan/2026-04-01_090000_IMG_9999.JPG'
+        }
+      ]
+    })
+    dependencies.hasher.createSha256
+      .mockResolvedValueOnce('existing-hash')
+      .mockResolvedValueOnce('existing-hash')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output'
+    })
+
+    expect(result.scannedCount).toBe(1)
+    expect(result.keptCount).toBe(0)
+    expect(result.copiedCount).toBe(0)
+    expect(result.skippedExistingCount).toBe(1)
+    expect(dependencies.fileSystem.copyFile).not.toHaveBeenCalled()
+    expect(getSavedIndex()?.photos).toHaveLength(1)
+    expect(getSavedIndex()?.photos[0]?.outputRelativePath).toBe(
+      '2026/04/busan/2026-04-01_090000_IMG_9999.JPG'
+    )
   })
 })

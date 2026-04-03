@@ -19,11 +19,12 @@ const OUTPUT_DIALOG_OPTIONS = {
 function getLoadSourceBadge(
   source: LibraryIndexLoadSource | null
 ): { label: string; tone: string; description: string } | null {
-  if (source === 'index') {
+  if (source === 'merged') {
     return {
-      label: 'index 기반',
+      label: '병합 기반',
       tone: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-      description: '저장된 .photo-organizer/index.json을 기준으로 조회 중입니다.'
+      description:
+        '출력 폴더 실제 파일 목록에 저장된 index 메타데이터를 병합해 조회 중입니다.'
     }
   }
 
@@ -184,7 +185,7 @@ export function BrowsePage() {
       })
 
       setLastLoadedIndex({
-        source: 'index',
+        source: 'merged',
         index: updatedIndex
       })
       setSelectedGroupId(selectedGroup.id)

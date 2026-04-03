@@ -33,6 +33,8 @@ export const scanPhotoLibraryResultSchema = z.object({
   scannedCount: z.number().int().nonnegative(),
   duplicateCount: z.number().int().nonnegative(),
   keptCount: z.number().int().nonnegative(),
+  copiedCount: z.number().int().nonnegative(),
+  skippedExistingCount: z.number().int().nonnegative(),
   groupCount: z.number().int().nonnegative(),
   warningCount: z.number().int().nonnegative(),
   failureCount: z.number().int().nonnegative(),

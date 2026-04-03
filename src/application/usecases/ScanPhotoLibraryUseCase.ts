@@ -6,6 +6,10 @@ import type {
   ScanPhotoLibraryIssue,
   ScanPhotoLibraryResult
 } from '@application/dto/ScanPhotoLibraryResult'
+import type {
+  ExistingOutputLibrarySnapshot,
+  ExistingOutputScannerPort
+} from '@application/ports/ExistingOutputScannerPort'
 import type { LibraryIndexStorePort } from '@application/ports/LibraryIndexStorePort'
 import {
   PhotoFileConflictError,
@@ -25,6 +29,8 @@ import {
 import { selectCanonicalDuplicatePhoto } from '@domain/services/DuplicatePhotoPolicy'
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import { buildPhotoOutputRelativePath } from '@domain/services/PhotoNamingService'
+import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
+import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
 import {
   LIBRARY_INDEX_VERSION,
   type LibraryIndex
@@ -44,6 +50,7 @@ export interface ScanPhotoLibraryDependencies {
   regionResolver: RegionResolverPort
   thumbnailGenerator: ThumbnailGeneratorPort
   libraryIndexStore: LibraryIndexStorePort
+  existingOutputScanner: ExistingOutputScannerPort
   rules?: OrganizationRules
 }
 
@@ -63,6 +70,13 @@ interface PreparedPhotoRecord {
   context: ScanPhotoContext
 }
 
+interface FinalizedScanResult {
+  copiedPhotos: Photo[]
+  copiedCount: number
+  duplicateCount: number
+  skippedExistingCount: number
+}
+
 export class ScanPhotoLibraryUseCase {
   private readonly rules: OrganizationRules
 
@@ -74,6 +88,14 @@ export class ScanPhotoLibraryUseCase {
     const validatedCommand = scanPhotoLibraryCommandSchema.parse(command)
     const paths = this.createScanPathContext(validatedCommand)
     const issues: ScanPhotoLibraryIssue[] = []
+    const existingOutputSnapshot = await this.dependencies.existingOutputScanner.scan(
+      paths.outputRoot
+    )
+    const storedIndex = await this.loadStoredLibraryIndexSafely(paths.outputRoot)
+    const existingOutputHashes = await this.createExistingOutputHashes(
+      existingOutputSnapshot,
+      issues
+    )
 
     const photoPaths = await this.dependencies.fileSystem.listPhotoFiles(
       paths.sourceRoot
@@ -98,28 +120,28 @@ export class ScanPhotoLibraryUseCase {
       }
     }
 
-    const photos = await this.finalizePreparedPhotos(
+    const finalizedScanResult = await this.finalizePreparedPhotos(
       preparedPhotoRecords,
       paths.outputRoot,
+      existingOutputHashes,
       issues
     )
-
-    const groups = createPhotoGroups(photos)
-    const index: LibraryIndex = {
-      version: LIBRARY_INDEX_VERSION,
-      generatedAt: new Date().toISOString(),
-      sourceRoot: paths.sourceRoot,
-      outputRoot: paths.outputRoot,
-      photos,
-      groups
-    }
+    const index = this.buildMergedLibraryIndex(
+      paths,
+      existingOutputSnapshot,
+      storedIndex,
+      finalizedScanResult.copiedPhotos
+    )
+    const groups = index.groups
 
     await this.dependencies.libraryIndexStore.save(index)
 
     return {
       scannedCount: photoPaths.length,
-      duplicateCount: photos.filter((photo) => photo.isDuplicate).length,
-      keptCount: photos.filter((photo) => !photo.isDuplicate).length,
+      duplicateCount: finalizedScanResult.duplicateCount,
+      keptCount: finalizedScanResult.copiedCount,
+      copiedCount: finalizedScanResult.copiedCount,
+      skippedExistingCount: finalizedScanResult.skippedExistingCount,
       groupCount: groups.length,
       warningCount: issues.filter((issue) => issue.severity === 'warning').length,
       failureCount: issues.filter((issue) => issue.severity === 'error').length,
@@ -206,27 +228,46 @@ export class ScanPhotoLibraryUseCase {
   private async finalizePreparedPhotos(
     preparedPhotoRecords: PreparedPhotoRecord[],
     outputRoot: string,
+    existingOutputHashes: Set<string>,
     issues: ScanPhotoLibraryIssue[]
-  ): Promise<Photo[]> {
+  ): Promise<FinalizedScanResult> {
     const canonicalPhotoIdByHash = this.createCanonicalPhotoIdByHash(
       preparedPhotoRecords.map((record) => record.photo)
     )
-    const finalizedPhotos: Photo[] = []
+    const copiedPhotos: Photo[] = []
+    let duplicateCount = 0
+    let skippedExistingCount = 0
 
     for (const preparedPhotoRecord of preparedPhotoRecords) {
       const finalizedPhoto = await this.finalizePreparedPhoto(
         preparedPhotoRecord,
         outputRoot,
         canonicalPhotoIdByHash,
+        existingOutputHashes,
         issues
       )
 
+      if (finalizedPhoto === 'duplicate') {
+        duplicateCount += 1
+        continue
+      }
+
+      if (finalizedPhoto === 'existing-output-duplicate') {
+        skippedExistingCount += 1
+        continue
+      }
+
       if (finalizedPhoto) {
-        finalizedPhotos.push(finalizedPhoto)
+        copiedPhotos.push(finalizedPhoto)
       }
     }
 
-    return finalizedPhotos
+    return {
+      copiedPhotos,
+      copiedCount: copiedPhotos.length,
+      duplicateCount,
+      skippedExistingCount
+    }
   }
 
   private createCanonicalPhotoIdByHash(photos: Photo[]): Map<string, string> {
@@ -258,8 +299,9 @@ export class ScanPhotoLibraryUseCase {
     preparedPhotoRecord: PreparedPhotoRecord,
     outputRoot: string,
     canonicalPhotoIdByHash: Map<string, string>,
+    existingOutputHashes: Set<string>,
     issues: ScanPhotoLibraryIssue[]
-  ): Promise<Photo | null> {
+  ): Promise<Photo | 'duplicate' | 'existing-output-duplicate' | null> {
     const photo = {
       ...preparedPhotoRecord.photo
     }
@@ -270,7 +312,15 @@ export class ScanPhotoLibraryUseCase {
     photo.isDuplicate = Boolean(canonicalPhotoId && canonicalPhotoId !== photo.id)
     photo.duplicateOfPhotoId = photo.isDuplicate ? canonicalPhotoId : undefined
 
-    if (!photo.isDuplicate && photo.outputRelativePath) {
+    if (photo.isDuplicate) {
+      return 'duplicate'
+    }
+
+    if (photo.sha256 && existingOutputHashes.has(photo.sha256)) {
+      return 'existing-output-duplicate'
+    }
+
+    if (photo.outputRelativePath) {
       const copySucceeded = await this.copyPhotoToOutput(outputRoot, photo, issues)
 
       if (!copySucceeded) {
@@ -285,6 +335,65 @@ export class ScanPhotoLibraryUseCase {
     }
 
     return photo
+  }
+
+  private async loadStoredLibraryIndexSafely(
+    outputRoot: string
+  ): Promise<LibraryIndex | null> {
+    try {
+      return await this.dependencies.libraryIndexStore.load(outputRoot)
+    } catch {
+      return null
+    }
+  }
+
+  private async createExistingOutputHashes(
+    snapshot: ExistingOutputLibrarySnapshot,
+    issues: ScanPhotoLibraryIssue[]
+  ): Promise<Set<string>> {
+    const hashes = new Set<string>()
+
+    for (const existingPhoto of snapshot.photos) {
+      try {
+        hashes.add(await this.dependencies.hasher.createSha256(existingPhoto.sourcePath))
+      } catch (error) {
+        issues.push(
+          this.createIssue({
+            code: 'existing-output-hash-failed',
+            severity: 'warning',
+            stage: 'hash',
+            sourcePath: existingPhoto.sourcePath,
+            photoId: existingPhoto.id,
+            outputRelativePath: existingPhoto.outputRelativePath,
+            message: this.getErrorMessage(error)
+          })
+        )
+      }
+    }
+
+    return hashes
+  }
+
+  private buildMergedLibraryIndex(
+    paths: ScanPathContext,
+    existingOutputSnapshot: ExistingOutputLibrarySnapshot,
+    storedIndex: LibraryIndex | null,
+    copiedPhotos: Photo[]
+  ): LibraryIndex {
+    const rebuiltExistingIndex = rebuildLibraryIndexFromExistingOutput(
+      existingOutputSnapshot
+    )
+    const mergedBasePhotos = rebuiltExistingIndex?.photos ?? []
+    const rebuiltIndex: LibraryIndex = {
+      version: LIBRARY_INDEX_VERSION,
+      generatedAt: new Date().toISOString(),
+      sourceRoot: paths.sourceRoot,
+      outputRoot: paths.outputRoot,
+      photos: [...mergedBasePhotos, ...copiedPhotos],
+      groups: createPhotoGroups([...mergedBasePhotos, ...copiedPhotos])
+    }
+
+    return mergeStoredLibraryMetadata(rebuiltIndex, storedIndex)
   }
 
   private async readMetadataSafely(

@@ -52,6 +52,7 @@ function createScanPhotoLibraryUseCase(command: ScanPhotoLibraryRequest) {
     regionResolver,
     thumbnailGenerator: new SharpThumbnailGenerator(thumbnailsRootPath),
     libraryIndexStore: createLibraryIndexStore(),
+    existingOutputScanner: new ExistingOutputLibraryScanner(rules),
     rules
   })
 }

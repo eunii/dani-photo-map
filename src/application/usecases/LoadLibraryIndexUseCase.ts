@@ -4,13 +4,14 @@ import {
 } from '@application/dto/LoadLibraryIndexCommand'
 import type { ExistingOutputScannerPort } from '@application/ports/ExistingOutputScannerPort'
 import type { LibraryIndexStorePort } from '@application/ports/LibraryIndexStorePort'
+import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
 import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import { normalizePathSeparators } from '@shared/utils/path'
 
 export interface LoadLibraryIndexResult {
   index: LibraryIndex | null
-  source: 'index' | 'fallback' | null
+  source: 'merged' | 'fallback' | null
 }
 
 export class LoadLibraryIndexUseCase {
@@ -24,26 +25,30 @@ export class LoadLibraryIndexUseCase {
   ): Promise<LoadLibraryIndexResult> {
     const validatedCommand = loadLibraryIndexCommandSchema.parse(command)
     const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
-
-    try {
-      const index = await this.libraryIndexStore.load(outputRoot)
-
-      if (index) {
-        return {
-          index,
-          source: 'index'
-        }
-      }
-    } catch {
-      // Invalid or unreadable index.json should fall back to output scan.
-    }
-
+    const storedIndex = await this.loadStoredLibraryIndexSafely(outputRoot)
     const snapshot = await this.existingOutputScanner.scan(outputRoot)
     const rebuiltIndex = rebuildLibraryIndexFromExistingOutput(snapshot)
 
+    if (!rebuiltIndex) {
+      return {
+        index: null,
+        source: null
+      }
+    }
+
     return {
-      index: rebuiltIndex,
-      source: rebuiltIndex ? 'fallback' : null
+      index: mergeStoredLibraryMetadata(rebuiltIndex, storedIndex),
+      source: storedIndex ? 'merged' : 'fallback'
+    }
+  }
+
+  private async loadStoredLibraryIndexSafely(
+    outputRoot: string
+  ): Promise<LibraryIndex | null> {
+    try {
+      return await this.libraryIndexStore.load(outputRoot)
+    } catch {
+      return null
     }
   }
 }

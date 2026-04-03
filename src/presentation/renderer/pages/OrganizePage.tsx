@@ -188,9 +188,21 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                 </p>
               </div>
               <div className="rounded-lg bg-white px-4 py-3">
+                <p className="text-xs text-slate-500">신규 복사 수</p>
+                <p className="text-xl font-semibold text-slate-900">
+                  {summary.copiedCount}
+                </p>
+              </div>
+              <div className="rounded-lg bg-white px-4 py-3">
                 <p className="text-xs text-slate-500">중복 수</p>
                 <p className="text-xl font-semibold text-slate-900">
                   {summary.duplicateCount}
+                </p>
+              </div>
+              <div className="rounded-lg bg-white px-4 py-3">
+                <p className="text-xs text-slate-500">기존 중복 스킵 수</p>
+                <p className="text-xl font-semibold text-slate-900">
+                  {summary.skippedExistingCount}
                 </p>
               </div>
               <div className="rounded-lg bg-white px-4 py-3">

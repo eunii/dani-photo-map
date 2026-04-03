@@ -17,7 +17,7 @@ export interface LoadLibraryIndexRequest {
   outputRoot: string
 }
 
-export type LibraryIndexLoadSource = 'index' | 'fallback'
+export type LibraryIndexLoadSource = 'merged' | 'fallback'
 
 export interface UpdatePhotoGroupRequest {
   outputRoot: string
@@ -101,6 +101,8 @@ export interface ScanPhotoLibrarySummary {
   scannedCount: number
   duplicateCount: number
   keptCount: number
+  copiedCount: number
+  skippedExistingCount: number
   groupCount: number
   warningCount: number
   failureCount: number
