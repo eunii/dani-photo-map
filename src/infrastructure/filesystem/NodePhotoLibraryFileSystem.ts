@@ -1,7 +1,9 @@
-import { cp, mkdir, readdir } from 'node:fs/promises'
-import { extname, join } from 'node:path'
+import { constants } from 'node:fs'
+import { copyFile, mkdir, readdir } from 'node:fs/promises'
+import { extname, join, normalize } from 'node:path'
 
 import type { PhotoLibraryFileSystemPort } from '@application/ports/PhotoLibraryFileSystemPort'
+import { normalizePathSeparators } from '@shared/utils/path'
 
 const PHOTO_EXTENSIONS = new Set([
   '.jpg',
@@ -20,15 +22,21 @@ export class NodePhotoLibraryFileSystem implements PhotoLibraryFileSystemPort {
 
     await this.collectPhotoFiles(rootPath, photoFiles)
 
-    return photoFiles.sort()
+    return photoFiles
+      .map((photoPath) => normalizePathSeparators(photoPath))
+      .sort()
   }
 
   async ensureDirectory(path: string): Promise<void> {
-    await mkdir(path, { recursive: true })
+    await mkdir(normalize(path), { recursive: true })
   }
 
   async copyFile(sourcePath: string, destinationPath: string): Promise<void> {
-    await cp(sourcePath, destinationPath)
+    await copyFile(
+      normalize(sourcePath),
+      normalize(destinationPath),
+      constants.COPYFILE_EXCL
+    )
   }
 
   private async collectPhotoFiles(

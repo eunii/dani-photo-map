@@ -18,21 +18,17 @@ import {
 } from '@domain/policies/OrganizationRules'
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import { buildPhotoOutputRelativePath } from '@domain/services/PhotoNamingService'
-import type { LibraryIndex } from '@domain/entities/LibraryIndex'
+import {
+  LIBRARY_INDEX_VERSION,
+  type LibraryIndex
+} from '@domain/entities/LibraryIndex'
 import type { Photo } from '@domain/entities/Photo'
-import { joinPathSegments } from '@shared/utils/path'
-
-function getFileNameFromPath(path: string): string {
-  return path.split(/[/\\]/).pop() ?? path
-}
-
-function getDirectoryName(path: string): string {
-  const segments = path.split('/')
-
-  segments.pop()
-
-  return segments.join('/')
-}
+import {
+  getPathBaseName,
+  getPathDirectoryName,
+  joinPathSegments,
+  normalizePathSeparators
+} from '@shared/utils/path'
 
 export interface ScanPhotoLibraryDependencies {
   fileSystem: PhotoLibraryFileSystemPort
@@ -52,20 +48,23 @@ export class ScanPhotoLibraryUseCase {
   }
 
   async execute(command: ScanPhotoLibraryCommand): Promise<ScanPhotoLibraryResult> {
-    scanPhotoLibraryCommandSchema.parse(command)
+    const validatedCommand = scanPhotoLibraryCommandSchema.parse(command)
+    const sourceRoot = normalizePathSeparators(validatedCommand.sourceRoot)
+    const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
 
     const photoPaths = await this.dependencies.fileSystem.listPhotoFiles(
-      command.sourceRoot
+      sourceRoot
     )
     const seenHashes = new Set<string>()
     const photos: Photo[] = []
 
-    await this.dependencies.fileSystem.ensureDirectory(command.outputRoot)
+    await this.dependencies.fileSystem.ensureDirectory(outputRoot)
     await this.dependencies.fileSystem.ensureDirectory(
-      joinPathSegments(command.outputRoot, this.rules.outputThumbnailsRelativePath)
+      joinPathSegments(outputRoot, this.rules.outputThumbnailsRelativePath)
     )
 
-    for (const [index, sourcePath] of photoPaths.entries()) {
+    for (const [index, listedPhotoPath] of photoPaths.entries()) {
+      const sourcePath = normalizePathSeparators(listedPhotoPath)
       const metadataIssues: string[] = []
       const metadata = await this.readMetadataSafely(sourcePath, metadataIssues)
       const sha256 = await this.dependencies.hasher.createSha256(sourcePath)
@@ -82,7 +81,7 @@ export class ScanPhotoLibraryUseCase {
       const photo: Photo = {
         id: `photo-${index + 1}`,
         sourcePath,
-        sourceFileName: getFileNameFromPath(sourcePath),
+        sourceFileName: getPathBaseName(sourcePath),
         sha256,
         capturedAt: metadata.capturedAt,
         gps: metadata.gps,
@@ -91,7 +90,7 @@ export class ScanPhotoLibraryUseCase {
           {
             capturedAt: metadata.capturedAt,
             regionName,
-            sourceFileName: getFileNameFromPath(sourcePath)
+            sourceFileName: getPathBaseName(sourcePath)
           },
           this.rules
         ),
@@ -100,7 +99,7 @@ export class ScanPhotoLibraryUseCase {
       }
 
       if (!photo.isDuplicate && photo.outputRelativePath) {
-        await this.copyPhotoToOutput(command.outputRoot, photo)
+        await this.copyPhotoToOutput(outputRoot, photo)
         photo.thumbnailRelativePath = await this.generateThumbnailSafely(
           sourcePath,
           metadataIssues
@@ -112,10 +111,10 @@ export class ScanPhotoLibraryUseCase {
 
     const groups = createPhotoGroups(photos)
     const index: LibraryIndex = {
-      version: 1,
+      version: LIBRARY_INDEX_VERSION,
       generatedAt: new Date().toISOString(),
-      sourceRoot: command.sourceRoot,
-      outputRoot: command.outputRoot,
+      sourceRoot,
+      outputRoot,
       photos,
       groups
     }
@@ -176,7 +175,7 @@ export class ScanPhotoLibraryUseCase {
     }
 
     const destinationPath = joinPathSegments(outputRoot, photo.outputRelativePath)
-    const destinationDirectory = getDirectoryName(destinationPath)
+    const destinationDirectory = getPathDirectoryName(destinationPath)
 
     await this.dependencies.fileSystem.ensureDirectory(destinationDirectory)
     await this.dependencies.fileSystem.copyFile(photo.sourcePath, destinationPath)
