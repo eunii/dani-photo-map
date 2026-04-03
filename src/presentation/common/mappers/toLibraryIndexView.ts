@@ -32,7 +32,8 @@ export function toLibraryIndexView(index: LibraryIndex): LibraryIndexView {
           capturedAtSource: photo.capturedAtSource,
           thumbnailRelativePath: photo.thumbnailRelativePath,
           outputRelativePath: photo.outputRelativePath,
-          hasGps: Boolean(photo.gps)
+          hasGps: Boolean(photo.gps),
+          missingGpsCategory: photo.missingGpsCategory
         }))
       }
     }),

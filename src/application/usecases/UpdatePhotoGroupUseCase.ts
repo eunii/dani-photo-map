@@ -6,32 +6,14 @@ import type { ExistingOutputScannerPort } from '@application/ports/ExistingOutpu
 import type { PhotoLibraryFileSystemPort } from '@application/ports/PhotoLibraryFileSystemPort'
 import type { LibraryIndexStorePort } from '@application/ports/LibraryIndexStorePort'
 import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
+import {
+  applyRenamePlan,
+  createGroupAwareRenamePlan
+} from '@application/services/groupAwarePhotoRelocation'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
-import type { Photo } from '@domain/entities/Photo'
 import type { PhotoGroup } from '@domain/entities/PhotoGroup'
 import { defaultOrganizationRules, type OrganizationRules } from '@domain/policies/OrganizationRules'
-import {
-  buildGroupAwarePhotoOutputRelativePath,
-  createGroupAwarePhotoFileNamePrefix
-} from '@domain/services/GroupAwarePhotoNamingService'
-import {
-  getPathBaseName,
-  getPathDirectoryName,
-  joinPathSegments,
-  normalizePathSeparators
-} from '@shared/utils/path'
-
-interface PlannedRename {
-  photoId: string
-  currentAbsolutePath: string
-  nextAbsolutePath: string
-  nextOutputRelativePath: string
-}
-
-interface RenameablePhoto extends Photo {
-  regionName: string
-  outputRelativePath: string
-}
+import { normalizePathSeparators } from '@shared/utils/path'
 
 function normalizeCompanions(companions: string[]): string[] {
   return Array.from(
@@ -84,14 +66,17 @@ export class UpdatePhotoGroupUseCase {
       ? index.photos.find((photo) => photo.id === representativePhotoId)
       : undefined
     const nextTitle = normalizeTitle(validatedCommand.title, group.displayTitle)
-    const renamePlan = await this.createRenamePlan(
-      group,
-      index.photos,
+    const renamePlan = await createGroupAwareRenamePlan({
+      photos: group.photoIds
+        .map((photoId) => index.photos.find((photo) => photo.id === photoId))
+        .filter((photo) => photo !== undefined),
       outputRoot,
-      nextTitle
-    )
+      groupTitle: nextTitle,
+      fileSystem: this.fileSystem,
+      rules: this.rules
+    })
 
-    await this.applyRenamePlan(renamePlan)
+    await applyRenamePlan(renamePlan, this.fileSystem)
 
     const updatedPhotos = index.photos.map((photo) => {
       const plannedRename = renamePlan.find((plan) => plan.photoId === photo.id)
@@ -154,161 +139,6 @@ export class UpdatePhotoGroupUseCase {
     return rebuiltIndex
   }
 
-  private async createRenamePlan(
-    group: PhotoGroup,
-    photos: Photo[],
-    outputRoot: string,
-    groupTitle: string
-  ): Promise<PlannedRename[]> {
-    const groupPhotos = group.photoIds
-      .map((photoId) => photos.find((photo) => photo.id === photoId))
-      .filter((photo): photo is Photo => photo !== undefined)
-      .map((photo) => this.toRenameablePhoto(photo))
-      .filter((photo): photo is RenameablePhoto => photo !== null)
-      .sort((left, right) => {
-        const leftCapturedAt = left.capturedAt?.iso ?? ''
-        const rightCapturedAt = right.capturedAt?.iso ?? ''
-
-        if (leftCapturedAt !== rightCapturedAt) {
-          return leftCapturedAt.localeCompare(rightCapturedAt)
-        }
-
-        return left.sourceFileName.localeCompare(right.sourceFileName)
-      })
-    const currentFileNamesByDirectory = new Map<string, Set<string>>()
-
-    for (const photo of groupPhotos) {
-      const currentDirectoryPath = getPathDirectoryName(photo.outputRelativePath)
-      const currentFileName = getPathBaseName(photo.outputRelativePath)
-      const currentFileNames = currentFileNamesByDirectory.get(currentDirectoryPath) ?? new Set<string>()
-
-      currentFileNames.add(currentFileName)
-      currentFileNamesByDirectory.set(currentDirectoryPath, currentFileNames)
-    }
-
-    const occupiedFileNamesByDirectory = new Map<string, Set<string>>()
-    const renamePlan: PlannedRename[] = []
-
-    for (const photo of groupPhotos) {
-      const targetDirectoryPath = getPathDirectoryName(
-        buildGroupAwarePhotoOutputRelativePath(photo, groupTitle, 1, this.rules)
-      )
-      const targetDirectoryAbsolutePath = joinPathSegments(
-        outputRoot,
-        targetDirectoryPath
-      )
-      const occupiedFileNames = await this.getOccupiedFileNames(
-        targetDirectoryPath,
-        targetDirectoryAbsolutePath,
-        currentFileNamesByDirectory,
-        occupiedFileNamesByDirectory
-      )
-      const nextSequenceNumber = this.findNextSequenceNumber(
-        occupiedFileNames,
-        photo,
-        groupTitle
-      )
-      const nextOutputRelativePath = buildGroupAwarePhotoOutputRelativePath(
-        photo,
-        groupTitle,
-        nextSequenceNumber,
-        this.rules
-      )
-      const nextFileName = getPathBaseName(nextOutputRelativePath)
-
-      occupiedFileNames.add(nextFileName)
-      renamePlan.push({
-        photoId: photo.id,
-        currentAbsolutePath: joinPathSegments(outputRoot, photo.outputRelativePath),
-        nextAbsolutePath: joinPathSegments(outputRoot, nextOutputRelativePath),
-        nextOutputRelativePath
-      })
-    }
-
-    return renamePlan
-  }
-
-  private async getOccupiedFileNames(
-    targetDirectoryPath: string,
-    targetDirectoryAbsolutePath: string,
-    currentFileNamesByDirectory: Map<string, Set<string>>,
-    occupiedFileNamesByDirectory: Map<string, Set<string>>
-  ): Promise<Set<string>> {
-    const existingOccupiedFileNames =
-      occupiedFileNamesByDirectory.get(targetDirectoryPath)
-
-    if (existingOccupiedFileNames) {
-      return existingOccupiedFileNames
-    }
-
-    const directoryFileNames = new Set(
-      await this.fileSystem.listDirectoryFileNames(targetDirectoryAbsolutePath)
-    )
-    const currentFileNames = currentFileNamesByDirectory.get(targetDirectoryPath) ?? new Set<string>()
-
-    for (const currentFileName of currentFileNames) {
-      directoryFileNames.delete(currentFileName)
-    }
-
-    occupiedFileNamesByDirectory.set(targetDirectoryPath, directoryFileNames)
-
-    return directoryFileNames
-  }
-
-  private findNextSequenceNumber(
-    occupiedFileNames: Set<string>,
-    photo: Photo,
-    groupTitle: string
-  ): number {
-    const prefix = createGroupAwarePhotoFileNamePrefix(
-      groupTitle,
-      photo.capturedAt
-    )
-    const fileName = photo.sourceFileName
-    const lastDotIndex = fileName.lastIndexOf('.')
-    const extension = lastDotIndex > 0 ? fileName.slice(lastDotIndex) : ''
-    const pattern = new RegExp(
-      `^${this.escapeRegExp(prefix)}_(\\d+)${this.escapeRegExp(extension)}$`
-    )
-    let maxSequenceNumber = 0
-
-    for (const occupiedFileName of occupiedFileNames) {
-      const match = occupiedFileName.match(pattern)
-
-      if (!match) {
-        continue
-      }
-
-      const sequenceNumber = Number.parseInt(match[1] ?? '0', 10)
-
-      if (sequenceNumber > maxSequenceNumber) {
-        maxSequenceNumber = sequenceNumber
-      }
-    }
-
-    return maxSequenceNumber + 1
-  }
-
-  private async applyRenamePlan(renamePlan: PlannedRename[]): Promise<void> {
-    const temporaryRenamePlan = renamePlan
-      .filter((plan) => plan.currentAbsolutePath !== plan.nextAbsolutePath)
-      .map((plan, index) => ({
-        ...plan,
-        temporaryAbsolutePath: `${plan.currentAbsolutePath}.photo-organizer-${Date.now()}-${index}.tmp`
-      }))
-
-    for (const plan of temporaryRenamePlan) {
-      await this.fileSystem.moveFile(plan.currentAbsolutePath, plan.temporaryAbsolutePath)
-    }
-
-    for (const plan of temporaryRenamePlan) {
-      await this.fileSystem.ensureDirectory(
-        getPathDirectoryName(plan.nextAbsolutePath)
-      )
-      await this.fileSystem.moveFile(plan.temporaryAbsolutePath, plan.nextAbsolutePath)
-    }
-  }
-
   private resolveRepresentativePhotoId(
     representativePhotoId: string | undefined,
     group: PhotoGroup
@@ -324,30 +154,5 @@ export class UpdatePhotoGroupUseCase {
     }
 
     return representativePhotoId
-  }
-
-  private escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  }
-
-  private toRenameablePhoto(photo: Photo): RenameablePhoto | null {
-    if (!photo.outputRelativePath) {
-      return null
-    }
-
-    const normalizedOutputRelativePath = normalizePathSeparators(photo.outputRelativePath)
-    const pathSegments = normalizedOutputRelativePath.split('/')
-    const regionNameFromPath = pathSegments.at(-2)
-    const regionName = photo.regionName ?? regionNameFromPath
-
-    if (!regionName) {
-      return null
-    }
-
-    return {
-      ...photo,
-      regionName,
-      outputRelativePath: normalizedOutputRelativePath
-    }
   }
 }

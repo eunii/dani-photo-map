@@ -16,6 +16,35 @@ const OUTPUT_DIALOG_OPTIONS = {
   buttonLabel: '출력 폴더 선택'
 } as const
 
+function getMissingGpsCategoryLabel(
+  category?: PreviewPendingOrganizationResult['groups'][number]['missingGpsCategory']
+): string | null {
+  switch (category) {
+    case 'capture':
+      return '캡처 자동 분류'
+    case 'missing-original-gps':
+      return '원본 GPS 없음'
+    case 'missing-imported-gps':
+      return '외부 수신본 GPS 없음'
+    default:
+      return null
+  }
+}
+
+function getAssignmentModeDescription(
+  group: PreviewPendingOrganizationResult['groups'][number]
+): string | null {
+  switch (group.assignmentMode) {
+    case 'auto-capture':
+      return '자동으로 캡처 폴더로 분리됩니다.'
+    case 'manual-existing-group':
+      return '기존 GPS 그룹을 선택하면 해당 그룹 소속으로 넣고 앱 내부 위치를 그 그룹 기준으로 사용합니다.'
+    case 'new-group':
+    default:
+      return null
+  }
+}
+
 interface OrganizePageProps {
   onNavigateToBrowse?: () => void
 }
@@ -43,6 +72,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   const [groupNotesInputs, setGroupNotesInputs] = useState<
     Record<string, string>
   >({})
+  const [groupAssignmentInputs, setGroupAssignmentInputs] = useState<
+    Record<string, string>
+  >({})
   const [previewImageLoadFailedByPhotoId, setPreviewImageLoadFailedByPhotoId] =
     useState<Record<string, boolean>>({})
 
@@ -59,13 +91,32 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
             .filter((value) => value.length > 0),
           notes: groupNotesInputs[group.groupKey]?.trim() || undefined
         }))
-        .filter((entry) => entry.title.length > 0),
+        .filter((entry) => {
+          const group = (previewResult?.groups ?? []).find(
+            (candidate) => candidate.groupKey === entry.groupKey
+          )
+
+          return (
+            entry.title.length > 0 && group?.assignmentMode !== 'manual-existing-group'
+          )
+        }),
     [
       groupCompanionsInputs,
+      previewResult?.groups,
       groupNotesInputs,
-      groupTitleInputs,
-      previewResult?.groups
+      groupTitleInputs
     ]
+  )
+  const pendingGroupAssignmentEntries = useMemo(
+    () =>
+      (previewResult?.groups ?? [])
+        .filter((group) => group.assignmentMode === 'manual-existing-group')
+        .map((group) => ({
+          groupKey: group.groupKey,
+          targetGroupId: groupAssignmentInputs[group.groupKey] ?? ''
+        }))
+        .filter((entry) => entry.targetGroupId.length > 0),
+    [groupAssignmentInputs, previewResult?.groups]
   )
 
   async function selectSourceRoot(): Promise<void> {
@@ -79,6 +130,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupTitleInputs({})
       setGroupCompanionsInputs({})
       setGroupNotesInputs({})
+      setGroupAssignmentInputs({})
       setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
       setErrorMessage(null)
@@ -97,6 +149,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupTitleInputs({})
       setGroupCompanionsInputs({})
       setGroupNotesInputs({})
+      setGroupAssignmentInputs({})
       setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
       setErrorMessage(null)
@@ -134,6 +187,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupNotesInputs(
         Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
       )
+      setGroupAssignmentInputs(
+        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
+      )
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -158,7 +214,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       const nextSummary = await window.photoApp.scanPhotoLibrary({
         sourceRoot,
         outputRoot,
-        groupMetadataOverrides: previewMetadataOverrideEntries
+        groupMetadataOverrides: previewMetadataOverrideEntries,
+        pendingGroupAssignments: pendingGroupAssignmentEntries
       })
       const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
 
@@ -168,6 +225,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupTitleInputs({})
       setGroupCompanionsInputs({})
       setGroupNotesInputs({})
+      setGroupAssignmentInputs({})
       setPreviewImageLoadFailedByPhotoId({})
     } catch (error) {
       setErrorMessage(
@@ -314,6 +372,23 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             사진 {group.photoCount}장
                             {group.representativeGps ? ' · GPS 기반 그룹' : ' · GPS 없음'}
                           </p>
+                          <div className="flex flex-wrap gap-2">
+                            {getMissingGpsCategoryLabel(group.missingGpsCategory) ? (
+                              <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                                {getMissingGpsCategoryLabel(group.missingGpsCategory)}
+                              </span>
+                            ) : null}
+                            {group.assignmentMode === 'manual-existing-group' ? (
+                              <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
+                                기존 그룹 선택 필요
+                              </span>
+                            ) : null}
+                          </div>
+                          {getAssignmentModeDescription(group) ? (
+                            <p className="text-xs text-slate-500">
+                              {getAssignmentModeDescription(group)}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
                           {group.groupKey}
@@ -387,6 +462,31 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                           )}
                         </div>
 
+                        {group.assignmentMode === 'manual-existing-group' ? (
+                          <label className="space-y-2">
+                            <span className="text-sm font-medium text-slate-800">
+                              합류시킬 기존 그룹
+                            </span>
+                            <select
+                              value={groupAssignmentInputs[group.groupKey] ?? ''}
+                              onChange={(event) =>
+                                setGroupAssignmentInputs((current) => ({
+                                  ...current,
+                                  [group.groupKey]: event.target.value
+                                }))
+                              }
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+                            >
+                              <option value="">새 GPS 없는 그룹으로 유지</option>
+                              {group.existingGroupCandidates.map((candidate) => (
+                                <option key={candidate.id} value={candidate.id}>
+                                  {candidate.title} · 사진 {candidate.photoCount}장
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
+
                         <label className="space-y-2">
                           <span className="text-sm font-medium text-slate-800">
                             정리할 그룹명
@@ -401,6 +501,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             }
                             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder={group.displayTitle}
+                            disabled={group.assignmentMode === 'manual-existing-group'}
                           />
                         </label>
 
@@ -418,6 +519,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             }
                             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder="예: Alice, Bob"
+                            disabled={group.assignmentMode === 'manual-existing-group'}
                           />
                         </label>
 
@@ -435,6 +537,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             }
                             className="min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder="이 그룹에 대한 메모를 남겨두세요."
+                            disabled={group.assignmentMode === 'manual-existing-group'}
                           />
                         </label>
                       </div>

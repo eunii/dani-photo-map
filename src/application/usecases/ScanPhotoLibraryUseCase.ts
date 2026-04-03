@@ -30,6 +30,7 @@ import { selectCanonicalDuplicatePhoto } from '@domain/services/DuplicatePhotoPo
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import { buildPhotoOutputRelativePath } from '@domain/services/PhotoNamingService'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
+import { movePhotosIntoGroup } from '@application/services/movePhotosIntoGroup'
 import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
 import {
   LIBRARY_INDEX_VERSION,
@@ -126,12 +127,13 @@ export class ScanPhotoLibraryUseCase {
       existingOutputHashes,
       issues
     )
-    const index = this.buildMergedLibraryIndex(
+    const index = await this.buildMergedLibraryIndex(
       paths,
       existingOutputSnapshot,
       storedIndex,
       finalizedScanResult.copiedPhotos,
-      validatedCommand.groupMetadataOverrides ?? []
+      validatedCommand.groupMetadataOverrides ?? [],
+      validatedCommand.pendingGroupAssignments ?? []
     )
     const groups = index.groups
 
@@ -194,13 +196,16 @@ export class ScanPhotoLibraryUseCase {
     const regionName = await this.resolveRegionNameSafely(
       context,
       metadata.gps,
+      metadata.missingGpsCategory,
       metadataIssues,
       issues
     )
     const outputRelativePath = buildPhotoOutputRelativePath(
       {
         capturedAt: metadata.capturedAt,
+        gps: metadata.gps,
         regionName,
+        missingGpsCategory: metadata.missingGpsCategory,
         sourceFileName: context.sourceFileName
       },
       this.rules
@@ -213,7 +218,10 @@ export class ScanPhotoLibraryUseCase {
       duplicateOfPhotoId: undefined,
       capturedAt: metadata.capturedAt,
       capturedAtSource: metadata.capturedAtSource,
+      originalGps: metadata.originalGps,
       gps: metadata.gps,
+      locationSource: metadata.gps ? 'exif' : 'none',
+      missingGpsCategory: metadata.missingGpsCategory,
       regionName,
       outputRelativePath,
       isDuplicate: false,
@@ -375,7 +383,7 @@ export class ScanPhotoLibraryUseCase {
     return hashes
   }
 
-  private buildMergedLibraryIndex(
+  private async buildMergedLibraryIndex(
     paths: ScanPathContext,
     existingOutputSnapshot: ExistingOutputLibrarySnapshot,
     storedIndex: LibraryIndex | null,
@@ -385,8 +393,12 @@ export class ScanPhotoLibraryUseCase {
       title: string
       companions: string[]
       notes?: string
+    }>,
+    pendingGroupAssignments: Array<{
+      groupKey: string
+      targetGroupId: string
     }>
-  ): LibraryIndex {
+  ): Promise<LibraryIndex> {
     const rebuiltExistingIndex = rebuildLibraryIndexFromExistingOutput(
       existingOutputSnapshot
     )
@@ -400,10 +412,17 @@ export class ScanPhotoLibraryUseCase {
       groups: createPhotoGroups([...mergedBasePhotos, ...copiedPhotos])
     }
 
-    return this.applyGroupMetadataOverrides(
+    const metadataAppliedIndex = this.applyGroupMetadataOverrides(
       mergeStoredLibraryMetadata(rebuiltIndex, storedIndex),
       copiedPhotos,
       groupMetadataOverrides
+    )
+
+    return this.applyPendingGroupAssignments(
+      metadataAppliedIndex,
+      copiedPhotos,
+      paths.outputRoot,
+      pendingGroupAssignments
     )
   }
 
@@ -477,6 +496,54 @@ export class ScanPhotoLibraryUseCase {
     }
   }
 
+  private async applyPendingGroupAssignments(
+    index: LibraryIndex,
+    copiedPhotos: Photo[],
+    outputRoot: string,
+    pendingGroupAssignments: Array<{
+      groupKey: string
+      targetGroupId: string
+    }>
+  ): Promise<LibraryIndex> {
+    if (copiedPhotos.length === 0 || pendingGroupAssignments.length === 0) {
+      return index
+    }
+
+    const pendingGroups = createPhotoGroups(copiedPhotos)
+    const pendingPhotoIdsByGroupKey = new Map(
+      pendingGroups.map((group) => [group.groupKey, group.photoIds] as const)
+    )
+    let nextIndex = index
+
+    for (const assignment of pendingGroupAssignments) {
+      const movingPhotoIds = pendingPhotoIdsByGroupKey.get(assignment.groupKey) ?? []
+
+      if (movingPhotoIds.length === 0) {
+        continue
+      }
+
+      const sourceGroup = nextIndex.groups.find((group) =>
+        movingPhotoIds.every((photoId) => group.photoIds.includes(photoId))
+      )
+
+      if (!sourceGroup) {
+        continue
+      }
+
+      nextIndex = await movePhotosIntoGroup({
+        index: nextIndex,
+        outputRoot,
+        sourceGroupId: sourceGroup.id,
+        destinationGroupId: assignment.targetGroupId,
+        photoIds: movingPhotoIds,
+        fileSystem: this.dependencies.fileSystem,
+        rules: this.rules
+      })
+    }
+
+    return nextIndex
+  }
+
   private async readMetadataSafely(
     context: ScanPhotoContext,
     issues: ScanPhotoLibraryIssue[]
@@ -526,11 +593,14 @@ export class ScanPhotoLibraryUseCase {
   private async resolveRegionNameSafely(
     context: ScanPhotoContext,
     gps: PhotoMetadata['gps'],
+    missingGpsCategory: PhotoMetadata['missingGpsCategory'],
     metadataIssues: string[],
     issues: ScanPhotoLibraryIssue[]
   ): Promise<string> {
     if (!gps) {
-      return this.rules.unknownRegionLabel
+      return missingGpsCategory === 'capture'
+        ? this.rules.captureRegionLabel
+        : this.rules.unknownRegionLabel
     }
 
     try {

@@ -9,6 +9,18 @@ export const photoCapturedAtSources = [
 
 export type PhotoCapturedAtSource = typeof photoCapturedAtSources[number]
 
+export const missingGpsCategories = [
+  'capture',
+  'missing-original-gps',
+  'missing-imported-gps'
+] as const
+
+export type MissingGpsCategory = typeof missingGpsCategories[number]
+
+export const photoLocationSources = ['exif', 'assigned-from-group', 'none'] as const
+
+export type PhotoLocationSource = typeof photoLocationSources[number]
+
 export interface Photo {
   id: string
   sourcePath: string
@@ -17,7 +29,10 @@ export interface Photo {
   duplicateOfPhotoId?: string
   capturedAt?: PhotoTimestamp
   capturedAtSource?: PhotoCapturedAtSource
+  originalGps?: GeoPoint
   gps?: GeoPoint
+  locationSource?: PhotoLocationSource
+  missingGpsCategory?: MissingGpsCategory
   regionName?: string
   outputRelativePath?: string
   thumbnailRelativePath?: string

@@ -12,6 +12,14 @@ export const scanPhotoLibraryCommandSchema = z.object({
         notes: z.string().min(1).optional()
       })
     )
+    .optional(),
+  pendingGroupAssignments: z
+    .array(
+      z.object({
+        groupKey: z.string().min(1),
+        targetGroupId: z.string().min(1)
+      })
+    )
     .optional()
 })
 

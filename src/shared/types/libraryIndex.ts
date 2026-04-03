@@ -3,7 +3,11 @@ import { z } from 'zod'
 import {
   LIBRARY_INDEX_VERSION
 } from '@domain/entities/LibraryIndex'
-import { photoCapturedAtSources } from '@domain/entities/Photo'
+import {
+  missingGpsCategories,
+  photoCapturedAtSources,
+  photoLocationSources
+} from '@domain/entities/Photo'
 
 const isoDateTimeStringSchema = z
   .string()
@@ -33,7 +37,10 @@ export const photoSchema = z.object({
   duplicateOfPhotoId: z.string().min(1).optional(),
   capturedAt: photoTimestampSchema.optional(),
   capturedAtSource: z.enum(photoCapturedAtSources).optional(),
+  originalGps: geoPointSchema.optional(),
   gps: geoPointSchema.optional(),
+  locationSource: z.enum(photoLocationSources).optional(),
+  missingGpsCategory: z.enum(missingGpsCategories).optional(),
   regionName: z.string().min(1).optional(),
   outputRelativePath: z.string().min(1).optional(),
   thumbnailRelativePath: z.string().min(1).optional(),

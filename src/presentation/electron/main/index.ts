@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 
 import { LoadLibraryIndexUseCase } from '@application/usecases/LoadLibraryIndexUseCase'
+import { MovePhotosToGroupUseCase } from '@application/usecases/MovePhotosToGroupUseCase'
 import { PreviewPendingOrganizationUseCase } from '@application/usecases/PreviewPendingOrganizationUseCase'
 import { ScanPhotoLibraryUseCase } from '@application/usecases/ScanPhotoLibraryUseCase'
 import { UpdatePhotoGroupUseCase } from '@application/usecases/UpdatePhotoGroupUseCase'
@@ -20,6 +21,7 @@ import { toLibraryIndexView } from '@presentation/common/mappers/toLibraryIndexV
 import type {
   DirectorySelectionOptions,
   LoadLibraryIndexRequest,
+  MovePhotosToGroupRequest,
   PreviewPendingOrganizationRequest,
   ScanPhotoLibraryRequest,
   UpdatePhotoGroupRequest
@@ -30,7 +32,8 @@ const IPC_CHANNELS = {
   loadLibraryIndex: 'photo-app/load-library-index',
   previewPendingOrganization: 'photo-app/preview-pending-organization',
   scanPhotoLibrary: 'photo-app/scan-photo-library',
-  updatePhotoGroup: 'photo-app/update-photo-group'
+  updatePhotoGroup: 'photo-app/update-photo-group',
+  movePhotosToGroup: 'photo-app/move-photos-to-group'
 } as const
 
 function createLibraryIndexStore(): JsonLibraryIndexStore {
@@ -96,6 +99,15 @@ function createUpdatePhotoGroupUseCase(): UpdatePhotoGroupUseCase {
   )
 }
 
+function createMovePhotosToGroupUseCase(): MovePhotosToGroupUseCase {
+  return new MovePhotosToGroupUseCase(
+    createLibraryIndexStore(),
+    new NodePhotoLibraryFileSystem(),
+    new ExistingOutputLibraryScanner(defaultOrganizationRules),
+    defaultOrganizationRules
+  )
+}
+
 function registerIpcHandlers(): void {
   ipcMain.removeHandler(IPC_CHANNELS.selectDirectory)
   ipcMain.handle(
@@ -150,6 +162,17 @@ function registerIpcHandlers(): void {
     IPC_CHANNELS.updatePhotoGroup,
     async (_event, command: UpdatePhotoGroupRequest) => {
       const useCase = createUpdatePhotoGroupUseCase()
+      const index = await useCase.execute(command)
+
+      return toLibraryIndexView(index)
+    }
+  )
+
+  ipcMain.removeHandler(IPC_CHANNELS.movePhotosToGroup)
+  ipcMain.handle(
+    IPC_CHANNELS.movePhotosToGroup,
+    async (_event, command: MovePhotosToGroupRequest) => {
+      const useCase = createMovePhotosToGroupUseCase()
       const index = await useCase.execute(command)
 
       return toLibraryIndexView(index)

@@ -345,4 +345,127 @@ describe('ScanPhotoLibraryUseCase', () => {
       '2026/04/busan/2026-04-01_090000_IMG_9999.JPG'
     )
   })
+
+  it('moves gps-missing photos into a selected existing group during scan without changing file hashes', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_2001.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: ['gps-missing'],
+      missingGpsCategory: 'missing-original-gps',
+      capturedAt: {
+        iso: '2026-04-03T11:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '03',
+        time: '110000'
+      }
+    })
+    dependencies.existingOutputScanner.scan.mockResolvedValue({
+      outputRoot: 'C:/output',
+      photos: [
+        {
+          id: 'fallback-photo-1',
+          sourcePath: 'C:/output/2026/04/seoul/2026-04-03_083000_IMG_9999.JPG',
+          sourceFileName: '2026-04-03_083000_IMG_9999.JPG',
+          capturedAt: {
+            iso: '2026-04-03T08:30:00.000Z',
+            year: '2026',
+            month: '04',
+            day: '03',
+            time: '083000'
+          },
+          regionName: 'seoul',
+          outputRelativePath: '2026/04/seoul/2026-04-03_083000_IMG_9999.JPG'
+        }
+      ]
+    })
+    dependencies.libraryIndexStore.load.mockResolvedValue({
+      version: 1,
+      generatedAt: '2026-04-03T12:00:00.000Z',
+      sourceRoot: 'C:/source',
+      outputRoot: 'C:/output',
+      photos: [
+        {
+          id: 'stored-photo-1',
+          sourcePath: 'C:/output/2026/04/seoul/2026-04-03_083000_IMG_9999.JPG',
+          sourceFileName: '2026-04-03_083000_IMG_9999.JPG',
+          sha256: 'existing-hash',
+          capturedAt: {
+            iso: '2026-04-03T08:30:00.000Z',
+            year: '2026',
+            month: '04',
+            day: '03',
+            time: '083000'
+          },
+          originalGps: {
+            latitude: 37.5665,
+            longitude: 126.978
+          },
+          gps: {
+            latitude: 37.5665,
+            longitude: 126.978
+          },
+          locationSource: 'exif',
+          regionName: 'seoul',
+          outputRelativePath: '2026/04/seoul/2026-04-03_083000_IMG_9999.JPG',
+          thumbnailRelativePath: '.photo-organizer/thumbnails/existing.webp',
+          isDuplicate: false,
+          metadataIssues: []
+        }
+      ],
+      groups: [
+        {
+          id: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+          groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+          title: '서울 산책',
+          displayTitle: '2026-04-03 seoul',
+          photoIds: ['stored-photo-1'],
+          representativePhotoId: 'stored-photo-1',
+          representativeGps: {
+            latitude: 37.5665,
+            longitude: 126.978
+          },
+          representativeThumbnailRelativePath: '.photo-organizer/thumbnails/existing.webp',
+          companions: [],
+          notes: undefined
+        }
+      ]
+    })
+    dependencies.hasher.createSha256
+      .mockResolvedValueOnce('existing-hash')
+      .mockResolvedValueOnce('new-hash')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      pendingGroupAssignments: [
+        {
+          groupKey: 'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+          targetGroupId: 'group|region=seoul|year=2026|month=04|day=03|slot=1'
+        }
+      ]
+    })
+
+    const movedPhoto = getSavedIndex()?.photos.find((photo) => photo.id === 'photo-1')
+
+    expect(movedPhoto).toMatchObject({
+      sha256: 'new-hash',
+      gps: {
+        latitude: 37.5665,
+        longitude: 126.978
+      },
+      locationSource: 'assigned-from-group',
+      regionName: 'seoul',
+      outputRelativePath: '2026/04/seoul/2026-04-03_1100_서울_산책_001.JPG'
+    })
+    expect(movedPhoto?.originalGps).toBeUndefined()
+    expect(getSavedIndex()?.groups).toHaveLength(1)
+    expect(getSavedIndex()?.groups[0]?.photoIds).toEqual(['fallback-photo-1', 'photo-1'])
+    expect(dependencies.fileSystem.moveFile).toHaveBeenCalled()
+  })
 })

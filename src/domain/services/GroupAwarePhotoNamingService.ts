@@ -46,6 +46,17 @@ function formatSequenceNumber(sequenceNumber: number): string {
   return String(sequenceNumber).padStart(3, '0')
 }
 
+function resolvePhotoRegionSegment(
+  photo: Pick<Photo, 'gps' | 'regionName' | 'missingGpsCategory'>,
+  rules: OrganizationRules
+): string {
+  if (!photo.gps && photo.missingGpsCategory === 'capture') {
+    return rules.captureRegionLabel
+  }
+
+  return photo.regionName ?? rules.unknownRegionLabel
+}
+
 export function createGroupAwarePhotoFileNamePrefix(
   groupTitle: string,
   timestamp?: PhotoTimestamp
@@ -69,15 +80,20 @@ export function createGroupAwarePhotoFileName(
 }
 
 export function buildGroupAwarePhotoOutputRelativePath(
-  photo: Pick<Photo, 'capturedAt' | 'regionName' | 'sourceFileName'>,
+  photo: Pick<
+    Photo,
+    | 'capturedAt'
+    | 'gps'
+    | 'regionName'
+    | 'sourceFileName'
+    | 'missingGpsCategory'
+  >,
   groupTitle: string,
   sequenceNumber: number,
   rules: OrganizationRules
 ): string {
   const safeTimestamp = getSafeTimestamp(photo.capturedAt)
-  const regionName = sanitizeFileNameSegment(
-    photo.regionName ?? rules.unknownRegionLabel
-  )
+  const regionName = sanitizeFileNameSegment(resolvePhotoRegionSegment(photo, rules))
   const fileName = createGroupAwarePhotoFileName(
     photo.sourceFileName,
     groupTitle,

@@ -29,12 +29,15 @@ import {
   normalizePathSeparators
 } from '@shared/utils/path'
 
+type AssignmentMode = 'new-group' | 'auto-capture' | 'manual-existing-group'
+
 export interface PendingOrganizationPreviewGroupPhoto {
   id: string
   sourcePath: string
   sourceFileName: string
   capturedAtIso?: string
   hasGps: boolean
+  missingGpsCategory?: Photo['missingGpsCategory']
   previewDataUrl?: string
 }
 
@@ -43,6 +46,18 @@ export interface PendingOrganizationPreviewGroup {
   displayTitle: string
   suggestedTitles: string[]
   photoCount: number
+  missingGpsCategory?: Photo['missingGpsCategory']
+  assignmentMode: AssignmentMode
+  existingGroupCandidates: Array<{
+    id: string
+    title: string
+    displayTitle: string
+    photoCount: number
+    representativeGps: {
+      latitude: number
+      longitude: number
+    }
+  }>
   representativeGps?: {
     latitude: number
     longitude: number
@@ -147,6 +162,7 @@ export class PreviewPendingOrganizationUseCase {
         const representativePhoto = group.representativePhotoId
           ? photosById.get(group.representativePhotoId)
           : undefined
+        const assignmentMode = this.resolveAssignmentMode(group, representativePhoto)
         const sameGroupTitle = this.resolveSameGroupTitle(group.groupKey, storedIndex)
         const primarySuggestions = buildNearbyGroupTitleSuggestions(
           group,
@@ -167,6 +183,16 @@ export class PreviewPendingOrganizationUseCase {
         return {
           groupKey: group.groupKey,
           displayTitle: group.displayTitle,
+          missingGpsCategory: representativePhoto?.missingGpsCategory,
+          assignmentMode,
+          existingGroupCandidates:
+            assignmentMode === 'manual-existing-group'
+              ? this.buildExistingGroupCandidates(
+                  representativePhoto,
+                  existingIndex?.groups ?? [],
+                  existingIndex?.photos ?? []
+                )
+              : [],
           suggestedTitles: Array.from(
             new Set(
               [
@@ -189,6 +215,7 @@ export class PreviewPendingOrganizationUseCase {
                 sourceFileName: photo.sourceFileName,
                 capturedAtIso: photo.capturedAt?.iso,
                 hasGps: Boolean(photo.gps),
+                missingGpsCategory: photo.missingGpsCategory,
                 previewDataUrl: await this.createPreviewDataUrlSafely(photo.sourcePath)
               }))
           )
@@ -202,6 +229,19 @@ export class PreviewPendingOrganizationUseCase {
       skippedExistingCount,
       groups
     }
+  }
+
+  private resolveAssignmentMode(
+    group: {
+      representativeGps?: { latitude: number; longitude: number }
+    },
+    representativePhoto: Photo | undefined
+  ): AssignmentMode {
+    if (representativePhoto?.missingGpsCategory === 'capture') {
+      return 'auto-capture'
+    }
+
+    return group.representativeGps ? 'new-group' : 'manual-existing-group'
   }
 
   private resolveSameGroupTitle(
@@ -224,7 +264,10 @@ export class PreviewPendingOrganizationUseCase {
       return null
     }
 
-    const regionName = await this.resolveRegionNameSafely(metadata.gps)
+    const regionName = await this.resolveRegionNameSafely(
+      metadata.gps,
+      metadata.missingGpsCategory
+    )
 
     return {
       id: context.photoId,
@@ -233,7 +276,10 @@ export class PreviewPendingOrganizationUseCase {
       sha256,
       capturedAt: metadata.capturedAt,
       capturedAtSource: metadata.capturedAtSource,
+      originalGps: metadata.originalGps,
       gps: metadata.gps,
+      locationSource: metadata.gps ? 'exif' : 'none',
+      missingGpsCategory: metadata.missingGpsCategory,
       regionName,
       isDuplicate: false,
       metadataIssues: metadata.metadataIssues ?? []
@@ -259,10 +305,13 @@ export class PreviewPendingOrganizationUseCase {
   }
 
   private async resolveRegionNameSafely(
-    gps: PhotoMetadata['gps']
+    gps: PhotoMetadata['gps'],
+    missingGpsCategory: PhotoMetadata['missingGpsCategory']
   ): Promise<string> {
     if (!gps) {
-      return this.rules.unknownRegionLabel
+      return missingGpsCategory === 'capture'
+        ? this.rules.captureRegionLabel
+        : this.rules.unknownRegionLabel
     }
 
     try {
@@ -348,5 +397,85 @@ export class PreviewPendingOrganizationUseCase {
     } catch {
       return null
     }
+  }
+
+  private buildExistingGroupCandidates(
+    currentPhoto: Photo | undefined,
+    groups: LibraryIndex['groups'],
+    photos: Photo[]
+  ): Array<{
+    id: string
+    title: string
+    displayTitle: string
+    photoCount: number
+    representativeGps: {
+      latitude: number
+      longitude: number
+    }
+  }> {
+    const photosById = new Map(photos.map((photo) => [photo.id, photo] as const))
+    const currentCapturedAt = currentPhoto?.capturedAt?.iso
+
+    return groups
+      .filter((group) => Boolean(group.representativeGps))
+      .map((group) => ({
+        group,
+        representativeCapturedAt: group.representativePhotoId
+          ? photosById.get(group.representativePhotoId)?.capturedAt?.iso
+          : undefined
+      }))
+      .sort((left, right) =>
+        this.compareGroupCandidateByCapturedAt(
+          left.representativeCapturedAt,
+          right.representativeCapturedAt,
+          currentCapturedAt,
+          left.group.title,
+          right.group.title
+        )
+      )
+      .slice(0, 8)
+      .map(({ group }) => ({
+        id: group.id,
+        title: group.title,
+        displayTitle: group.displayTitle,
+        photoCount: group.photoIds.length,
+        representativeGps: group.representativeGps!
+      }))
+  }
+
+  private compareGroupCandidateByCapturedAt(
+    leftCapturedAtIso: string | undefined,
+    rightCapturedAtIso: string | undefined,
+    currentCapturedAtIso: string | undefined,
+    leftTitle: string,
+    rightTitle: string
+  ): number {
+    const leftDistance = this.calculateCapturedAtDistance(
+      leftCapturedAtIso,
+      currentCapturedAtIso
+    )
+    const rightDistance = this.calculateCapturedAtDistance(
+      rightCapturedAtIso,
+      currentCapturedAtIso
+    )
+
+    if (leftDistance !== rightDistance) {
+      return leftDistance - rightDistance
+    }
+
+    return leftTitle.localeCompare(rightTitle)
+  }
+
+  private calculateCapturedAtDistance(
+    candidateCapturedAtIso: string | undefined,
+    currentCapturedAtIso: string | undefined
+  ): number {
+    if (!candidateCapturedAtIso || !currentCapturedAtIso) {
+      return Number.POSITIVE_INFINITY
+    }
+
+    return Math.abs(
+      Date.parse(candidateCapturedAtIso) - Date.parse(currentCapturedAtIso)
+    )
   }
 }

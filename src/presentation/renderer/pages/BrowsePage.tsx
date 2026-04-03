@@ -51,6 +51,7 @@ export function BrowsePage() {
   )
   const [isLoadingIndex, setIsLoadingIndex] = useState(false)
   const [isSavingGroup, setIsSavingGroup] = useState(false)
+  const [isMovingPhotos, setIsMovingPhotos] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>()
   const [hoveredGroupId, setHoveredGroupId] = useState<string | undefined>()
@@ -199,6 +200,41 @@ export function BrowsePage() {
     }
   }
 
+  async function handleMovePhotos(nextMove: {
+    sourceGroupId: string
+    destinationGroupId: string
+    photoIds: string[]
+  }): Promise<void> {
+    if (!outputRoot) {
+      return
+    }
+
+    setIsMovingPhotos(true)
+    setErrorMessage(null)
+
+    try {
+      const updatedIndex = await window.photoApp.movePhotosToGroup({
+        outputRoot,
+        sourceGroupId: nextMove.sourceGroupId,
+        destinationGroupId: nextMove.destinationGroupId,
+        photoIds: nextMove.photoIds
+      })
+
+      setLastLoadedIndex({
+        source: 'merged',
+        index: updatedIndex
+      })
+      setSelectedGroupId(nextMove.destinationGroupId)
+      setHoveredGroupId(undefined)
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '사진 이동에 실패했습니다.'
+      )
+    } finally {
+      setIsMovingPhotos(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="space-y-3">
@@ -323,11 +359,14 @@ export function BrowsePage() {
             </div>
             <GroupDetailPanel
               group={selectedGroup}
+              allGroups={libraryIndex?.groups ?? []}
               titleSuggestions={titleSuggestions}
               outputRoot={libraryIndex?.outputRoot}
               loadSource={loadSource}
               isSaving={isSavingGroup}
+              isMovingPhotos={isMovingPhotos}
               onSave={handleSaveGroup}
+              onMovePhotos={handleMovePhotos}
             />
           </div>
         )}

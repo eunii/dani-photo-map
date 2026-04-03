@@ -31,6 +31,26 @@ function isValidLongitude(longitude: number): boolean {
   return longitude >= -180 && longitude <= 180
 }
 
+function normalizePathForClassification(sourcePath: string): string {
+  return sourcePath.replace(/\\/g, '/').toLowerCase()
+}
+
+function isLikelyCapturePath(sourcePath: string): boolean {
+  const normalizedPath = normalizePathForClassification(sourcePath)
+
+  return [
+    'screenshot',
+    'screen_shot',
+    'screen-shot',
+    'screen capture',
+    'screen_capture',
+    'screen-capture',
+    'screenshots',
+    '스크린샷',
+    '캡처'
+  ].some((keyword) => normalizedPath.includes(keyword))
+}
+
 export class ExifrPhotoMetadataReader implements PhotoMetadataReaderPort {
   constructor(
     private readonly parseMetadata: typeof exifr.parse = exifr.parse,
@@ -89,6 +109,13 @@ export class ExifrPhotoMetadataReader implements PhotoMetadataReaderPort {
             longitude: metadata.longitude
           }
         : undefined
+    const missingGpsCategory = !gps
+      ? isLikelyCapturePath(sourcePath)
+        ? 'capture'
+        : capturedAtSource === 'file-modified-at'
+          ? 'missing-imported-gps'
+          : 'missing-original-gps'
+      : undefined
 
     if (!gps) {
       if (
@@ -104,7 +131,9 @@ export class ExifrPhotoMetadataReader implements PhotoMetadataReaderPort {
     return {
       capturedAt,
       capturedAtSource,
+      originalGps: gps,
       gps,
+      missingGpsCategory,
       metadataIssues
     }
   }

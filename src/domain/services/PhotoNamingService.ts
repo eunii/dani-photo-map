@@ -39,6 +39,17 @@ function splitFileName(originalFileName: string): {
   }
 }
 
+function resolvePhotoRegionSegment(
+  photo: Pick<Photo, 'gps' | 'regionName' | 'missingGpsCategory'>,
+  rules: OrganizationRules
+): string {
+  if (!photo.gps && photo.missingGpsCategory === 'capture') {
+    return rules.captureRegionLabel
+  }
+
+  return photo.regionName ?? rules.unknownRegionLabel
+}
+
 export function createOrganizedPhotoFileName(
   originalFileName: string,
   timestamp?: PhotoTimestamp
@@ -54,13 +65,18 @@ export function createOrganizedPhotoFileName(
 }
 
 export function buildPhotoOutputRelativePath(
-  photo: Pick<Photo, 'capturedAt' | 'regionName' | 'sourceFileName'>,
+  photo: Pick<
+    Photo,
+    | 'capturedAt'
+    | 'gps'
+    | 'regionName'
+    | 'sourceFileName'
+    | 'missingGpsCategory'
+  >,
   rules: OrganizationRules
 ): string {
   const safeTimestamp = getSafeTimestamp(photo.capturedAt)
-  const regionName = sanitizeFileNameSegment(
-    photo.regionName ?? rules.unknownRegionLabel
-  )
+  const regionName = sanitizeFileNameSegment(resolvePhotoRegionSegment(photo, rules))
   const fileName = createOrganizedPhotoFileName(
     photo.sourceFileName,
     photo.capturedAt

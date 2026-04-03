@@ -1,3 +1,5 @@
+import type { MissingGpsCategory } from '@domain/entities/Photo'
+
 export interface AppInfo {
   name: string
   version: string
@@ -16,6 +18,10 @@ export interface ScanPhotoLibraryRequest {
     title: string
     companions: string[]
     notes?: string
+  }>
+  pendingGroupAssignments?: Array<{
+    groupKey: string
+    targetGroupId: string
   }>
 }
 
@@ -39,6 +45,13 @@ export interface UpdatePhotoGroupRequest {
   representativePhotoId?: string
 }
 
+export interface MovePhotosToGroupRequest {
+  outputRoot: string
+  sourceGroupId: string
+  destinationGroupId: string
+  photoIds: string[]
+}
+
 export interface MapGroupSummary {
   id: string
   title: string
@@ -56,6 +69,7 @@ export interface GroupPhotoSummary {
   thumbnailRelativePath?: string
   outputRelativePath?: string
   hasGps: boolean
+  missingGpsCategory?: MissingGpsCategory
 }
 
 export interface GroupDetail {
@@ -127,14 +141,34 @@ export interface PendingOrganizationPreviewPhoto {
   sourceFileName: string
   capturedAtIso?: string
   hasGps: boolean
+  missingGpsCategory?: MissingGpsCategory
   previewDataUrl?: string
 }
+
+export interface PendingOrganizationAssignmentCandidate {
+  id: string
+  title: string
+  displayTitle: string
+  photoCount: number
+  representativeGps: {
+    latitude: number
+    longitude: number
+  }
+}
+
+export type PendingOrganizationAssignmentMode =
+  | 'new-group'
+  | 'auto-capture'
+  | 'manual-existing-group'
 
 export interface PendingOrganizationPreviewGroup {
   groupKey: string
   displayTitle: string
   suggestedTitles: string[]
   photoCount: number
+  missingGpsCategory?: MissingGpsCategory
+  assignmentMode: PendingOrganizationAssignmentMode
+  existingGroupCandidates: PendingOrganizationAssignmentCandidate[]
   representativeGps?: {
     latitude: number
     longitude: number
@@ -166,5 +200,8 @@ export interface PreloadBridge {
   ) => Promise<ScanPhotoLibrarySummary>
   updatePhotoGroup: (
     request: UpdatePhotoGroupRequest
+  ) => Promise<LibraryIndexView>
+  movePhotosToGroup: (
+    request: MovePhotosToGroupRequest
   ) => Promise<LibraryIndexView>
 }

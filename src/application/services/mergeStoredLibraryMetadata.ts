@@ -31,7 +31,11 @@ export function mergeStoredLibraryMetadata(
       ...photo,
       capturedAt: storedPhoto.capturedAt ?? photo.capturedAt,
       capturedAtSource: storedPhoto.capturedAtSource ?? photo.capturedAtSource,
+      originalGps: storedPhoto.originalGps ?? photo.originalGps,
       gps: storedPhoto.gps ?? photo.gps,
+      locationSource: storedPhoto.locationSource ?? photo.locationSource,
+      missingGpsCategory:
+        storedPhoto.missingGpsCategory ?? photo.missingGpsCategory,
       regionName: storedPhoto.regionName ?? photo.regionName,
       thumbnailRelativePath:
         storedPhoto.thumbnailRelativePath ?? photo.thumbnailRelativePath,

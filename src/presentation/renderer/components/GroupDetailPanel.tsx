@@ -7,15 +7,22 @@ import type {
 
 interface GroupDetailPanelProps {
   group?: GroupDetail
+  allGroups?: GroupDetail[]
   titleSuggestions?: string[]
   outputRoot?: string
   loadSource?: LibraryIndexLoadSource | null
   isSaving?: boolean
+  isMovingPhotos?: boolean
   onSave?: (nextGroup: {
     title: string
     companions: string[]
     notes?: string
     representativePhotoId?: string
+  }) => Promise<void>
+  onMovePhotos?: (nextMove: {
+    sourceGroupId: string
+    destinationGroupId: string
+    photoIds: string[]
   }) => Promise<void>
 }
 
@@ -31,17 +38,22 @@ function toFileUrl(outputRoot: string, relativePath?: string): string | undefine
 
 export function GroupDetailPanel({
   group,
+  allGroups = [],
   titleSuggestions = [],
   outputRoot,
   loadSource,
   isSaving = false,
-  onSave
+  isMovingPhotos = false,
+  onSave,
+  onMovePhotos
 }: GroupDetailPanelProps) {
   const [thumbnailLoadFailed, setThumbnailLoadFailed] = useState(false)
   const [title, setTitle] = useState('')
   const [companionsText, setCompanionsText] = useState('')
   const [notes, setNotes] = useState('')
   const [representativePhotoId, setRepresentativePhotoId] = useState('')
+  const [moveTargetGroupId, setMoveTargetGroupId] = useState('')
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([])
 
   useEffect(() => {
     setThumbnailLoadFailed(false)
@@ -49,11 +61,20 @@ export function GroupDetailPanel({
     setCompanionsText(group?.companions.join(', ') ?? '')
     setNotes(group?.notes ?? '')
     setRepresentativePhotoId(group?.representativePhotoId ?? '')
+    setMoveTargetGroupId('')
+    setSelectedPhotoIds([])
   }, [group])
 
   const representativeThumbnailUrl = useMemo(
     () => (outputRoot ? toFileUrl(outputRoot, group?.representativeThumbnailRelativePath) : undefined),
     [group?.representativeThumbnailRelativePath, outputRoot]
+  )
+  const moveTargetGroups = useMemo(
+    () =>
+      allGroups.filter(
+        (candidate) => candidate.id !== group?.id && Boolean(candidate.representativeGps)
+      ),
+    [allGroups, group?.id]
   )
 
   async function handleSave(): Promise<void> {
@@ -70,6 +91,31 @@ export function GroupDetailPanel({
       notes: notes.trim() || undefined,
       representativePhotoId: representativePhotoId || undefined
     })
+  }
+
+  async function handleMovePhotos(): Promise<void> {
+    if (
+      !group ||
+      !onMovePhotos ||
+      !moveTargetGroupId ||
+      selectedPhotoIds.length === 0
+    ) {
+      return
+    }
+
+    await onMovePhotos({
+      sourceGroupId: group.id,
+      destinationGroupId: moveTargetGroupId,
+      photoIds: selectedPhotoIds
+    })
+  }
+
+  function togglePhotoSelection(photoId: string): void {
+    setSelectedPhotoIds((current) =>
+      current.includes(photoId)
+        ? current.filter((currentPhotoId) => currentPhotoId !== photoId)
+        : [...current, photoId]
+    )
   }
 
   return (
@@ -216,6 +262,76 @@ export function GroupDetailPanel({
                       {photo.sourceFileName}
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">
+                      사진을 다른 그룹으로 이동
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      선택한 사진은 대상 그룹 소속으로 들어가고 앱 내부 위치는 그
+                      그룹 대표 위치 기준으로 맞춰집니다. 파일 EXIF는 수정하지
+                      않습니다.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 space-y-3">
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium text-slate-800">
+                      이동할 대상 그룹
+                    </span>
+                    <select
+                      value={moveTargetGroupId}
+                      onChange={(event) => setMoveTargetGroupId(event.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-0 focus:border-blue-400"
+                    >
+                      <option value="">대상 그룹 선택</option>
+                      {moveTargetGroups.map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>
+                          {candidate.title} · 사진 {candidate.photoCount}장
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="grid gap-2">
+                    {group.photos.map((photo) => (
+                      <label
+                        key={photo.id}
+                        className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedPhotoIds.includes(photo.id)}
+                          onChange={() => togglePhotoSelection(photo.id)}
+                        />
+                        <span className="flex-1 truncate">{photo.sourceFileName}</span>
+                        {photo.missingGpsCategory ? (
+                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                            {photo.missingGpsCategory}
+                          </span>
+                        ) : null}
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                      disabled={
+                        isMovingPhotos ||
+                        !moveTargetGroupId ||
+                        selectedPhotoIds.length === 0
+                      }
+                      onClick={() => void handleMovePhotos()}
+                    >
+                      {isMovingPhotos ? '이동 중...' : '선택 사진 이동'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
