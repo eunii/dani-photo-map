@@ -468,4 +468,79 @@ describe('ScanPhotoLibraryUseCase', () => {
     expect(getSavedIndex()?.groups[0]?.photoIds).toEqual(['fallback-photo-1', 'photo-1'])
     expect(dependencies.fileSystem.moveFile).toHaveBeenCalled()
   })
+
+  it('splits gps-missing preview photos into multiple named groups while leaving the rest in the default group', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_3001.JPG',
+      'C:\\source\\IMG_3002.JPG',
+      'C:\\source\\IMG_3003.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: ['gps-missing'],
+      missingGpsCategory: 'missing-original-gps',
+      capturedAt: {
+        iso: '2026-04-03T11:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '03',
+        time: '110000'
+      }
+    })
+    dependencies.hasher.createSha256
+      .mockResolvedValueOnce('hash-3001')
+      .mockResolvedValueOnce('hash-3002')
+      .mockResolvedValueOnce('hash-3003')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      pendingCustomGroupSplits: [
+        {
+          groupKey: 'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+          splitId: 'split-a',
+          title: '카페',
+          photoIds: ['photo-1']
+        },
+        {
+          groupKey: 'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+          splitId: 'split-b',
+          title: '실내',
+          photoIds: ['photo-2']
+        }
+      ]
+    })
+
+    expect(getSavedIndex()?.groups.map((group) => group.title).sort()).toEqual([
+      '2026-04-03 location-unknown',
+      '실내',
+      '카페'
+    ].sort())
+    expect(
+      Object.fromEntries(
+        (getSavedIndex()?.groups ?? []).map((group) => [group.title, group.photoIds])
+      )
+    ).toEqual({
+      '2026-04-03 location-unknown': ['photo-3'],
+      카페: ['photo-1'],
+      실내: ['photo-2']
+    })
+    expect(getSavedIndex()?.photos.find((photo) => photo.id === 'photo-1')).toMatchObject({
+      manualGroupId: 'split-a',
+      manualGroupTitle: '카페'
+    })
+    expect(getSavedIndex()?.photos.find((photo) => photo.id === 'photo-2')).toMatchObject({
+      manualGroupId: 'split-b',
+      manualGroupTitle: '실내'
+    })
+    expect(
+      getSavedIndex()?.photos.find((photo) => photo.id === 'photo-3')?.manualGroupId
+    ).toBeUndefined()
+    expect(
+      getSavedIndex()?.photos.find((photo) => photo.id === 'photo-3')?.manualGroupTitle
+    ).toBeUndefined()
+  })
 })

@@ -49,6 +49,18 @@ interface OrganizePageProps {
   onNavigateToBrowse?: () => void
 }
 
+interface PendingCustomSplitInput {
+  id: string
+  title: string
+  photoIds: string[]
+}
+
+function getAssignedPhotoIdSet(
+  splits: PendingCustomSplitInput[] | undefined
+): Set<string> {
+  return new Set((splits ?? []).flatMap((split) => split.photoIds))
+}
+
 export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   const sourceRoot = useLibraryWorkspaceStore((state) => state.sourceRoot)
   const outputRoot = useLibraryWorkspaceStore((state) => state.outputRoot)
@@ -74,6 +86,15 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   >({})
   const [groupAssignmentInputs, setGroupAssignmentInputs] = useState<
     Record<string, string>
+  >({})
+  const [groupSelectedPhotoIds, setGroupSelectedPhotoIds] = useState<
+    Record<string, string[]>
+  >({})
+  const [groupSplitTitleInputs, setGroupSplitTitleInputs] = useState<
+    Record<string, string>
+  >({})
+  const [groupCustomSplits, setGroupCustomSplits] = useState<
+    Record<string, PendingCustomSplitInput[]>
   >({})
   const [previewImageLoadFailedByPhotoId, setPreviewImageLoadFailedByPhotoId] =
     useState<Record<string, boolean>>({})
@@ -118,6 +139,18 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
         .filter((entry) => entry.targetGroupId.length > 0),
     [groupAssignmentInputs, previewResult?.groups]
   )
+  const pendingCustomGroupSplitEntries = useMemo(
+    () =>
+      Object.entries(groupCustomSplits).flatMap(([groupKey, splits]) =>
+        splits.map((split) => ({
+          groupKey,
+          splitId: split.id,
+          title: split.title,
+          photoIds: split.photoIds
+        }))
+      ),
+    [groupCustomSplits]
+  )
 
   async function selectSourceRoot(): Promise<void> {
     const selectedPath = await window.photoApp.selectDirectory(
@@ -131,6 +164,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupCompanionsInputs({})
       setGroupNotesInputs({})
       setGroupAssignmentInputs({})
+      setGroupSelectedPhotoIds({})
+      setGroupSplitTitleInputs({})
+      setGroupCustomSplits({})
       setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
       setErrorMessage(null)
@@ -150,6 +186,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupCompanionsInputs({})
       setGroupNotesInputs({})
       setGroupAssignmentInputs({})
+      setGroupSelectedPhotoIds({})
+      setGroupSplitTitleInputs({})
+      setGroupCustomSplits({})
       setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
       setErrorMessage(null)
@@ -190,6 +229,15 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupAssignmentInputs(
         Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
       )
+      setGroupSelectedPhotoIds(
+        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, []]))
+      )
+      setGroupSplitTitleInputs(
+        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
+      )
+      setGroupCustomSplits(
+        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, []]))
+      )
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -215,7 +263,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
         sourceRoot,
         outputRoot,
         groupMetadataOverrides: previewMetadataOverrideEntries,
-        pendingGroupAssignments: pendingGroupAssignmentEntries
+        pendingGroupAssignments: pendingGroupAssignmentEntries,
+        pendingCustomGroupSplits: pendingCustomGroupSplitEntries
       })
       const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
 
@@ -226,6 +275,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupCompanionsInputs({})
       setGroupNotesInputs({})
       setGroupAssignmentInputs({})
+      setGroupSelectedPhotoIds({})
+      setGroupSplitTitleInputs({})
+      setGroupCustomSplits({})
       setPreviewImageLoadFailedByPhotoId({})
     } catch (error) {
       setErrorMessage(
@@ -234,6 +286,55 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     } finally {
       setIsScanning(false)
     }
+  }
+
+  function toggleGroupPhotoSelection(groupKey: string, photoId: string): void {
+    setGroupSelectedPhotoIds((current) => {
+      const selectedPhotoIds = current[groupKey] ?? []
+
+      return {
+        ...current,
+        [groupKey]: selectedPhotoIds.includes(photoId)
+          ? selectedPhotoIds.filter((currentPhotoId) => currentPhotoId !== photoId)
+          : [...selectedPhotoIds, photoId]
+      }
+    })
+  }
+
+  function addCustomSplit(groupKey: string): void {
+    const title = groupSplitTitleInputs[groupKey]?.trim() ?? ''
+    const photoIds = groupSelectedPhotoIds[groupKey] ?? []
+
+    if (title.length === 0 || photoIds.length === 0) {
+      return
+    }
+
+    setGroupCustomSplits((current) => ({
+      ...current,
+      [groupKey]: [
+        ...(current[groupKey] ?? []),
+        {
+          id: `${groupKey}::split-${crypto.randomUUID()}`,
+          title,
+          photoIds
+        }
+      ]
+    }))
+    setGroupSelectedPhotoIds((current) => ({
+      ...current,
+      [groupKey]: []
+    }))
+    setGroupSplitTitleInputs((current) => ({
+      ...current,
+      [groupKey]: ''
+    }))
+  }
+
+  function removeCustomSplit(groupKey: string, splitId: string): void {
+    setGroupCustomSplits((current) => ({
+      ...current,
+      [groupKey]: (current[groupKey] ?? []).filter((split) => split.id !== splitId)
+    }))
   }
 
   return (
@@ -357,7 +458,13 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
             {hasPendingPreviewGroups ? (
               <div className="space-y-4">
-                {previewResult.groups.map((group) => (
+                {previewResult.groups.map((group) => {
+                  const customSplits = groupCustomSplits[group.groupKey] ?? []
+                  const assignedPhotoIdSet = getAssignedPhotoIdSet(customSplits)
+                  const hasExistingGroupAssignment =
+                    (groupAssignmentInputs[group.groupKey] ?? '').length > 0
+
+                  return (
                   <article
                     key={group.groupKey}
                     className="rounded-xl border border-sky-200 bg-white p-4"
@@ -476,6 +583,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                                 }))
                               }
                               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+                              disabled={customSplits.length > 0}
                             >
                               <option value="">새 GPS 없는 그룹으로 유지</option>
                               {group.existingGroupCandidates.map((candidate) => (
@@ -489,7 +597,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
                         <label className="space-y-2">
                           <span className="text-sm font-medium text-slate-800">
-                            정리할 그룹명
+                            기본 그룹명
                           </span>
                           <input
                             value={groupTitleInputs[group.groupKey] ?? ''}
@@ -501,9 +609,110 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             }
                             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder={group.displayTitle}
-                            disabled={group.assignmentMode === 'manual-existing-group'}
+                            disabled={
+                              group.assignmentMode === 'manual-existing-group' &&
+                              hasExistingGroupAssignment
+                            }
                           />
                         </label>
+
+                        {group.assignmentMode === 'manual-existing-group' &&
+                        !hasExistingGroupAssignment ? (
+                          <div className="space-y-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-slate-900">
+                                선택 사진을 다른 그룹명으로 분리
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                일부 사진을 선택해서 새 그룹명을 만들고, 남은 사진은
+                                위 기본 그룹명으로 남길 수 있습니다.
+                              </p>
+                            </div>
+
+                            <label className="space-y-2">
+                              <span className="text-sm font-medium text-slate-800">
+                                새 그룹명
+                              </span>
+                              <input
+                                value={groupSplitTitleInputs[group.groupKey] ?? ''}
+                                onChange={(event) =>
+                                  setGroupSplitTitleInputs((current) => ({
+                                    ...current,
+                                    [group.groupKey]: event.target.value
+                                  }))
+                                }
+                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+                                placeholder="예: 카페 / 실내 / 받은 사진"
+                              />
+                            </label>
+
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {group.representativePhotos.map((photo) => (
+                                <label
+                                  key={photo.id}
+                                  className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm ${
+                                    assignedPhotoIdSet.has(photo.id)
+                                      ? 'border-slate-200 bg-slate-100 text-slate-400'
+                                      : 'border-slate-200 bg-white text-slate-700'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={(groupSelectedPhotoIds[group.groupKey] ?? []).includes(
+                                      photo.id
+                                    )}
+                                    disabled={assignedPhotoIdSet.has(photo.id)}
+                                    onChange={() =>
+                                      toggleGroupPhotoSelection(group.groupKey, photo.id)
+                                    }
+                                  />
+                                  <span className="flex-1 truncate">{photo.sourceFileName}</span>
+                                </label>
+                              ))}
+                            </div>
+
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
+                                disabled={
+                                  (groupSelectedPhotoIds[group.groupKey] ?? []).length === 0 ||
+                                  (groupSplitTitleInputs[group.groupKey]?.trim().length ?? 0) === 0
+                                }
+                                onClick={() => addCustomSplit(group.groupKey)}
+                              >
+                                선택 사진 분리
+                              </button>
+                            </div>
+
+                            {customSplits.length > 0 ? (
+                              <div className="space-y-2">
+                                {customSplits.map((split) => (
+                                  <div
+                                    key={split.id}
+                                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                                  >
+                                    <div className="flex-1 text-sm text-slate-700">
+                                      <span className="font-medium text-slate-900">
+                                        {split.title}
+                                      </span>
+                                      {` · ${split.photoIds.length}장`}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="text-xs font-medium text-rose-600"
+                                      onClick={() =>
+                                        removeCustomSplit(group.groupKey, split.id)
+                                      }
+                                    >
+                                      제거
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
 
                         <label className="space-y-2">
                           <span className="text-sm font-medium text-slate-800">
@@ -519,7 +728,10 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             }
                             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder="예: Alice, Bob"
-                            disabled={group.assignmentMode === 'manual-existing-group'}
+                            disabled={
+                              group.assignmentMode === 'manual-existing-group' &&
+                              hasExistingGroupAssignment
+                            }
                           />
                         </label>
 
@@ -537,13 +749,17 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             }
                             className="min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder="이 그룹에 대한 메모를 남겨두세요."
-                            disabled={group.assignmentMode === 'manual-existing-group'}
+                            disabled={
+                              group.assignmentMode === 'manual-existing-group' &&
+                              hasExistingGroupAssignment
+                            }
                           />
                         </label>
                       </div>
                     </div>
                   </article>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-sky-300 bg-white p-6 text-center">

@@ -33,6 +33,8 @@ export interface Photo {
   gps?: GeoPoint
   locationSource?: PhotoLocationSource
   missingGpsCategory?: MissingGpsCategory
+  manualGroupId?: string
+  manualGroupTitle?: string
   regionName?: string
   outputRelativePath?: string
   thumbnailRelativePath?: string

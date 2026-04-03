@@ -14,6 +14,8 @@ interface GroupSeed {
   month: string
   day: string
   slotIndex: number
+  manualGroupId?: string
+  manualGroupTitle?: string
 }
 
 function getPhotoRegionName(photo: Photo): string {
@@ -33,6 +35,10 @@ function getPhotoDay(photo: Photo): string {
 }
 
 function buildGroupDisplayTitle(seed: GroupSeed): string {
+  if (seed.manualGroupTitle) {
+    return seed.manualGroupTitle
+  }
+
   const dateLabel =
     seed.day === '00'
       ? `${seed.year}-${seed.month}`
@@ -42,14 +48,20 @@ function buildGroupDisplayTitle(seed: GroupSeed): string {
 }
 
 function buildGroupKey(seed: GroupSeed): string {
-  return [
+  const baseKey = [
     'group',
     `region=${encodeURIComponent(seed.regionName)}`,
     `year=${seed.year}`,
     `month=${seed.month}`,
     `day=${seed.day}`,
     `slot=${seed.slotIndex}`
-  ].join('|')
+  ]
+
+  if (seed.manualGroupId) {
+    baseKey.push(`manual=${encodeURIComponent(seed.manualGroupId)}`)
+  }
+
+  return baseKey.join('|')
 }
 
 function comparePhotosByTimeline(left: Photo, right: Photo): number {
@@ -72,6 +84,10 @@ function shouldStartNewGroup(
   }
 
   if (getPhotoDay(previousPhoto) !== getPhotoDay(nextPhoto)) {
+    return true
+  }
+
+  if ((previousPhoto.manualGroupId ?? '') !== (nextPhoto.manualGroupId ?? '')) {
     return true
   }
 
@@ -123,7 +139,9 @@ export function groupPhotosByPolicy(photos: Photo[]): PhotoGroupBucket[] {
           year: getPhotoYear(photo),
           month: getPhotoMonth(photo),
           day: getPhotoDay(photo),
-          slotIndex
+          slotIndex,
+          manualGroupId: photo.manualGroupId,
+          manualGroupTitle: photo.manualGroupTitle
         }
         currentPhotos = [photo]
       } else {

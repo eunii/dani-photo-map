@@ -41,6 +41,8 @@ export const photoSchema = z.object({
   gps: geoPointSchema.optional(),
   locationSource: z.enum(photoLocationSources).optional(),
   missingGpsCategory: z.enum(missingGpsCategories).optional(),
+  manualGroupId: z.string().min(1).optional(),
+  manualGroupTitle: z.string().min(1).optional(),
   regionName: z.string().min(1).optional(),
   outputRelativePath: z.string().min(1).optional(),
   thumbnailRelativePath: z.string().min(1).optional(),

@@ -208,7 +208,6 @@ export class PreviewPendingOrganizationUseCase {
             group.photoIds
               .map((photoId) => photosById.get(photoId))
               .filter((photo): photo is Photo => photo !== undefined)
-              .slice(0, 3)
               .map(async (photo) => ({
                 id: photo.id,
                 sourcePath: photo.sourcePath,

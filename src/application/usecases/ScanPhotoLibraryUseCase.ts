@@ -133,7 +133,8 @@ export class ScanPhotoLibraryUseCase {
       storedIndex,
       finalizedScanResult.copiedPhotos,
       validatedCommand.groupMetadataOverrides ?? [],
-      validatedCommand.pendingGroupAssignments ?? []
+      validatedCommand.pendingGroupAssignments ?? [],
+      validatedCommand.pendingCustomGroupSplits ?? []
     )
     const groups = index.groups
 
@@ -397,33 +398,103 @@ export class ScanPhotoLibraryUseCase {
     pendingGroupAssignments: Array<{
       groupKey: string
       targetGroupId: string
+    }>,
+    pendingCustomGroupSplits: Array<{
+      groupKey: string
+      splitId: string
+      title: string
+      photoIds: string[]
     }>
   ): Promise<LibraryIndex> {
     const rebuiltExistingIndex = rebuildLibraryIndexFromExistingOutput(
       existingOutputSnapshot
     )
     const mergedBasePhotos = rebuiltExistingIndex?.photos ?? []
+    const customizedCopiedPhotos = this.applyPendingCustomGroupSplits(
+      copiedPhotos,
+      pendingCustomGroupSplits
+    )
     const rebuiltIndex: LibraryIndex = {
       version: LIBRARY_INDEX_VERSION,
       generatedAt: new Date().toISOString(),
       sourceRoot: paths.sourceRoot,
       outputRoot: paths.outputRoot,
-      photos: [...mergedBasePhotos, ...copiedPhotos],
-      groups: createPhotoGroups([...mergedBasePhotos, ...copiedPhotos])
+      photos: [...mergedBasePhotos, ...customizedCopiedPhotos],
+      groups: createPhotoGroups([...mergedBasePhotos, ...customizedCopiedPhotos])
     }
 
     const metadataAppliedIndex = this.applyGroupMetadataOverrides(
       mergeStoredLibraryMetadata(rebuiltIndex, storedIndex),
-      copiedPhotos,
+      customizedCopiedPhotos,
       groupMetadataOverrides
     )
 
     return this.applyPendingGroupAssignments(
       metadataAppliedIndex,
-      copiedPhotos,
+      customizedCopiedPhotos,
       paths.outputRoot,
       pendingGroupAssignments
     )
+  }
+
+  private applyPendingCustomGroupSplits(
+    copiedPhotos: Photo[],
+    pendingCustomGroupSplits: Array<{
+      groupKey: string
+      splitId: string
+      title: string
+      photoIds: string[]
+    }>
+  ): Photo[] {
+    if (copiedPhotos.length === 0 || pendingCustomGroupSplits.length === 0) {
+      return copiedPhotos
+    }
+
+    const pendingPhotoIdsByGroupKey = new Map<string, Set<string>>()
+
+    for (const group of createPhotoGroups(copiedPhotos)) {
+      pendingPhotoIdsByGroupKey.set(group.groupKey, new Set(group.photoIds))
+    }
+
+    const splitByPhotoId = new Map<
+      string,
+      {
+        splitId: string
+        title: string
+      }
+    >()
+
+    for (const split of pendingCustomGroupSplits) {
+      const allowedPhotoIds = pendingPhotoIdsByGroupKey.get(split.groupKey)
+      const normalizedTitle = split.title.trim()
+
+      if (!allowedPhotoIds || normalizedTitle.length === 0) {
+        continue
+      }
+
+      for (const photoId of split.photoIds) {
+        if (!allowedPhotoIds.has(photoId) || splitByPhotoId.has(photoId)) {
+          continue
+        }
+
+        splitByPhotoId.set(photoId, {
+          splitId: split.splitId,
+          title: normalizedTitle
+        })
+      }
+    }
+
+    return copiedPhotos.map((photo) => {
+      const split = splitByPhotoId.get(photo.id)
+
+      return split
+        ? {
+            ...photo,
+            manualGroupId: split.splitId,
+            manualGroupTitle: split.title
+          }
+        : photo
+    })
   }
 
   private applyGroupMetadataOverrides(

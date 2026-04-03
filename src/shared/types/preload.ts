@@ -23,6 +23,12 @@ export interface ScanPhotoLibraryRequest {
     groupKey: string
     targetGroupId: string
   }>
+  pendingCustomGroupSplits?: Array<{
+    groupKey: string
+    splitId: string
+    title: string
+    photoIds: string[]
+  }>
 }
 
 export interface LoadLibraryIndexRequest {

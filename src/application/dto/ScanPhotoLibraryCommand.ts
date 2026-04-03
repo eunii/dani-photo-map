@@ -20,6 +20,16 @@ export const scanPhotoLibraryCommandSchema = z.object({
         targetGroupId: z.string().min(1)
       })
     )
+    .optional(),
+  pendingCustomGroupSplits: z
+    .array(
+      z.object({
+        groupKey: z.string().min(1),
+        splitId: z.string().min(1),
+        title: z.string().min(1),
+        photoIds: z.array(z.string().min(1)).min(1)
+      })
+    )
     .optional()
 })
 
