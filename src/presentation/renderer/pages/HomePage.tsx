@@ -7,6 +7,11 @@ import type {
   ScanPhotoLibrarySummary
 } from '@shared/types/preload'
 
+const STORAGE_KEYS = {
+  sourceRoot: 'photo-organizer/source-root',
+  outputRoot: 'photo-organizer/output-root'
+} as const
+
 const SOURCE_DIALOG_OPTIONS = {
   title: '원본 사진 폴더 선택',
   buttonLabel: '원본 폴더 선택'
@@ -17,17 +22,47 @@ const OUTPUT_DIALOG_OPTIONS = {
   buttonLabel: '출력 폴더 선택'
 } as const
 
+function readStoredPath(key: string): string {
+  try {
+    return window.localStorage.getItem(key) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function persistPath(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    void key
+    void value
+  }
+}
+
 export function HomePage() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
-  const [sourceRoot, setSourceRoot] = useState('')
-  const [outputRoot, setOutputRoot] = useState('')
+  const [sourceRoot, setSourceRoot] = useState(() =>
+    readStoredPath(STORAGE_KEYS.sourceRoot)
+  )
+  const [outputRoot, setOutputRoot] = useState(() =>
+    readStoredPath(STORAGE_KEYS.outputRoot)
+  )
   const [isScanning, setIsScanning] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [summary, setSummary] = useState<ScanPhotoLibrarySummary | null>(null)
+  const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>()
 
   useEffect(() => {
     void window.photoApp.getAppInfo().then(setAppInfo)
   }, [])
+
+  useEffect(() => {
+    persistPath(STORAGE_KEYS.sourceRoot, sourceRoot)
+  }, [sourceRoot])
+
+  useEffect(() => {
+    persistPath(STORAGE_KEYS.outputRoot, outputRoot)
+  }, [outputRoot])
 
   async function selectSourceRoot(): Promise<void> {
     const selectedPath = await window.photoApp.selectDirectory(
@@ -37,6 +72,7 @@ export function HomePage() {
     if (selectedPath) {
       setSourceRoot(selectedPath)
       setSummary(null)
+      setSelectedGroupId(undefined)
       setErrorMessage(null)
     }
   }
@@ -49,6 +85,7 @@ export function HomePage() {
     if (selectedPath) {
       setOutputRoot(selectedPath)
       setSummary(null)
+      setSelectedGroupId(undefined)
       setErrorMessage(null)
     }
   }
@@ -69,6 +106,7 @@ export function HomePage() {
       })
 
       setSummary(nextSummary)
+      setSelectedGroupId(nextSummary.mapGroups[0]?.id)
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
@@ -199,8 +237,16 @@ export function HomePage() {
               </p>
             </div>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)]">
-              <GroupsMap groups={summary?.mapGroups ?? []} />
-              <GroupListPanel groups={summary?.mapGroups ?? []} />
+              <GroupsMap
+                groups={summary?.mapGroups ?? []}
+                selectedGroupId={selectedGroupId}
+                onSelectGroup={setSelectedGroupId}
+              />
+              <GroupListPanel
+                groups={summary?.mapGroups ?? []}
+                selectedGroupId={selectedGroupId}
+                onSelectGroup={setSelectedGroupId}
+              />
             </div>
           </section>
 

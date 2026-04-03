@@ -1,21 +1,48 @@
 import { useEffect, useMemo, useRef } from 'react'
 
-import maplibregl, { LngLatBounds } from 'maplibre-gl'
+import maplibregl, { LngLatBounds, type StyleSpecification } from 'maplibre-gl'
 
 import type { MapGroupSummary } from '@shared/types/preload'
 
 interface GroupsMapProps {
   groups: MapGroupSummary[]
+  selectedGroupId?: string
+  onSelectGroup?: (groupId: string) => void
 }
 
 const DEFAULT_CENTER: [number, number] = [127.0, 37.5]
 const DEFAULT_ZOOM = 5
-const MAP_STYLE_URL = 'https://demotiles.maplibre.org/style.json'
+const MAP_STYLE: StyleSpecification = {
+  version: 8,
+  projection: {
+    type: 'mercator'
+  },
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors'
+    }
+  },
+  layers: [
+    {
+      id: 'osm',
+      type: 'raster',
+      source: 'osm'
+    }
+  ]
+}
 
-export function GroupsMap({ groups }: GroupsMapProps) {
+export function GroupsMap({
+  groups,
+  selectedGroupId,
+  onSelectGroup
+}: GroupsMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const markersRef = useRef<maplibregl.Marker[]>([])
+  const popupByGroupIdRef = useRef(new Map<string, maplibregl.Popup>())
 
   const hasGroups = groups.length > 0
   const mapGroups = useMemo(() => groups, [groups])
@@ -27,7 +54,7 @@ export function GroupsMap({ groups }: GroupsMapProps) {
 
     mapRef.current = new maplibregl.Map({
       container: containerRef.current,
-      style: MAP_STYLE_URL,
+      style: MAP_STYLE,
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
       attributionControl: false
@@ -58,6 +85,7 @@ export function GroupsMap({ groups }: GroupsMapProps) {
     }
 
     markersRef.current = []
+    popupByGroupIdRef.current.clear()
 
     if (mapGroups.length === 0) {
       map.easeTo({
@@ -72,16 +100,27 @@ export function GroupsMap({ groups }: GroupsMapProps) {
     const bounds = new LngLatBounds()
 
     for (const group of mapGroups) {
-      const marker = new maplibregl.Marker({ color: '#2563eb' })
+      const markerElement = document.createElement('button')
+      markerElement.type = 'button'
+      markerElement.className =
+        'h-4 w-4 rounded-full border-2 border-white bg-blue-600 shadow'
+      markerElement.setAttribute('aria-label', group.title)
+
+      const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
+        `<strong>${group.title}</strong><br/>사진 ${group.photoCount}장`
+      )
+
+      markerElement.addEventListener('click', () => {
+        onSelectGroup?.(group.id)
+      })
+
+      const marker = new maplibregl.Marker({ element: markerElement })
         .setLngLat([group.longitude, group.latitude])
-        .setPopup(
-          new maplibregl.Popup({ offset: 16 }).setHTML(
-            `<strong>${group.title}</strong><br/>사진 ${group.photoCount}장`
-          )
-        )
+        .setPopup(popup)
         .addTo(map)
 
       markersRef.current.push(marker)
+      popupByGroupIdRef.current.set(group.id, popup)
       bounds.extend([group.longitude, group.latitude])
     }
 
@@ -105,7 +144,29 @@ export function GroupsMap({ groups }: GroupsMapProps) {
       padding: 48,
       duration: 500
     })
-  }, [mapGroups])
+  }, [mapGroups, onSelectGroup])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || !selectedGroupId) {
+      return
+    }
+
+    const selectedGroup = mapGroups.find((group) => group.id === selectedGroupId)
+
+    if (!selectedGroup) {
+      return
+    }
+
+    map.easeTo({
+      center: [selectedGroup.longitude, selectedGroup.latitude],
+      zoom: Math.max(map.getZoom(), 9),
+      duration: 500
+    })
+
+    popupByGroupIdRef.current.get(selectedGroup.id)?.addTo(map)
+  }, [mapGroups, selectedGroupId])
 
   return (
     <section className="space-y-3">

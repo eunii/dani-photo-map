@@ -2,9 +2,15 @@ import type { MapGroupSummary } from '@shared/types/preload'
 
 interface GroupListPanelProps {
   groups: MapGroupSummary[]
+  selectedGroupId?: string
+  onSelectGroup?: (groupId: string) => void
 }
 
-export function GroupListPanel({ groups }: GroupListPanelProps) {
+export function GroupListPanel({
+  groups,
+  selectedGroupId,
+  onSelectGroup
+}: GroupListPanelProps) {
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
@@ -31,7 +37,11 @@ export function GroupListPanel({ groups }: GroupListPanelProps) {
             {groups.map((group) => (
               <article
                 key={group.id}
-                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                className={`rounded-xl border p-4 shadow-sm transition ${
+                  selectedGroupId === group.id
+                    ? 'border-blue-300 bg-blue-50 shadow-blue-100'
+                    : 'border-slate-200 bg-white'
+                }`}
               >
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-3">
@@ -51,6 +61,15 @@ export function GroupListPanel({ groups }: GroupListPanelProps) {
                       <span className="font-medium text-slate-700">경도</span>{' '}
                       {group.longitude.toFixed(5)}
                     </p>
+                  </div>
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-blue-300 hover:text-blue-700"
+                      onClick={() => onSelectGroup?.(group.id)}
+                    >
+                      지도에서 보기
+                    </button>
                   </div>
                 </div>
               </article>
