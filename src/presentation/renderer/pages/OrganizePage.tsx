@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
-import type { ScanPhotoLibrarySummary } from '@shared/types/preload'
+import type {
+  PreviewPendingOrganizationResult,
+  ScanPhotoLibrarySummary
+} from '@shared/types/preload'
 import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
 
 const SOURCE_DIALOG_OPTIONS = {
@@ -26,8 +29,32 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     (state) => state.setLastLoadedIndex
   )
   const [isScanning, setIsScanning] = useState(false)
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [summary, setSummary] = useState<ScanPhotoLibrarySummary | null>(null)
+  const [previewResult, setPreviewResult] =
+    useState<PreviewPendingOrganizationResult | null>(null)
+  const [groupTitleOverrides, setGroupTitleOverrides] = useState<
+    Record<string, string>
+  >({})
+
+  const hasPendingPreviewGroups = (previewResult?.groups.length ?? 0) > 0
+  const previewOverrideEntries = useMemo(
+    () =>
+      (previewResult?.groups ?? [])
+        .map((group) => ({
+          groupKey: group.groupKey,
+          title: groupTitleOverrides[group.groupKey]?.trim() ?? ''
+        }))
+        .filter((entry) => entry.title.length > 0),
+    [groupTitleOverrides, previewResult?.groups]
+  )
+
+  function toFileUrl(sourcePath: string): string {
+    return encodeURI(
+      `file:///${sourcePath.replace(/\\/g, '/').replace(/^\/+/, '')}`
+    )
+  }
 
   async function selectSourceRoot(): Promise<void> {
     const selectedPath = await window.photoApp.selectDirectory(
@@ -36,6 +63,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
     if (selectedPath) {
       setSourceRoot(selectedPath)
+      setPreviewResult(null)
+      setGroupTitleOverrides({})
       setSummary(null)
       setErrorMessage(null)
     }
@@ -49,8 +78,45 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     if (selectedPath) {
       setOutputRoot(selectedPath)
       setLastLoadedIndex(null)
+      setPreviewResult(null)
+      setGroupTitleOverrides({})
       setSummary(null)
       setErrorMessage(null)
+    }
+  }
+
+  async function handlePreview(): Promise<void> {
+    if (!sourceRoot || !outputRoot) {
+      setErrorMessage('원본 사진 폴더와 출력 폴더를 먼저 선택하세요.')
+      return
+    }
+
+    setIsLoadingPreview(true)
+    setErrorMessage(null)
+
+    try {
+      const nextPreview = await window.photoApp.previewPendingOrganization({
+        sourceRoot,
+        outputRoot
+      })
+
+      setPreviewResult(nextPreview)
+      setGroupTitleOverrides(
+        Object.fromEntries(
+          nextPreview.groups.map((group) => [
+            group.groupKey,
+            group.suggestedTitles[0] ?? group.displayTitle
+          ])
+        )
+      )
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : '신규 정리 후보를 불러오지 못했습니다.'
+      )
+    } finally {
+      setIsLoadingPreview(false)
     }
   }
 
@@ -66,12 +132,15 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     try {
       const nextSummary = await window.photoApp.scanPhotoLibrary({
         sourceRoot,
-        outputRoot
+        outputRoot,
+        groupTitleOverrides: previewOverrideEntries
       })
       const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
 
       setSummary(nextSummary)
       setLastLoadedIndex(loadedIndex)
+      setPreviewResult(null)
+      setGroupTitleOverrides({})
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
@@ -133,6 +202,14 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
+          disabled={isLoadingPreview || isScanning}
+          onClick={() => void handlePreview()}
+        >
+          {isLoadingPreview ? '후보 불러오는 중...' : '신규 정리 후보 불러오기'}
+        </button>
+        <button
+          type="button"
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
           disabled={isScanning}
           onClick={() => void handleScan()}
@@ -148,8 +225,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           조회 페이지 열기
         </button>
         <p className="text-sm text-slate-500">
-          EXIF 메타데이터 읽기, SHA-256 중복 검사, 결과 복사 및 `index.json`
-          생성까지 실행합니다.
+          먼저 신규 정리 후보를 확인하고, 그룹명을 입력한 뒤 실행할 수
+          있습니다.
         </p>
       </div>
 
@@ -157,6 +234,137 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
         </div>
+      ) : null}
+
+      {previewResult ? (
+        <section className="rounded-xl border border-sky-200 bg-sky-50 p-5">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <h2 className="text-sm font-semibold text-sky-900">
+                  신규 정리 후보
+                </h2>
+                <p className="text-sm text-sky-800">
+                  신규 정리 대상 {previewResult.pendingPhotoCount}장, 기존 중복
+                  스킵 예정 {previewResult.skippedExistingCount}장
+                </p>
+              </div>
+              <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-sky-700">
+                스캔 후보 {previewResult.scannedCount}장
+              </div>
+            </div>
+
+            {hasPendingPreviewGroups ? (
+              <div className="space-y-4">
+                {previewResult.groups.map((group) => (
+                  <article
+                    key={group.groupKey}
+                    className="rounded-xl border border-sky-200 bg-white p-4"
+                  >
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <h3 className="text-sm font-semibold text-slate-900">
+                            {group.displayTitle}
+                          </h3>
+                          <p className="text-sm text-slate-600">
+                            사진 {group.photoCount}장
+                            {group.representativeGps ? ' · GPS 기반 그룹' : ' · GPS 없음'}
+                          </p>
+                        </div>
+                        <div className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+                          {group.groupKey}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {group.representativePhotos.map((photo) => (
+                          <div
+                            key={photo.id}
+                            className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
+                          >
+                            <img
+                              src={toFileUrl(photo.sourcePath)}
+                              alt={photo.sourceFileName}
+                              className="h-36 w-full object-cover"
+                            />
+                            <div className="space-y-1 px-3 py-2">
+                              <p className="truncate text-sm font-medium text-slate-900">
+                                {photo.sourceFileName}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {photo.capturedAtIso ?? '촬영 시각 없음'}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-slate-800">
+                            추천 그룹명
+                          </p>
+                          {group.suggestedTitles.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {group.suggestedTitles.map((title) => (
+                                <button
+                                  key={title}
+                                  type="button"
+                                  className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
+                                  onClick={() =>
+                                    setGroupTitleOverrides((current) => ({
+                                      ...current,
+                                      [group.groupKey]: title
+                                    }))
+                                  }
+                                >
+                                  {title}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-500">
+                              근처 GPS 범위에서 기존 그룹명이 없어 기본 그룹명을
+                              사용합니다.
+                            </p>
+                          )}
+                        </div>
+
+                        <label className="space-y-2">
+                          <span className="text-sm font-medium text-slate-800">
+                            정리할 그룹명
+                          </span>
+                          <input
+                            value={groupTitleOverrides[group.groupKey] ?? ''}
+                            onChange={(event) =>
+                              setGroupTitleOverrides((current) => ({
+                                ...current,
+                                [group.groupKey]: event.target.value
+                              }))
+                            }
+                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+                            placeholder={group.displayTitle}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-sky-300 bg-white p-6 text-center">
+                <p className="text-sm font-semibold text-slate-900">
+                  새로 정리할 파일이 없습니다.
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  현재 원본 폴더의 파일은 출력 폴더에 이미 있거나 중복으로
+                  판단되었습니다.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
       ) : null}
 
       {summary ? (

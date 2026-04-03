@@ -247,6 +247,48 @@ describe('ScanPhotoLibraryUseCase', () => {
     })
   })
 
+  it('applies provided group title overrides to newly organized groups', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_1001.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      gps: {
+        latitude: 37.5665,
+        longitude: 126.978
+      },
+      capturedAt: {
+        iso: '2026-04-03T08:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '03',
+        time: '080000'
+      }
+    })
+    dependencies.hasher.createSha256.mockResolvedValue('hash-title-1')
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      groupTitleOverrides: [
+        {
+          groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+          title: '서울 산책'
+        }
+      ]
+    })
+
+    expect(getSavedIndex()?.groups[0]).toMatchObject({
+      title: '서울 산책',
+      displayTitle: '2026-04-03 seoul'
+    })
+  })
+
   it('skips copying when the same SHA-256 already exists anywhere in the output', async () => {
     const { dependencies, getSavedIndex } = createUseCaseDependencies()
 

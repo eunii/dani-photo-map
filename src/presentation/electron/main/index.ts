@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 
 import { LoadLibraryIndexUseCase } from '@application/usecases/LoadLibraryIndexUseCase'
+import { PreviewPendingOrganizationUseCase } from '@application/usecases/PreviewPendingOrganizationUseCase'
 import { ScanPhotoLibraryUseCase } from '@application/usecases/ScanPhotoLibraryUseCase'
 import { UpdatePhotoGroupUseCase } from '@application/usecases/UpdatePhotoGroupUseCase'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
@@ -18,6 +19,7 @@ import { toLibraryIndexView } from '@presentation/common/mappers/toLibraryIndexV
 import type {
   DirectorySelectionOptions,
   LoadLibraryIndexRequest,
+  PreviewPendingOrganizationRequest,
   ScanPhotoLibraryRequest,
   UpdatePhotoGroupRequest
 } from '@shared/types/preload'
@@ -25,6 +27,7 @@ import type {
 const IPC_CHANNELS = {
   selectDirectory: 'photo-app/select-directory',
   loadLibraryIndex: 'photo-app/load-library-index',
+  previewPendingOrganization: 'photo-app/preview-pending-organization',
   scanPhotoLibrary: 'photo-app/scan-photo-library',
   updatePhotoGroup: 'photo-app/update-photo-group'
 } as const
@@ -64,6 +67,24 @@ function createLoadLibraryIndexUseCase(): LoadLibraryIndexUseCase {
   )
 }
 
+function createPreviewPendingOrganizationUseCase(): PreviewPendingOrganizationUseCase {
+  const rules = defaultOrganizationRules
+
+  return new PreviewPendingOrganizationUseCase({
+    fileSystem: new NodePhotoLibraryFileSystem(),
+    metadataReader: new ExifrPhotoMetadataReader(),
+    hasher: new NodePhotoHasher(),
+    regionResolver: new CachedRegionResolver(
+      new CuratedRegionResolver(
+        new FallbackRegionResolver(rules.unknownRegionLabel)
+      )
+    ),
+    libraryIndexStore: createLibraryIndexStore(),
+    existingOutputScanner: new ExistingOutputLibraryScanner(rules),
+    rules
+  })
+}
+
 function createUpdatePhotoGroupUseCase(): UpdatePhotoGroupUseCase {
   return new UpdatePhotoGroupUseCase(
     createLibraryIndexStore(),
@@ -99,6 +120,16 @@ function registerIpcHandlers(): void {
         source: result.source,
         index: result.index ? toLibraryIndexView(result.index) : null
       }
+    }
+  )
+
+  ipcMain.removeHandler(IPC_CHANNELS.previewPendingOrganization)
+  ipcMain.handle(
+    IPC_CHANNELS.previewPendingOrganization,
+    async (_event, command: PreviewPendingOrganizationRequest) => {
+      const useCase = createPreviewPendingOrganizationUseCase()
+
+      return useCase.execute(command)
     }
   )
 

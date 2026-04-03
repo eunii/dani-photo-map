@@ -11,9 +11,18 @@ export interface DirectorySelectionOptions {
 export interface ScanPhotoLibraryRequest {
   sourceRoot: string
   outputRoot: string
+  groupTitleOverrides?: Array<{
+    groupKey: string
+    title: string
+  }>
 }
 
 export interface LoadLibraryIndexRequest {
+  outputRoot: string
+}
+
+export interface PreviewPendingOrganizationRequest {
+  sourceRoot: string
   outputRoot: string
 }
 
@@ -110,6 +119,33 @@ export interface ScanPhotoLibrarySummary {
   mapGroups: MapGroupSummary[]
 }
 
+export interface PendingOrganizationPreviewPhoto {
+  id: string
+  sourcePath: string
+  sourceFileName: string
+  capturedAtIso?: string
+  hasGps: boolean
+}
+
+export interface PendingOrganizationPreviewGroup {
+  groupKey: string
+  displayTitle: string
+  suggestedTitles: string[]
+  photoCount: number
+  representativeGps?: {
+    latitude: number
+    longitude: number
+  }
+  representativePhotos: PendingOrganizationPreviewPhoto[]
+}
+
+export interface PreviewPendingOrganizationResult {
+  scannedCount: number
+  pendingPhotoCount: number
+  skippedExistingCount: number
+  groups: PendingOrganizationPreviewGroup[]
+}
+
 export interface PreloadBridge {
   getAppInfo: () => Promise<AppInfo>
   ping: () => Promise<string>
@@ -119,6 +155,9 @@ export interface PreloadBridge {
   loadLibraryIndex: (
     request: LoadLibraryIndexRequest
   ) => Promise<LoadLibraryIndexResult>
+  previewPendingOrganization: (
+    request: PreviewPendingOrganizationRequest
+  ) => Promise<PreviewPendingOrganizationResult>
   scanPhotoLibrary: (
     request: ScanPhotoLibraryRequest
   ) => Promise<ScanPhotoLibrarySummary>

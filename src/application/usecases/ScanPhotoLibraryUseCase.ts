@@ -130,7 +130,8 @@ export class ScanPhotoLibraryUseCase {
       paths,
       existingOutputSnapshot,
       storedIndex,
-      finalizedScanResult.copiedPhotos
+      finalizedScanResult.copiedPhotos,
+      validatedCommand.groupTitleOverrides ?? []
     )
     const groups = index.groups
 
@@ -378,7 +379,8 @@ export class ScanPhotoLibraryUseCase {
     paths: ScanPathContext,
     existingOutputSnapshot: ExistingOutputLibrarySnapshot,
     storedIndex: LibraryIndex | null,
-    copiedPhotos: Photo[]
+    copiedPhotos: Photo[],
+    groupTitleOverrides: Array<{ groupKey: string; title: string }>
   ): LibraryIndex {
     const rebuiltExistingIndex = rebuildLibraryIndexFromExistingOutput(
       existingOutputSnapshot
@@ -393,7 +395,61 @@ export class ScanPhotoLibraryUseCase {
       groups: createPhotoGroups([...mergedBasePhotos, ...copiedPhotos])
     }
 
-    return mergeStoredLibraryMetadata(rebuiltIndex, storedIndex)
+    return this.applyGroupTitleOverrides(
+      mergeStoredLibraryMetadata(rebuiltIndex, storedIndex),
+      copiedPhotos,
+      groupTitleOverrides
+    )
+  }
+
+  private applyGroupTitleOverrides(
+    index: LibraryIndex,
+    copiedPhotos: Photo[],
+    groupTitleOverrides: Array<{ groupKey: string; title: string }>
+  ): LibraryIndex {
+    if (copiedPhotos.length === 0 || groupTitleOverrides.length === 0) {
+      return index
+    }
+
+    const overrideTitleByPendingGroupKey = new Map(
+      groupTitleOverrides
+        .map((override) => [override.groupKey, override.title.trim()] as const)
+        .filter((entry) => entry[1].length > 0)
+    )
+
+    if (overrideTitleByPendingGroupKey.size === 0) {
+      return index
+    }
+
+    const pendingGroups = createPhotoGroups(copiedPhotos)
+    const pendingGroupKeyByPhotoId = new Map<string, string>()
+
+    for (const group of pendingGroups) {
+      for (const photoId of group.photoIds) {
+        pendingGroupKeyByPhotoId.set(photoId, group.groupKey)
+      }
+    }
+
+    return {
+      ...index,
+      groups: index.groups.map((group) => {
+        const overrideTitle = group.photoIds
+          .map((photoId) => pendingGroupKeyByPhotoId.get(photoId))
+          .map((pendingGroupKey) =>
+            pendingGroupKey
+              ? overrideTitleByPendingGroupKey.get(pendingGroupKey)
+              : undefined
+          )
+          .find((title) => Boolean(title))
+
+        return overrideTitle
+          ? {
+              ...group,
+              title: overrideTitle
+            }
+          : group
+      })
+    }
   }
 
   private async readMetadataSafely(
