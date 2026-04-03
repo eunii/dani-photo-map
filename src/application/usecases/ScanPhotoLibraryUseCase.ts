@@ -131,7 +131,7 @@ export class ScanPhotoLibraryUseCase {
       existingOutputSnapshot,
       storedIndex,
       finalizedScanResult.copiedPhotos,
-      validatedCommand.groupTitleOverrides ?? []
+      validatedCommand.groupMetadataOverrides ?? []
     )
     const groups = index.groups
 
@@ -380,7 +380,12 @@ export class ScanPhotoLibraryUseCase {
     existingOutputSnapshot: ExistingOutputLibrarySnapshot,
     storedIndex: LibraryIndex | null,
     copiedPhotos: Photo[],
-    groupTitleOverrides: Array<{ groupKey: string; title: string }>
+    groupMetadataOverrides: Array<{
+      groupKey: string
+      title: string
+      companions: string[]
+      notes?: string
+    }>
   ): LibraryIndex {
     const rebuiltExistingIndex = rebuildLibraryIndexFromExistingOutput(
       existingOutputSnapshot
@@ -395,29 +400,47 @@ export class ScanPhotoLibraryUseCase {
       groups: createPhotoGroups([...mergedBasePhotos, ...copiedPhotos])
     }
 
-    return this.applyGroupTitleOverrides(
+    return this.applyGroupMetadataOverrides(
       mergeStoredLibraryMetadata(rebuiltIndex, storedIndex),
       copiedPhotos,
-      groupTitleOverrides
+      groupMetadataOverrides
     )
   }
 
-  private applyGroupTitleOverrides(
+  private applyGroupMetadataOverrides(
     index: LibraryIndex,
     copiedPhotos: Photo[],
-    groupTitleOverrides: Array<{ groupKey: string; title: string }>
+    groupMetadataOverrides: Array<{
+      groupKey: string
+      title: string
+      companions: string[]
+      notes?: string
+    }>
   ): LibraryIndex {
-    if (copiedPhotos.length === 0 || groupTitleOverrides.length === 0) {
+    if (copiedPhotos.length === 0 || groupMetadataOverrides.length === 0) {
       return index
     }
 
-    const overrideTitleByPendingGroupKey = new Map(
-      groupTitleOverrides
-        .map((override) => [override.groupKey, override.title.trim()] as const)
-        .filter((entry) => entry[1].length > 0)
+    const overrideByPendingGroupKey = new Map(
+      groupMetadataOverrides
+        .map((override) => [
+          override.groupKey,
+          {
+            title: override.title.trim(),
+            companions: Array.from(
+              new Set(
+                override.companions
+                  .map((companion) => companion.trim())
+                  .filter((companion) => companion.length > 0)
+              )
+            ),
+            notes: override.notes?.trim() || undefined
+          }
+        ] as const)
+        .filter((entry) => entry[1].title.length > 0)
     )
 
-    if (overrideTitleByPendingGroupKey.size === 0) {
+    if (overrideByPendingGroupKey.size === 0) {
       return index
     }
 
@@ -433,19 +456,21 @@ export class ScanPhotoLibraryUseCase {
     return {
       ...index,
       groups: index.groups.map((group) => {
-        const overrideTitle = group.photoIds
+        const override = group.photoIds
           .map((photoId) => pendingGroupKeyByPhotoId.get(photoId))
           .map((pendingGroupKey) =>
             pendingGroupKey
-              ? overrideTitleByPendingGroupKey.get(pendingGroupKey)
+              ? overrideByPendingGroupKey.get(pendingGroupKey)
               : undefined
           )
-          .find((title) => Boolean(title))
+          .find((value) => Boolean(value))
 
-        return overrideTitle
+        return override
           ? {
               ...group,
-              title: overrideTitle
+              title: override.title,
+              companions: override.companions,
+              notes: override.notes
             }
           : group
       })

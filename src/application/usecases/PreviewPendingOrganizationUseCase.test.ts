@@ -22,6 +22,9 @@ function createDependencies() {
     regionResolver: {
       resolveName: vi.fn()
     },
+    photoPreview: {
+      createDataUrl: vi.fn()
+    },
     libraryIndexStore: {
       load: vi.fn(),
       save: vi.fn()
@@ -59,6 +62,9 @@ describe('PreviewPendingOrganizationUseCase', () => {
       .mockResolvedValueOnce('new-hash')
       .mockResolvedValueOnce('existing-hash')
     dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.photoPreview.createDataUrl.mockResolvedValue(
+      'data:image/webp;base64,preview'
+    )
     dependencies.existingOutputScanner.scan.mockResolvedValue({
       outputRoot: 'C:/output',
       photos: [
@@ -142,7 +148,8 @@ describe('PreviewPendingOrganizationUseCase', () => {
     })
     expect(result.groups[0]?.representativePhotos[0]).toMatchObject({
       sourceFileName: 'IMG_0001.JPG',
-      hasGps: true
+      hasGps: true,
+      previewDataUrl: 'data:image/webp;base64,preview'
     })
   })
 })

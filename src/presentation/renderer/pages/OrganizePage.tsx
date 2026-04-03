@@ -34,27 +34,39 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   const [summary, setSummary] = useState<ScanPhotoLibrarySummary | null>(null)
   const [previewResult, setPreviewResult] =
     useState<PreviewPendingOrganizationResult | null>(null)
-  const [groupTitleOverrides, setGroupTitleOverrides] = useState<
+  const [groupTitleInputs, setGroupTitleInputs] = useState<
     Record<string, string>
   >({})
+  const [groupCompanionsInputs, setGroupCompanionsInputs] = useState<
+    Record<string, string>
+  >({})
+  const [groupNotesInputs, setGroupNotesInputs] = useState<
+    Record<string, string>
+  >({})
+  const [previewImageLoadFailedByPhotoId, setPreviewImageLoadFailedByPhotoId] =
+    useState<Record<string, boolean>>({})
 
   const hasPendingPreviewGroups = (previewResult?.groups.length ?? 0) > 0
-  const previewOverrideEntries = useMemo(
+  const previewMetadataOverrideEntries = useMemo(
     () =>
       (previewResult?.groups ?? [])
         .map((group) => ({
           groupKey: group.groupKey,
-          title: groupTitleOverrides[group.groupKey]?.trim() ?? ''
+          title: groupTitleInputs[group.groupKey]?.trim() ?? '',
+          companions: (groupCompanionsInputs[group.groupKey] ?? '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0),
+          notes: groupNotesInputs[group.groupKey]?.trim() || undefined
         }))
         .filter((entry) => entry.title.length > 0),
-    [groupTitleOverrides, previewResult?.groups]
+    [
+      groupCompanionsInputs,
+      groupNotesInputs,
+      groupTitleInputs,
+      previewResult?.groups
+    ]
   )
-
-  function toFileUrl(sourcePath: string): string {
-    return encodeURI(
-      `file:///${sourcePath.replace(/\\/g, '/').replace(/^\/+/, '')}`
-    )
-  }
 
   async function selectSourceRoot(): Promise<void> {
     const selectedPath = await window.photoApp.selectDirectory(
@@ -64,7 +76,10 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     if (selectedPath) {
       setSourceRoot(selectedPath)
       setPreviewResult(null)
-      setGroupTitleOverrides({})
+      setGroupTitleInputs({})
+      setGroupCompanionsInputs({})
+      setGroupNotesInputs({})
+      setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
       setErrorMessage(null)
     }
@@ -79,7 +94,10 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setOutputRoot(selectedPath)
       setLastLoadedIndex(null)
       setPreviewResult(null)
-      setGroupTitleOverrides({})
+      setGroupTitleInputs({})
+      setGroupCompanionsInputs({})
+      setGroupNotesInputs({})
+      setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
       setErrorMessage(null)
     }
@@ -101,13 +119,20 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       })
 
       setPreviewResult(nextPreview)
-      setGroupTitleOverrides(
+      setPreviewImageLoadFailedByPhotoId({})
+      setGroupTitleInputs(
         Object.fromEntries(
           nextPreview.groups.map((group) => [
             group.groupKey,
             group.suggestedTitles[0] ?? group.displayTitle
           ])
         )
+      )
+      setGroupCompanionsInputs(
+        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
+      )
+      setGroupNotesInputs(
+        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
       )
     } catch (error) {
       setErrorMessage(
@@ -133,14 +158,17 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       const nextSummary = await window.photoApp.scanPhotoLibrary({
         sourceRoot,
         outputRoot,
-        groupTitleOverrides: previewOverrideEntries
+        groupMetadataOverrides: previewMetadataOverrideEntries
       })
       const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
 
       setSummary(nextSummary)
       setLastLoadedIndex(loadedIndex)
       setPreviewResult(null)
-      setGroupTitleOverrides({})
+      setGroupTitleInputs({})
+      setGroupCompanionsInputs({})
+      setGroupNotesInputs({})
+      setPreviewImageLoadFailedByPhotoId({})
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
@@ -200,22 +228,37 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
-          disabled={isLoadingPreview || isScanning}
-          onClick={() => void handlePreview()}
-        >
-          {isLoadingPreview ? '후보 불러오는 중...' : '신규 정리 후보 불러오기'}
-        </button>
-        <button
-          type="button"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-          disabled={isScanning}
-          onClick={() => void handleScan()}
-        >
-          {isScanning ? '정리 중...' : '사진 정리 실행'}
-        </button>
+        {!previewResult ? (
+          <button
+            type="button"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            disabled={isLoadingPreview || isScanning}
+            onClick={() => void handlePreview()}
+          >
+            {isLoadingPreview ? '후보 불러오는 중...' : '정리 시작하기'}
+          </button>
+        ) : (
+          <>
+            {hasPendingPreviewGroups ? (
+              <button
+                type="button"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                disabled={isScanning}
+                onClick={() => void handleScan()}
+              >
+                {isScanning ? '정리 중...' : '저장하기'}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
+              disabled={isLoadingPreview || isScanning}
+              onClick={() => void handlePreview()}
+            >
+              후보 다시 불러오기
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
@@ -225,8 +268,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           조회 페이지 열기
         </button>
         <p className="text-sm text-slate-500">
-          먼저 신규 정리 후보를 확인하고, 그룹명을 입력한 뒤 실행할 수
-          있습니다.
+          정리 시작하기를 누르면 신규 후보를 먼저 검토하고, 메타 정보를 입력한
+          뒤 저장할 수 있습니다.
         </p>
       </div>
 
@@ -242,7 +285,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-1">
                 <h2 className="text-sm font-semibold text-sky-900">
-                  신규 정리 후보
+                  신규 정리 후보 검토
                 </h2>
                 <p className="text-sm text-sky-800">
                   신규 정리 대상 {previewResult.pendingPhotoCount}장, 기존 중복
@@ -283,11 +326,24 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             key={photo.id}
                             className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
                           >
-                            <img
-                              src={toFileUrl(photo.sourcePath)}
-                              alt={photo.sourceFileName}
-                              className="h-36 w-full object-cover"
-                            />
+                            {photo.previewDataUrl &&
+                            !previewImageLoadFailedByPhotoId[photo.id] ? (
+                              <img
+                                src={photo.previewDataUrl}
+                                alt={photo.sourceFileName}
+                                className="h-36 w-full object-cover"
+                                onError={() =>
+                                  setPreviewImageLoadFailedByPhotoId((current) => ({
+                                    ...current,
+                                    [photo.id]: true
+                                  }))
+                                }
+                              />
+                            ) : (
+                              <div className="flex h-36 items-center justify-center bg-slate-200 px-3 text-center text-sm text-slate-500">
+                                미리보기를 불러오지 못했습니다.
+                              </div>
+                            )}
                             <div className="space-y-1 px-3 py-2">
                               <p className="truncate text-sm font-medium text-slate-900">
                                 {photo.sourceFileName}
@@ -313,7 +369,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                                   type="button"
                                   className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
                                   onClick={() =>
-                                    setGroupTitleOverrides((current) => ({
+                                    setGroupTitleInputs((current) => ({
                                       ...current,
                                       [group.groupKey]: title
                                     }))
@@ -336,15 +392,49 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             정리할 그룹명
                           </span>
                           <input
-                            value={groupTitleOverrides[group.groupKey] ?? ''}
+                            value={groupTitleInputs[group.groupKey] ?? ''}
                             onChange={(event) =>
-                              setGroupTitleOverrides((current) => ({
+                              setGroupTitleInputs((current) => ({
                                 ...current,
                                 [group.groupKey]: event.target.value
                               }))
                             }
                             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder={group.displayTitle}
+                          />
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="text-sm font-medium text-slate-800">
+                            동행인
+                          </span>
+                          <input
+                            value={groupCompanionsInputs[group.groupKey] ?? ''}
+                            onChange={(event) =>
+                              setGroupCompanionsInputs((current) => ({
+                                ...current,
+                                [group.groupKey]: event.target.value
+                              }))
+                            }
+                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+                            placeholder="예: Alice, Bob"
+                          />
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="text-sm font-medium text-slate-800">
+                            메모
+                          </span>
+                          <textarea
+                            value={groupNotesInputs[group.groupKey] ?? ''}
+                            onChange={(event) =>
+                              setGroupNotesInputs((current) => ({
+                                ...current,
+                                [group.groupKey]: event.target.value
+                              }))
+                            }
+                            className="min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+                            placeholder="이 그룹에 대한 메모를 남겨두세요."
                           />
                         </label>
                       </div>

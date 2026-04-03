@@ -11,9 +11,11 @@ export interface DirectorySelectionOptions {
 export interface ScanPhotoLibraryRequest {
   sourceRoot: string
   outputRoot: string
-  groupTitleOverrides?: Array<{
+  groupMetadataOverrides?: Array<{
     groupKey: string
     title: string
+    companions: string[]
+    notes?: string
   }>
 }
 
@@ -125,6 +127,7 @@ export interface PendingOrganizationPreviewPhoto {
   sourceFileName: string
   capturedAtIso?: string
   hasGps: boolean
+  previewDataUrl?: string
 }
 
 export interface PendingOrganizationPreviewGroup {

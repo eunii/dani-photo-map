@@ -10,6 +10,7 @@ import type {
   PhotoMetadata,
   PhotoMetadataReaderPort
 } from '@application/ports/PhotoMetadataReaderPort'
+import type { PhotoPreviewPort } from '@application/ports/PhotoPreviewPort'
 import type { RegionResolverPort } from '@application/ports/RegionResolverPort'
 import { buildNearbyGroupTitleSuggestions } from '@application/services/buildNearbyGroupTitleSuggestions'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
@@ -33,6 +34,7 @@ export interface PendingOrganizationPreviewGroupPhoto {
   sourceFileName: string
   capturedAtIso?: string
   hasGps: boolean
+  previewDataUrl?: string
 }
 
 export interface PendingOrganizationPreviewGroup {
@@ -59,6 +61,7 @@ export interface PreviewPendingOrganizationDependencies {
   metadataReader: PhotoMetadataReaderPort
   hasher: PhotoHasherPort
   regionResolver: RegionResolverPort
+  photoPreview: PhotoPreviewPort
   libraryIndexStore: LibraryIndexStorePort
   existingOutputScanner: ExistingOutputScannerPort
   rules?: OrganizationRules
@@ -137,28 +140,35 @@ export class PreviewPendingOrganizationUseCase {
     const previewGroups = createPhotoGroups(canonicalCandidates)
     const photosById = new Map(canonicalCandidates.map((photo) => [photo.id, photo]))
 
-    return {
-      scannedCount: listedPhotoPaths.length,
-      pendingPhotoCount: canonicalCandidates.length,
-      skippedExistingCount,
-      groups: previewGroups.map((group) => ({
+    const groups = await Promise.all(
+      previewGroups.map(async (group) => ({
         groupKey: group.groupKey,
         displayTitle: group.displayTitle,
         suggestedTitles: buildNearbyGroupTitleSuggestions(group, existingIndex?.groups ?? []),
         photoCount: group.photoIds.length,
         representativeGps: group.representativeGps,
-        representativePhotos: group.photoIds
-          .map((photoId) => photosById.get(photoId))
-          .filter((photo): photo is Photo => photo !== undefined)
-          .slice(0, 3)
-          .map((photo) => ({
-            id: photo.id,
-            sourcePath: photo.sourcePath,
-            sourceFileName: photo.sourceFileName,
-            capturedAtIso: photo.capturedAt?.iso,
-            hasGps: Boolean(photo.gps)
-          }))
+        representativePhotos: await Promise.all(
+          group.photoIds
+            .map((photoId) => photosById.get(photoId))
+            .filter((photo): photo is Photo => photo !== undefined)
+            .slice(0, 3)
+            .map(async (photo) => ({
+              id: photo.id,
+              sourcePath: photo.sourcePath,
+              sourceFileName: photo.sourceFileName,
+              capturedAtIso: photo.capturedAt?.iso,
+              hasGps: Boolean(photo.gps),
+              previewDataUrl: await this.createPreviewDataUrlSafely(photo.sourcePath)
+            }))
+        )
       }))
+    )
+
+    return {
+      scannedCount: listedPhotoPaths.length,
+      pendingPhotoCount: canonicalCandidates.length,
+      skippedExistingCount,
+      groups
     }
   }
 
@@ -259,6 +269,16 @@ export class PreviewPendingOrganizationUseCase {
     }
 
     return hashes
+  }
+
+  private async createPreviewDataUrlSafely(
+    sourcePath: string
+  ): Promise<string | undefined> {
+    try {
+      return await this.dependencies.photoPreview.createDataUrl(sourcePath)
+    } catch {
+      return undefined
+    }
   }
 
   private async loadExistingIndex(

@@ -14,6 +14,7 @@ import { CuratedRegionResolver } from '@infrastructure/geo/CuratedRegionResolver
 import { FallbackRegionResolver } from '@infrastructure/geo/FallbackRegionResolver'
 import { NodePhotoHasher } from '@infrastructure/hashing/NodePhotoHasher'
 import { JsonLibraryIndexStore } from '@infrastructure/storage/JsonLibraryIndexStore'
+import { SharpPhotoPreviewGenerator } from '@infrastructure/thumbnails/SharpPhotoPreviewGenerator'
 import { SharpThumbnailGenerator } from '@infrastructure/thumbnails/SharpThumbnailGenerator'
 import { toLibraryIndexView } from '@presentation/common/mappers/toLibraryIndexView'
 import type {
@@ -79,6 +80,7 @@ function createPreviewPendingOrganizationUseCase(): PreviewPendingOrganizationUs
         new FallbackRegionResolver(rules.unknownRegionLabel)
       )
     ),
+    photoPreview: new SharpPhotoPreviewGenerator(),
     libraryIndexStore: createLibraryIndexStore(),
     existingOutputScanner: new ExistingOutputLibraryScanner(rules),
     rules

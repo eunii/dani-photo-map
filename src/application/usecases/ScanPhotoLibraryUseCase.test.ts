@@ -247,7 +247,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     })
   })
 
-  it('applies provided group title overrides to newly organized groups', async () => {
+  it('applies provided group metadata overrides to newly organized groups', async () => {
     const { dependencies, getSavedIndex } = createUseCaseDependencies()
 
     dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
@@ -275,17 +275,21 @@ describe('ScanPhotoLibraryUseCase', () => {
     await useCase.execute({
       sourceRoot: 'C:\\source',
       outputRoot: 'C:\\output',
-      groupTitleOverrides: [
+      groupMetadataOverrides: [
         {
           groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
-          title: '서울 산책'
+          title: '서울 산책',
+          companions: ['Alice', ' Bob '],
+          notes: '  봄 산책 메모  '
         }
       ]
     })
 
     expect(getSavedIndex()?.groups[0]).toMatchObject({
       title: '서울 산책',
-      displayTitle: '2026-04-03 seoul'
+      displayTitle: '2026-04-03 seoul',
+      companions: ['Alice', 'Bob'],
+      notes: '봄 산책 메모'
     })
   })
 
