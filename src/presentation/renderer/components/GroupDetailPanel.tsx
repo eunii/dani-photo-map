@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import type { GroupDetail } from '@shared/types/preload'
+import type {
+  GroupDetail,
+  LibraryIndexLoadSource
+} from '@shared/types/preload'
 
 interface GroupDetailPanelProps {
   group?: GroupDetail
   titleSuggestions?: string[]
   outputRoot?: string
+  loadSource?: LibraryIndexLoadSource | null
   isSaving?: boolean
   onSave?: (nextGroup: {
     title: string
@@ -29,6 +33,7 @@ export function GroupDetailPanel({
   group,
   titleSuggestions = [],
   outputRoot,
+  loadSource,
   isSaving = false,
   onSave
 }: GroupDetailPanelProps) {
@@ -216,7 +221,9 @@ export function GroupDetailPanel({
 
               <div className="flex justify-end">
                 <p className="mr-auto text-xs text-slate-500">
-                  저장하면 그룹 메타데이터와 함께 출력 파일명이 그룹 제목 기준으로 재정리됩니다.
+                  {loadSource === 'fallback'
+                    ? '복구 기반 상태에서 저장하면 index.json을 새로 만들고 그룹 메타데이터를 함께 반영합니다.'
+                    : '저장하면 그룹 메타데이터와 함께 출력 파일명이 그룹 제목 기준으로 재정리됩니다.'}
                 </p>
                 <button
                   type="button"

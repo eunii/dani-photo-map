@@ -2,8 +2,10 @@ import {
   type UpdatePhotoGroupCommand,
   updatePhotoGroupCommandSchema
 } from '@application/dto/UpdatePhotoGroupCommand'
+import type { ExistingOutputScannerPort } from '@application/ports/ExistingOutputScannerPort'
 import type { PhotoLibraryFileSystemPort } from '@application/ports/PhotoLibraryFileSystemPort'
 import type { LibraryIndexStorePort } from '@application/ports/LibraryIndexStorePort'
+import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import type { Photo } from '@domain/entities/Photo'
 import type { PhotoGroup } from '@domain/entities/PhotoGroup'
@@ -57,17 +59,14 @@ export class UpdatePhotoGroupUseCase {
   constructor(
     private readonly libraryIndexStore: LibraryIndexStorePort,
     private readonly fileSystem: PhotoLibraryFileSystemPort,
+    private readonly existingOutputScanner?: ExistingOutputScannerPort,
     private readonly rules: OrganizationRules = defaultOrganizationRules
   ) {}
 
   async execute(command: UpdatePhotoGroupCommand): Promise<LibraryIndex> {
     const validatedCommand = updatePhotoGroupCommandSchema.parse(command)
     const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
-    const index = await this.libraryIndexStore.load(outputRoot)
-
-    if (!index) {
-      throw new Error(`Library index not found under ${outputRoot}`)
-    }
+    const index = await this.loadEditableIndex(outputRoot)
 
     const group = index.groups.find(
       (currentGroup) => currentGroup.id === validatedCommand.groupId
@@ -128,6 +127,31 @@ export class UpdatePhotoGroupUseCase {
     await this.libraryIndexStore.save(updatedIndex)
 
     return updatedIndex
+  }
+
+  private async loadEditableIndex(outputRoot: string): Promise<LibraryIndex> {
+    try {
+      const storedIndex = await this.libraryIndexStore.load(outputRoot)
+
+      if (storedIndex) {
+        return storedIndex
+      }
+    } catch {
+      // Corrupted index.json should fall back to the output scan.
+    }
+
+    if (!this.existingOutputScanner) {
+      throw new Error(`Library index not found under ${outputRoot}`)
+    }
+
+    const snapshot = await this.existingOutputScanner.scan(outputRoot)
+    const rebuiltIndex = rebuildLibraryIndexFromExistingOutput(snapshot)
+
+    if (!rebuiltIndex) {
+      throw new Error(`Library index not found under ${outputRoot}`)
+    }
+
+    return rebuiltIndex
   }
 
   private async createRenamePlan(

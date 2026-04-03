@@ -5,6 +5,7 @@ import { LoadLibraryIndexUseCase } from '@application/usecases/LoadLibraryIndexU
 import { ScanPhotoLibraryUseCase } from '@application/usecases/ScanPhotoLibraryUseCase'
 import { UpdatePhotoGroupUseCase } from '@application/usecases/UpdatePhotoGroupUseCase'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
+import { ExistingOutputLibraryScanner } from '@infrastructure/filesystem/ExistingOutputLibraryScanner'
 import { ExifrPhotoMetadataReader } from '@infrastructure/exif/ExifrPhotoMetadataReader'
 import { NodePhotoLibraryFileSystem } from '@infrastructure/filesystem/NodePhotoLibraryFileSystem'
 import { CachedRegionResolver } from '@infrastructure/geo/CachedRegionResolver'
@@ -56,13 +57,17 @@ function createScanPhotoLibraryUseCase(command: ScanPhotoLibraryRequest) {
 }
 
 function createLoadLibraryIndexUseCase(): LoadLibraryIndexUseCase {
-  return new LoadLibraryIndexUseCase(createLibraryIndexStore())
+  return new LoadLibraryIndexUseCase(
+    createLibraryIndexStore(),
+    new ExistingOutputLibraryScanner(defaultOrganizationRules)
+  )
 }
 
 function createUpdatePhotoGroupUseCase(): UpdatePhotoGroupUseCase {
   return new UpdatePhotoGroupUseCase(
     createLibraryIndexStore(),
     new NodePhotoLibraryFileSystem(),
+    new ExistingOutputLibraryScanner(defaultOrganizationRules),
     defaultOrganizationRules
   )
 }
@@ -87,9 +92,12 @@ function registerIpcHandlers(): void {
     IPC_CHANNELS.loadLibraryIndex,
     async (_event, command: LoadLibraryIndexRequest) => {
       const useCase = createLoadLibraryIndexUseCase()
-      const index = await useCase.execute(command)
+      const result = await useCase.execute(command)
 
-      return index ? toLibraryIndexView(index) : null
+      return {
+        source: result.source,
+        index: result.index ? toLibraryIndexView(result.index) : null
+      }
     }
   )
 

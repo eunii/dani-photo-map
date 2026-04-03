@@ -36,7 +36,8 @@ export function GroupListPanel({
                 아직 그룹이 없습니다.
               </p>
               <p className="text-sm text-slate-600">
-                정리된 `index.json`이 있으면 그룹 카드가 여기에 표시됩니다.
+                저장된 인덱스 또는 복구된 출력 결과가 있으면 그룹 카드가 여기에
+                표시됩니다.
               </p>
             </div>
           </div>

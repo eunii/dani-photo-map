@@ -173,4 +173,56 @@ describe('UpdatePhotoGroupUseCase', () => {
       '2026/04/seoul/2026-04-03_0800_부산_당일치기_004.JPG'
     )
   })
+
+  it('rebuilds the library from existing output when index.json is missing', async () => {
+    const savedIndexes: LibraryIndex[] = []
+    const fileSystem = createFileSystem()
+    const store = {
+      load: vi.fn().mockResolvedValue(null),
+      save: vi.fn(async (index: LibraryIndex) => {
+        savedIndexes.push(index)
+      })
+    }
+    const existingOutputScanner = {
+      scan: vi.fn().mockResolvedValue({
+        outputRoot: 'C:/photos/output',
+        photos: [
+          {
+            id: 'fallback-photo-1',
+            sourcePath:
+              'C:/photos/output/2026/04/seoul/2026-04-03_080000_IMG_0001.JPG',
+            sourceFileName: '2026-04-03_080000_IMG_0001.JPG',
+            capturedAt: {
+              iso: '2026-04-03T08:00:00.000Z',
+              year: '2026',
+              month: '04',
+              day: '03',
+              time: '080000'
+            },
+            regionName: 'seoul',
+            outputRelativePath: '2026/04/seoul/2026-04-03_080000_IMG_0001.JPG'
+          }
+        ]
+      })
+    }
+    const useCase = new UpdatePhotoGroupUseCase(
+      store,
+      fileSystem,
+      existingOutputScanner
+    )
+
+    const updatedIndex = await useCase.execute({
+      outputRoot: 'C:/photos/output',
+      groupId: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+      title: '서울 산책',
+      companions: ['Alice']
+    })
+
+    expect(existingOutputScanner.scan).toHaveBeenCalledWith('C:/photos/output')
+    expect(updatedIndex.groups[0]).toMatchObject({
+      title: '서울 산책',
+      companions: ['Alice']
+    })
+    expect(savedIndexes).toHaveLength(1)
+  })
 })

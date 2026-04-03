@@ -17,6 +17,8 @@ export interface LoadLibraryIndexRequest {
   outputRoot: string
 }
 
+export type LibraryIndexLoadSource = 'index' | 'fallback'
+
 export interface UpdatePhotoGroupRequest {
   outputRoot: string
   groupId: string
@@ -70,6 +72,11 @@ export interface LibraryIndexView {
   mapGroups: MapGroupSummary[]
 }
 
+export interface LoadLibraryIndexResult {
+  index: LibraryIndexView | null
+  source: LibraryIndexLoadSource | null
+}
+
 export type ScanPhotoLibraryIssueSeverity = 'warning' | 'error'
 
 export type ScanPhotoLibraryIssueStage =
@@ -109,7 +116,7 @@ export interface PreloadBridge {
   ) => Promise<string | null>
   loadLibraryIndex: (
     request: LoadLibraryIndexRequest
-  ) => Promise<LibraryIndexView | null>
+  ) => Promise<LoadLibraryIndexResult>
   scanPhotoLibrary: (
     request: ScanPhotoLibraryRequest
   ) => Promise<ScanPhotoLibrarySummary>
