@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { GroupListPanel } from '@presentation/renderer/components/GroupListPanel'
 import { GroupsMap } from '@presentation/renderer/components/GroupsMap'
 import type {
   AppInfo,
@@ -188,7 +189,20 @@ export function HomePage() {
             </section>
           ) : null}
 
-          <GroupsMap groups={summary?.mapGroups ?? []} />
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-900">
+                지도 및 그룹 개요
+              </h2>
+              <p className="text-xs text-slate-500">
+                스캔 결과 중 GPS가 있는 대표 그룹을 우선 확인합니다.
+              </p>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)]">
+              <GroupsMap groups={summary?.mapGroups ?? []} />
+              <GroupListPanel groups={summary?.mapGroups ?? []} />
+            </div>
+          </section>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
             Photo Organizer MVP
