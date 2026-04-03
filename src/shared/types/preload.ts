@@ -13,11 +13,20 @@ export interface ScanPhotoLibraryRequest {
   outputRoot: string
 }
 
+export interface MapGroupSummary {
+  id: string
+  title: string
+  photoCount: number
+  latitude: number
+  longitude: number
+}
+
 export interface ScanPhotoLibrarySummary {
   scannedCount: number
   duplicateCount: number
   keptCount: number
   groupCount: number
+  mapGroups: MapGroupSummary[]
 }
 
 export interface PreloadBridge {

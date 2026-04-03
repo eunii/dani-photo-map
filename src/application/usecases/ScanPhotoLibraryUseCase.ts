@@ -126,7 +126,16 @@ export class ScanPhotoLibraryUseCase {
       scannedCount: photos.length,
       duplicateCount: photos.filter((photo) => photo.isDuplicate).length,
       keptCount: photos.filter((photo) => !photo.isDuplicate).length,
-      groupCount: groups.length
+      groupCount: groups.length,
+      mapGroups: groups
+        .filter((group) => group.representativeGps)
+        .map((group) => ({
+          id: group.id,
+          title: group.title,
+          photoCount: group.photoIds.length,
+          latitude: group.representativeGps!.latitude,
+          longitude: group.representativeGps!.longitude
+        }))
     }
   }
 

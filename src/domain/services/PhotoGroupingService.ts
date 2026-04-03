@@ -32,6 +32,8 @@ export function createPhotoGroups(photos: Photo[]): PhotoGroup[] {
       title: `${year}-${month} ${regionName}`,
       photoIds: groupPhotos.map((photo) => photo.id),
       representativePhotoId: firstPhoto?.id,
+      representativeGps: firstPhoto?.gps,
+      representativeThumbnailRelativePath: firstPhoto?.thumbnailRelativePath,
       companions: []
     }
   })

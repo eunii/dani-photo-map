@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { GroupsMap } from '@presentation/renderer/components/GroupsMap'
 import type {
   AppInfo,
   ScanPhotoLibrarySummary
@@ -186,6 +187,8 @@ export function HomePage() {
               </div>
             </section>
           ) : null}
+
+          <GroupsMap groups={summary?.mapGroups ?? []} />
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
             Photo Organizer MVP
