@@ -52,8 +52,10 @@ function createLibraryIndex(outputRoot: string): LibraryIndex {
     ],
     groups: [
       {
-        id: 'group-1',
+        id: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+        groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
         title: '2026년 4월 서울',
+        displayTitle: '2026년 4월 서울',
         photoIds: ['photo-1'],
         representativePhotoId: 'photo-1',
         representativeGps: {

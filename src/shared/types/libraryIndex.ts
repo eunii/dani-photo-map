@@ -1,6 +1,9 @@
 import { z } from 'zod'
 
-import { LIBRARY_INDEX_VERSION } from '@domain/entities/LibraryIndex'
+import {
+  LIBRARY_INDEX_VERSION
+} from '@domain/entities/LibraryIndex'
+import { photoCapturedAtSources } from '@domain/entities/Photo'
 
 const isoDateTimeStringSchema = z
   .string()
@@ -28,6 +31,7 @@ export const photoSchema = z.object({
   sourceFileName: z.string().min(1),
   sha256: z.string().min(1).optional(),
   capturedAt: photoTimestampSchema.optional(),
+  capturedAtSource: z.enum(photoCapturedAtSources).optional(),
   gps: geoPointSchema.optional(),
   regionName: z.string().min(1).optional(),
   outputRelativePath: z.string().min(1).optional(),
@@ -38,7 +42,9 @@ export const photoSchema = z.object({
 
 export const photoGroupSchema = z.object({
   id: z.string().min(1),
+  groupKey: z.string().min(1),
   title: z.string().min(1),
+  displayTitle: z.string().min(1),
   photoIds: z.array(z.string().min(1)),
   representativePhotoId: z.string().min(1).optional(),
   representativeGps: geoPointSchema.optional(),

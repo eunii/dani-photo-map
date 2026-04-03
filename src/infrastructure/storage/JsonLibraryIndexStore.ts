@@ -21,6 +21,10 @@ function isWindowsRenameConflictError(error: unknown): boolean {
   )
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown error'
+}
+
 export class JsonLibraryIndexStore implements LibraryIndexStorePort {
   constructor(
     private readonly indexRelativePath = '.photo-organizer/index.json'
@@ -38,7 +42,9 @@ export class JsonLibraryIndexStore implements LibraryIndexStorePort {
         return null
       }
 
-      throw error
+      throw new Error(
+        `Failed to load library index at ${filePath}: ${getErrorMessage(error)}`
+      )
     }
   }
 
@@ -59,11 +65,21 @@ export class JsonLibraryIndexStore implements LibraryIndexStorePort {
     } catch (error) {
       if (!isWindowsRenameConflictError(error)) {
         await rm(tempFilePath, { force: true })
-        throw error
+        throw new Error(
+          `Failed to save library index at ${filePath}: ${getErrorMessage(error)}`
+        )
       }
 
       await rm(filePath, { force: true })
-      await rename(tempFilePath, filePath)
+
+      try {
+        await rename(tempFilePath, filePath)
+      } catch (renameError) {
+        await rm(tempFilePath, { force: true })
+        throw new Error(
+          `Failed to save library index at ${filePath}: ${getErrorMessage(renameError)}`
+        )
+      }
     }
   }
 

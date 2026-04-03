@@ -2,9 +2,15 @@ import {
   type ScanPhotoLibraryCommand,
   scanPhotoLibraryCommandSchema
 } from '@application/dto/ScanPhotoLibraryCommand'
-import type { ScanPhotoLibraryResult } from '@application/dto/ScanPhotoLibraryResult'
+import type {
+  ScanPhotoLibraryIssue,
+  ScanPhotoLibraryResult
+} from '@application/dto/ScanPhotoLibraryResult'
 import type { LibraryIndexStorePort } from '@application/ports/LibraryIndexStorePort'
-import type { PhotoLibraryFileSystemPort } from '@application/ports/PhotoLibraryFileSystemPort'
+import {
+  PhotoFileConflictError,
+  type PhotoLibraryFileSystemPort
+} from '@application/ports/PhotoLibraryFileSystemPort'
 import type { PhotoHasherPort } from '@application/ports/PhotoHasherPort'
 import type {
   PhotoMetadata,
@@ -40,6 +46,17 @@ export interface ScanPhotoLibraryDependencies {
   rules?: OrganizationRules
 }
 
+interface ScanPathContext {
+  sourceRoot: string
+  outputRoot: string
+}
+
+interface ScanPhotoContext {
+  photoId: string
+  sourcePath: string
+  sourceFileName: string
+}
+
 export class ScanPhotoLibraryUseCase {
   private readonly rules: OrganizationRules
 
@@ -49,72 +66,41 @@ export class ScanPhotoLibraryUseCase {
 
   async execute(command: ScanPhotoLibraryCommand): Promise<ScanPhotoLibraryResult> {
     const validatedCommand = scanPhotoLibraryCommandSchema.parse(command)
-    const sourceRoot = normalizePathSeparators(validatedCommand.sourceRoot)
-    const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
+    const paths = this.createScanPathContext(validatedCommand)
+    const issues: ScanPhotoLibraryIssue[] = []
 
     const photoPaths = await this.dependencies.fileSystem.listPhotoFiles(
-      sourceRoot
+      paths.sourceRoot
     )
     const seenHashes = new Set<string>()
     const photos: Photo[] = []
 
-    await this.dependencies.fileSystem.ensureDirectory(outputRoot)
-    await this.dependencies.fileSystem.ensureDirectory(
-      joinPathSegments(outputRoot, this.rules.outputThumbnailsRelativePath)
-    )
+    await this.prepareOutputDirectories(paths.outputRoot)
 
     for (const [index, listedPhotoPath] of photoPaths.entries()) {
       const sourcePath = normalizePathSeparators(listedPhotoPath)
-      const metadataIssues: string[] = []
-      const metadata = await this.readMetadataSafely(sourcePath, metadataIssues)
-      const sha256 = await this.dependencies.hasher.createSha256(sourcePath)
-      const isDuplicate = seenHashes.has(sha256)
-
-      if (!isDuplicate) {
-        seenHashes.add(sha256)
-      }
-
-      const regionName = await this.resolveRegionNameSafely(
-        metadata.gps,
-        metadataIssues
-      )
-      const photo: Photo = {
-        id: `photo-${index + 1}`,
-        sourcePath,
-        sourceFileName: getPathBaseName(sourcePath),
-        sha256,
-        capturedAt: metadata.capturedAt,
-        gps: metadata.gps,
-        regionName,
-        outputRelativePath: buildPhotoOutputRelativePath(
-          {
-            capturedAt: metadata.capturedAt,
-            regionName,
-            sourceFileName: getPathBaseName(sourcePath)
-          },
-          this.rules
-        ),
-        isDuplicate,
-        metadataIssues
-      }
-
-      if (!photo.isDuplicate && photo.outputRelativePath) {
-        await this.copyPhotoToOutput(outputRoot, photo)
-        photo.thumbnailRelativePath = await this.generateThumbnailSafely(
+      const photo = await this.processPhoto(
+        {
+          photoId: `photo-${index + 1}`,
           sourcePath,
-          metadataIssues
-        )
-      }
+          sourceFileName: getPathBaseName(sourcePath)
+        },
+        paths.outputRoot,
+        seenHashes,
+        issues
+      )
 
-      photos.push(photo)
+      if (photo) {
+        photos.push(photo)
+      }
     }
 
     const groups = createPhotoGroups(photos)
     const index: LibraryIndex = {
       version: LIBRARY_INDEX_VERSION,
       generatedAt: new Date().toISOString(),
-      sourceRoot,
-      outputRoot,
+      sourceRoot: paths.sourceRoot,
+      outputRoot: paths.outputRoot,
       photos,
       groups
     }
@@ -122,10 +108,13 @@ export class ScanPhotoLibraryUseCase {
     await this.dependencies.libraryIndexStore.save(index)
 
     return {
-      scannedCount: photos.length,
+      scannedCount: photoPaths.length,
       duplicateCount: photos.filter((photo) => photo.isDuplicate).length,
       keptCount: photos.filter((photo) => !photo.isDuplicate).length,
       groupCount: groups.length,
+      warningCount: issues.filter((issue) => issue.severity === 'warning').length,
+      failureCount: issues.filter((issue) => issue.severity === 'error').length,
+      issues,
       mapGroups: groups
         .filter((group) => group.representativeGps)
         .map((group) => ({
@@ -138,21 +127,142 @@ export class ScanPhotoLibraryUseCase {
     }
   }
 
-  private async readMetadataSafely(
-    sourcePath: string,
-    metadataIssues: string[]
-  ) {
+  private createScanPathContext(command: ScanPhotoLibraryCommand): ScanPathContext {
+    return {
+      sourceRoot: normalizePathSeparators(command.sourceRoot),
+      outputRoot: normalizePathSeparators(command.outputRoot)
+    }
+  }
+
+  private async prepareOutputDirectories(outputRoot: string): Promise<void> {
     try {
-      return await this.dependencies.metadataReader.read(sourcePath)
-    } catch {
-      metadataIssues.push('metadata-read-failed')
-      return {}
+      await this.dependencies.fileSystem.ensureDirectory(outputRoot)
+      await this.dependencies.fileSystem.ensureDirectory(
+        joinPathSegments(outputRoot, this.rules.outputThumbnailsRelativePath)
+      )
+    } catch (error) {
+      throw new Error(
+        `Failed to prepare output directories under ${outputRoot}: ${this.getErrorMessage(error)}`
+      )
+    }
+  }
+
+  private async processPhoto(
+    context: ScanPhotoContext,
+    outputRoot: string,
+    seenHashes: Set<string>,
+    issues: ScanPhotoLibraryIssue[]
+  ): Promise<Photo | null> {
+    const metadata = await this.readMetadataSafely(context, issues)
+    const metadataIssues = [...(metadata.metadataIssues ?? [])]
+    const sha256 = await this.createSha256Safely(context, issues)
+
+    if (!sha256) {
+      return null
+    }
+
+    const isDuplicate = seenHashes.has(sha256)
+
+    if (!isDuplicate) {
+      seenHashes.add(sha256)
+    }
+
+    const regionName = await this.resolveRegionNameSafely(
+      context,
+      metadata.gps,
+      metadataIssues,
+      issues
+    )
+    const outputRelativePath = buildPhotoOutputRelativePath(
+      {
+        capturedAt: metadata.capturedAt,
+        regionName,
+        sourceFileName: context.sourceFileName
+      },
+      this.rules
+    )
+    const photo: Photo = {
+      id: context.photoId,
+      sourcePath: context.sourcePath,
+      sourceFileName: context.sourceFileName,
+      sha256,
+      capturedAt: metadata.capturedAt,
+      capturedAtSource: metadata.capturedAtSource,
+      gps: metadata.gps,
+      regionName,
+      outputRelativePath,
+      isDuplicate,
+      metadataIssues
+    }
+
+    if (!photo.isDuplicate && photo.outputRelativePath) {
+      const copySucceeded = await this.copyPhotoToOutput(outputRoot, photo, issues)
+
+      if (!copySucceeded) {
+        return null
+      }
+
+      photo.thumbnailRelativePath = await this.generateThumbnailSafely(
+        context,
+        metadataIssues,
+        issues
+      )
+    }
+
+    return photo
+  }
+
+  private async readMetadataSafely(
+    context: ScanPhotoContext,
+    issues: ScanPhotoLibraryIssue[]
+  ): Promise<PhotoMetadata> {
+    try {
+      return await this.dependencies.metadataReader.read(context.sourcePath)
+    } catch (error) {
+      const issue = this.createIssue({
+        code: 'metadata-read-failed',
+        severity: 'warning',
+        stage: 'metadata-read',
+        sourcePath: context.sourcePath,
+        photoId: context.photoId,
+        message: this.getErrorMessage(error)
+      })
+
+      issues.push(issue)
+
+      return {
+        metadataIssues: [issue.code]
+      }
+    }
+  }
+
+  private async createSha256Safely(
+    context: ScanPhotoContext,
+    issues: ScanPhotoLibraryIssue[]
+  ): Promise<string | null> {
+    try {
+      return await this.dependencies.hasher.createSha256(context.sourcePath)
+    } catch (error) {
+      issues.push(
+        this.createIssue({
+          code: 'hash-create-failed',
+          severity: 'error',
+          stage: 'hash',
+          sourcePath: context.sourcePath,
+          photoId: context.photoId,
+          message: this.getErrorMessage(error)
+        })
+      )
+
+      return null
     }
   }
 
   private async resolveRegionNameSafely(
+    context: ScanPhotoContext,
     gps: PhotoMetadata['gps'],
-    metadataIssues: string[]
+    metadataIssues: string[],
+    issues: ScanPhotoLibraryIssue[]
   ): Promise<string> {
     if (!gps) {
       return this.rules.unknownRegionLabel
@@ -160,36 +270,106 @@ export class ScanPhotoLibraryUseCase {
 
     try {
       return await this.dependencies.regionResolver.resolveName(gps)
-    } catch {
-      metadataIssues.push('region-resolve-failed')
+    } catch (error) {
+      const issue = this.createIssue({
+        code: 'region-resolve-failed',
+        severity: 'warning',
+        stage: 'region-resolve',
+        sourcePath: context.sourcePath,
+        photoId: context.photoId,
+        message: this.getErrorMessage(error)
+      })
+
+      metadataIssues.push(issue.code)
+      issues.push(issue)
+
       return this.rules.unknownRegionLabel
     }
   }
 
   private async copyPhotoToOutput(
     outputRoot: string,
-    photo: Pick<Photo, 'sourcePath' | 'outputRelativePath'>
-  ): Promise<void> {
+    photo: Pick<Photo, 'id' | 'sourcePath' | 'outputRelativePath'>,
+    issues: ScanPhotoLibraryIssue[]
+  ): Promise<boolean> {
     if (!photo.outputRelativePath) {
-      return
+      return true
     }
 
     const destinationPath = joinPathSegments(outputRoot, photo.outputRelativePath)
     const destinationDirectory = getPathDirectoryName(destinationPath)
 
-    await this.dependencies.fileSystem.ensureDirectory(destinationDirectory)
-    await this.dependencies.fileSystem.copyFile(photo.sourcePath, destinationPath)
+    try {
+      await this.dependencies.fileSystem.ensureDirectory(destinationDirectory)
+      await this.dependencies.fileSystem.copyFile(photo.sourcePath, destinationPath)
+
+      return true
+    } catch (error) {
+      if (error instanceof PhotoFileConflictError) {
+        issues.push(
+          this.createIssue({
+            code: 'copy-destination-conflict',
+            severity: 'error',
+            stage: 'copy',
+            sourcePath: photo.sourcePath,
+            photoId: photo.id,
+            outputRelativePath: photo.outputRelativePath,
+            destinationPath: error.destinationPath,
+            message: error.message
+          })
+        )
+
+        return false
+      }
+
+      issues.push(
+        this.createIssue({
+          code: 'copy-failed',
+          severity: 'error',
+          stage: 'copy',
+          sourcePath: photo.sourcePath,
+          photoId: photo.id,
+          outputRelativePath: photo.outputRelativePath,
+          destinationPath,
+          message: this.getErrorMessage(error)
+        })
+      )
+
+      return false
+    }
   }
 
   private async generateThumbnailSafely(
-    sourcePath: string,
-    metadataIssues: string[]
+    context: ScanPhotoContext,
+    metadataIssues: string[],
+    issues: ScanPhotoLibraryIssue[]
   ): Promise<string | undefined> {
     try {
-      return await this.dependencies.thumbnailGenerator.generateForPhoto(sourcePath)
-    } catch {
-      metadataIssues.push('thumbnail-generation-failed')
+      return await this.dependencies.thumbnailGenerator.generateForPhoto(
+        context.sourcePath
+      )
+    } catch (error) {
+      const issue = this.createIssue({
+        code: 'thumbnail-generation-failed',
+        severity: 'warning',
+        stage: 'thumbnail',
+        sourcePath: context.sourcePath,
+        photoId: context.photoId,
+        message: this.getErrorMessage(error)
+      })
+
+      metadataIssues.push(issue.code)
+      issues.push(issue)
+
       return undefined
     }
+  }
+
+  private createIssue(issue: ScanPhotoLibraryIssue): ScanPhotoLibraryIssue {
+    return issue
+  }
+
+  private getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : 'Unknown error'
   }
 }

@@ -21,11 +21,34 @@ export interface MapGroupSummary {
   longitude: number
 }
 
+export type ScanPhotoLibraryIssueSeverity = 'warning' | 'error'
+
+export type ScanPhotoLibraryIssueStage =
+  | 'metadata-read'
+  | 'hash'
+  | 'region-resolve'
+  | 'copy'
+  | 'thumbnail'
+
+export interface ScanPhotoLibraryIssue {
+  code: string
+  severity: ScanPhotoLibraryIssueSeverity
+  stage: ScanPhotoLibraryIssueStage
+  sourcePath: string
+  photoId?: string
+  outputRelativePath?: string
+  destinationPath?: string
+  message: string
+}
+
 export interface ScanPhotoLibrarySummary {
   scannedCount: number
   duplicateCount: number
   keptCount: number
   groupCount: number
+  warningCount: number
+  failureCount: number
+  issues: ScanPhotoLibraryIssue[]
   mapGroups: MapGroupSummary[]
 }
 

@@ -2,7 +2,10 @@ import { constants } from 'node:fs'
 import { copyFile, mkdir, readdir } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
-import type { PhotoLibraryFileSystemPort } from '@application/ports/PhotoLibraryFileSystemPort'
+import {
+  PhotoFileConflictError,
+  type PhotoLibraryFileSystemPort
+} from '@application/ports/PhotoLibraryFileSystemPort'
 import { normalizePathSeparators } from '@shared/utils/path'
 
 const PHOTO_EXTENSIONS = new Set([
@@ -32,11 +35,23 @@ export class NodePhotoLibraryFileSystem implements PhotoLibraryFileSystemPort {
   }
 
   async copyFile(sourcePath: string, destinationPath: string): Promise<void> {
-    await copyFile(
-      normalize(sourcePath),
-      normalize(destinationPath),
-      constants.COPYFILE_EXCL
-    )
+    try {
+      await copyFile(
+        normalize(sourcePath),
+        normalize(destinationPath),
+        constants.COPYFILE_EXCL
+      )
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'EEXIST'
+      ) {
+        throw new PhotoFileConflictError(destinationPath)
+      }
+
+      throw error
+    }
   }
 
   private async collectPhotoFiles(
