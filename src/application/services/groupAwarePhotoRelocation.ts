@@ -31,13 +31,15 @@ export function toRenameablePhoto(photo: Photo): RenameablePhoto | null {
 
   const normalizedOutputRelativePath = normalizePathSeparators(photo.outputRelativePath)
   const pathSegments = normalizedOutputRelativePath.split('/').filter(Boolean)
-  const regionNameFromPath =
-    pathSegments.length >= 4 ? pathSegments.at(-2) : undefined
-  const regionName = photo.regionName ?? regionNameFromPath
-
-  if (!regionName) {
+  /** `년/월/파일`만 있고 지역 폴더가 생략된 경우(unknown 라벨)는 세그먼트가 3개 */
+  if (pathSegments.length < 3) {
     return null
   }
+
+  const regionNameFromPath =
+    pathSegments.length >= 4 ? pathSegments.at(-2) : undefined
+  const regionName =
+    photo.regionName ?? regionNameFromPath ?? 'base'
 
   return {
     ...photo,
