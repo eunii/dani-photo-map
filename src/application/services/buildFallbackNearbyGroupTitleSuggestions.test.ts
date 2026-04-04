@@ -4,7 +4,7 @@ import { LIBRARY_INDEX_VERSION } from '@domain/entities/LibraryIndex'
 import { buildFallbackNearbyGroupTitleSuggestions } from '@application/services/buildFallbackNearbyGroupTitleSuggestions'
 
 describe('buildFallbackNearbyGroupTitleSuggestions', () => {
-  it('returns a title when an existing output photo is on the same day within one hour and nearby', async () => {
+  it('returns a title when an indexed output photo is in the same calendar month, nearby GPS', async () => {
     const metadataReader = {
       read: vi.fn().mockResolvedValue({
         metadataIssues: [],
@@ -72,7 +72,76 @@ describe('buildFallbackNearbyGroupTitleSuggestions', () => {
     expect(suggestions).toEqual(['서울 산책'])
   })
 
-  it('excludes photos outside the one hour window', async () => {
+  it('excludes photos from a different calendar month before reading metadata', async () => {
+    const metadataReader = {
+      read: vi.fn().mockResolvedValue({
+        metadataIssues: [],
+        gps: {
+          latitude: 37.5666,
+          longitude: 126.9781
+        }
+      })
+    }
+
+    const suggestions = await buildFallbackNearbyGroupTitleSuggestions({
+      currentGroup: {
+        id: 'preview-group-1',
+        representativeGps: {
+          latitude: 37.5665,
+          longitude: 126.978
+        }
+      },
+      currentCapturedAtIso: '2026-04-03T08:00:00.000Z',
+      existingOutputPhotos: [
+        {
+          id: 'existing-photo-1',
+          sourcePath: 'C:/output/2026/05/seoul/2026-05-03_101500_IMG_0001.JPG',
+          sourceFileName: '2026-05-03_101500_IMG_0001.JPG',
+          capturedAt: {
+            iso: '2026-05-03T10:15:00.000Z',
+            year: '2026',
+            month: '05',
+            day: '03',
+            time: '101500'
+          },
+          regionName: 'seoul',
+          outputRelativePath: '2026/05/seoul/2026-05-03_101500_IMG_0001.JPG'
+        }
+      ],
+      existingIndex: {
+        version: LIBRARY_INDEX_VERSION,
+        generatedAt: '2026-05-03T10:11:12.000Z',
+        sourceRoot: 'C:/photos/source',
+        outputRoot: 'C:/output',
+        photos: [
+          {
+            id: 'rebuilt-photo-1',
+            sourcePath: 'C:/output/2026/05/seoul/2026-05-03_101500_IMG_0001.JPG',
+            sourceFileName: '2026-05-03_101500_IMG_0001.JPG',
+            outputRelativePath: '2026/05/seoul/2026-05-03_101500_IMG_0001.JPG',
+            isDuplicate: false,
+            metadataIssues: ['recovered-from-output']
+          }
+        ],
+        groups: [
+          {
+            id: 'group|region=seoul|year=2026|month=05|day=03|slot=1',
+            groupKey: 'group|region=seoul|year=2026|month=05|day=03|slot=1',
+            title: '서울 산책',
+            displayTitle: '2026-05-03 seoul',
+            photoIds: ['rebuilt-photo-1'],
+            companions: []
+          }
+        ]
+      },
+      metadataReader
+    })
+
+    expect(suggestions).toEqual([])
+    expect(metadataReader.read).not.toHaveBeenCalled()
+  })
+
+  it('includes same-month photos even when more than one hour apart on the same day', async () => {
     const metadataReader = {
       read: vi.fn().mockResolvedValue({
         metadataIssues: [],
@@ -137,7 +206,7 @@ describe('buildFallbackNearbyGroupTitleSuggestions', () => {
       metadataReader
     })
 
-    expect(suggestions).toEqual([])
-    expect(metadataReader.read).not.toHaveBeenCalled()
+    expect(suggestions).toEqual(['서울 산책'])
+    expect(metadataReader.read).toHaveBeenCalledTimes(1)
   })
 })

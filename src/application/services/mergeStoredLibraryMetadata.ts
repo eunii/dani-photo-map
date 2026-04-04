@@ -1,5 +1,7 @@
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
+import type { PhotoGroup } from '@domain/entities/PhotoGroup'
 import type { Photo } from '@domain/entities/Photo'
+import { groupKeyIdentitySignature } from '@domain/services/groupKeyIdentity'
 
 export function mergeStoredLibraryMetadata(
   rebuiltIndex: LibraryIndex,
@@ -29,6 +31,9 @@ export function mergeStoredLibraryMetadata(
 
     return {
       ...photo,
+      sha256: storedPhoto.sha256 ?? photo.sha256,
+      duplicateOfPhotoId:
+        storedPhoto.duplicateOfPhotoId ?? photo.duplicateOfPhotoId,
       capturedAt: storedPhoto.capturedAt ?? photo.capturedAt,
       capturedAtSource: storedPhoto.capturedAtSource ?? photo.capturedAtSource,
       originalGps: storedPhoto.originalGps ?? photo.originalGps,
@@ -62,7 +67,11 @@ export function mergeStoredLibraryMetadata(
   )
 
   const groups = rebuiltIndex.groups.map((group) => {
-    const storedGroup = storedGroupsByGroupKey.get(group.groupKey)
+    const storedGroup = findStoredGroupForMerge(
+      group.groupKey,
+      storedGroupsByGroupKey,
+      storedIndex.groups
+    )
 
     if (!storedGroup) {
       return group
@@ -96,6 +105,28 @@ export function mergeStoredLibraryMetadata(
     photos,
     groups
   }
+}
+
+function findStoredGroupForMerge(
+  rebuiltGroupKey: string,
+  storedGroupsByGroupKey: Map<string, PhotoGroup>,
+  storedGroups: PhotoGroup[]
+): PhotoGroup | undefined {
+  const exact = storedGroupsByGroupKey.get(rebuiltGroupKey)
+
+  if (exact) {
+    return exact
+  }
+
+  const targetSignature = groupKeyIdentitySignature(rebuiltGroupKey)
+
+  if (!targetSignature) {
+    return undefined
+  }
+
+  return storedGroups.find(
+    (candidate) => groupKeyIdentitySignature(candidate.groupKey) === targetSignature
+  )
 }
 
 function resolveRepresentativePhotoId(

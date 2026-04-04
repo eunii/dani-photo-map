@@ -4,8 +4,6 @@ import {
   pickEarliestUsableCapturedAtFromPhotos
 } from '@domain/services/groupingDateHelpers'
 
-const MAX_GROUP_TIME_GAP_MS = 6 * 60 * 60 * 1000
-
 interface PhotoGroupBucket {
   groupKey: string
   displayTitle: string
@@ -32,6 +30,10 @@ function getPhotoYear(photo: Photo): string {
 
 function getPhotoMonth(photo: Photo): string {
   return photo.capturedAt?.month ?? '00'
+}
+
+function getPhotoYearMonthId(photo: Photo): string {
+  return `${getPhotoYear(photo)}-${getPhotoMonth(photo)}`
 }
 
 function getPhotoDay(photo: Photo): string {
@@ -91,7 +93,7 @@ function finalizeGroupSeed(photos: Photo[], seed: GroupSeed): GroupSeed {
     ...seed,
     year: earliest.year,
     month: earliest.month,
-    day: earliest.day
+    day: '00'
   }
 }
 
@@ -120,7 +122,7 @@ function shouldStartNewGroup(
   if (
     previousUsable &&
     nextUsable &&
-    getPhotoDay(previousPhoto) !== getPhotoDay(nextPhoto)
+    getPhotoYearMonthId(previousPhoto) !== getPhotoYearMonthId(nextPhoto)
   ) {
     return true
   }
@@ -129,17 +131,7 @@ function shouldStartNewGroup(
     return true
   }
 
-  const previousIso = previousPhoto.capturedAt?.iso
-  const nextIso = nextPhoto.capturedAt?.iso
-
-  if (!previousIso || !nextIso) {
-    return false
-  }
-
-  const previousTime = Date.parse(previousIso)
-  const nextTime = Date.parse(nextIso)
-
-  return nextTime - previousTime > MAX_GROUP_TIME_GAP_MS
+  return false
 }
 
 export function groupPhotosByPolicy(photos: Photo[]): PhotoGroupBucket[] {

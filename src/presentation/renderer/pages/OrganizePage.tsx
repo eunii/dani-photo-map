@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type {
   PendingOrganizationAssignmentCandidate,
@@ -8,6 +8,11 @@ import type {
 } from '@shared/types/preload'
 import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
 import { normalizePathSeparators } from '@shared/utils/path'
+
+import {
+  buildOrganizeScanPayload,
+  type OrganizeCustomSplitInput
+} from '@presentation/renderer/pages/organizeScanPayload'
 
 const SOURCE_DIALOG_OPTIONS = {
   title: '원본 사진 폴더 선택',
@@ -48,18 +53,61 @@ function getAssignmentModeDescription(
   }
 }
 
+type GroupSavePhase = 'idle' | 'queued' | 'saving' | 'done' | 'error'
+
+function formatGroupSavePhaseLabel(phase: GroupSavePhase): string {
+  switch (phase) {
+    case 'queued':
+      return '저장 대기'
+    case 'saving':
+      return '저장 중'
+    case 'done':
+      return '저장 완료'
+    case 'error':
+      return '저장 실패'
+    default:
+      return '미저장'
+  }
+}
+
 interface OrganizePageProps {
   onNavigateToBrowse?: () => void
 }
 
-interface PendingCustomSplitInput {
-  id: string
-  title: string
-  photoIds: string[]
+function buildEffectiveOrganizeInputs(
+  groups: PreviewPendingOrganizationResult['groups'],
+  inputs: {
+    groupTitleInputs: Record<string, string>
+    groupCompanionsInputs: Record<string, string>
+    groupNotesInputs: Record<string, string>
+    groupAssignmentInputs: Record<string, string>
+    groupCustomSplits: Record<string, OrganizeCustomSplitInput[]>
+  }
+): Parameters<typeof buildOrganizeScanPayload>[2] {
+  const groupTitleInputs = { ...inputs.groupTitleInputs }
+
+  for (const group of groups) {
+    if (group.assignmentMode === 'manual-existing-group') {
+      continue
+    }
+
+    if (!groupTitleInputs[group.groupKey]?.trim()) {
+      groupTitleInputs[group.groupKey] =
+        group.suggestedTitles[0] ?? group.displayTitle
+    }
+  }
+
+  return {
+    groupTitleInputs,
+    groupCompanionsInputs: inputs.groupCompanionsInputs,
+    groupNotesInputs: inputs.groupNotesInputs,
+    groupAssignmentInputs: inputs.groupAssignmentInputs,
+    groupCustomSplits: inputs.groupCustomSplits
+  }
 }
 
 function getAssignedPhotoIdSet(
-  splits: PendingCustomSplitInput[] | undefined
+  splits: OrganizeCustomSplitInput[] | undefined
 ): Set<string> {
   return new Set((splits ?? []).flatMap((split) => split.photoIds))
 }
@@ -171,7 +219,6 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   const setLastLoadedIndex = useLibraryWorkspaceStore(
     (state) => state.setLastLoadedIndex
   )
-  const [isScanning, setIsScanning] = useState(false)
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [summary, setSummary] = useState<ScanPhotoLibrarySummary | null>(null)
@@ -196,8 +243,30 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     Record<string, string>
   >({})
   const [groupCustomSplits, setGroupCustomSplits] = useState<
-    Record<string, PendingCustomSplitInput[]>
+    Record<string, OrganizeCustomSplitInput[]>
   >({})
+  const [saveJobQueue, setSaveJobQueue] = useState<
+    Array<{
+      copyGroupKey: string
+      isLastStep: boolean
+      snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
+    }>
+  >([])
+  const [runningSaveGroupKey, setRunningSaveGroupKey] = useState<string | null>(
+    null
+  )
+  const runningSaveGroupKeyRef = useRef<string | null>(null)
+  const [saveAllSession, setSaveAllSession] = useState<{
+    total: number
+    done: number
+  } | null>(null)
+  const [groupSavePhaseByKey, setGroupSavePhaseByKey] = useState<
+    Record<string, GroupSavePhase>
+  >({})
+
+  useEffect(() => {
+    runningSaveGroupKeyRef.current = runningSaveGroupKey
+  }, [runningSaveGroupKey])
   const [previewImageLoadFailedByPhotoId, setPreviewImageLoadFailedByPhotoId] =
     useState<Record<string, boolean>>({})
   const [wizardStepIndex, setWizardStepIndex] = useState(0)
@@ -213,114 +282,10 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     return [...withGps, ...withoutGps]
   }, [previewResult])
 
-  const wizardIncludedGroupKeySet = useMemo(
-    () =>
-      new Set(
-        orderedPreviewGroups
-          .slice(0, wizardStepIndex + 1)
-          .map((g) => g.groupKey)
-      ),
-    [orderedPreviewGroups, wizardStepIndex]
-  )
-
   const hasPendingPreviewGroups = (previewResult?.groups.length ?? 0) > 0
-  const previewMetadataOverrideEntries = useMemo(
-    () =>
-      (previewResult?.groups ?? [])
-        .filter((group) => wizardIncludedGroupKeySet.has(group.groupKey))
-        .map((group) => ({
-          groupKey: group.groupKey,
-          title: groupTitleInputs[group.groupKey]?.trim() ?? '',
-          companions: (groupCompanionsInputs[group.groupKey] ?? '')
-            .split(',')
-            .map((value) => value.trim())
-            .filter((value) => value.length > 0),
-          notes: groupNotesInputs[group.groupKey]?.trim() || undefined
-        }))
-        .filter((entry) => {
-          const group = (previewResult?.groups ?? []).find(
-            (candidate) => candidate.groupKey === entry.groupKey
-          )
 
-          return (
-            entry.title.length > 0 && group?.assignmentMode !== 'manual-existing-group'
-          )
-        }),
-    [
-      groupCompanionsInputs,
-      groupNotesInputs,
-      groupTitleInputs,
-      previewResult?.groups,
-      wizardIncludedGroupKeySet
-    ]
-  )
-  const pendingGroupAssignmentEntries = useMemo(
-    () =>
-      (previewResult?.groups ?? [])
-        .filter((group) => wizardIncludedGroupKeySet.has(group.groupKey))
-        .filter((group) => group.assignmentMode === 'manual-existing-group')
-        .map((group) => ({
-          groupKey: group.groupKey,
-          targetGroupId: groupAssignmentInputs[group.groupKey] ?? ''
-        }))
-        .filter((entry) => entry.targetGroupId.length > 0),
-    [groupAssignmentInputs, previewResult?.groups, wizardIncludedGroupKeySet]
-  )
-  const pendingCustomGroupSplitEntries = useMemo(
-    () =>
-      Object.entries(groupCustomSplits)
-        .filter(([groupKey]) => wizardIncludedGroupKeySet.has(groupKey))
-        .flatMap(([groupKey, splits]) =>
-          splits.map((split) => ({
-            groupKey,
-            splitId: split.id,
-            title: split.title,
-            photoIds: split.photoIds
-          }))
-        ),
-    [groupCustomSplits, wizardIncludedGroupKeySet]
-  )
-  const defaultTitleManualPhotoEntries = useMemo(() => {
-    if (!previewResult) {
-      return [] as Array<{ photoId: string; title: string }>
-    }
-
-    const entries: Array<{ photoId: string; title: string }> = []
-
-    for (const group of previewResult.groups) {
-      if (!wizardIncludedGroupKeySet.has(group.groupKey)) {
-        continue
-      }
-
-      if ((groupAssignmentInputs[group.groupKey] ?? '').trim().length > 0) {
-        continue
-      }
-
-      const title = (groupTitleInputs[group.groupKey] ?? '').trim()
-
-      if (!title) {
-        continue
-      }
-
-      const assigned = new Set(
-        (groupCustomSplits[group.groupKey] ?? []).flatMap((split) => split.photoIds)
-      )
-
-      for (const photo of group.representativePhotos) {
-        if (!assigned.has(photo.id)) {
-          entries.push({ photoId: photo.id, title })
-        }
-      }
-    }
-
-    return entries
-  }, [
-    groupAssignmentInputs,
-    groupCustomSplits,
-    groupTitleInputs,
-    previewResult,
-    wizardIncludedGroupKeySet
-  ])
+  const savePipelineBusy =
+    runningSaveGroupKey !== null || saveJobQueue.length > 0
 
   const wizardGroup =
     orderedPreviewGroups.length > 0
@@ -366,6 +331,86 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       return [...withGps, ...withoutGps]
     }, [lastLoadedIndex, outputRoot])
 
+  useEffect(() => {
+    if (runningSaveGroupKey !== null) {
+      return
+    }
+
+    if (saveJobQueue.length === 0) {
+      return
+    }
+
+    if (!sourceRoot || !outputRoot) {
+      return
+    }
+
+    const nextJob = saveJobQueue[0]
+
+    setSaveJobQueue((previous) => previous.slice(1))
+    setRunningSaveGroupKey(nextJob.copyGroupKey)
+    setGroupSavePhaseByKey((previous) => ({
+      ...previous,
+      [nextJob.copyGroupKey]: 'saving'
+    }))
+
+    void (async () => {
+      try {
+        const nextSummary = await window.photoApp.scanPhotoLibrary({
+          sourceRoot,
+          outputRoot,
+          ...nextJob.snapshotPayload,
+          copyGroupKeysInThisRun: [nextJob.copyGroupKey]
+        })
+        const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
+
+        setLastLoadedIndex(loadedIndex)
+
+        setSaveAllSession((previous) =>
+          previous ? { ...previous, done: previous.done + 1 } : previous
+        )
+
+        setGroupSavePhaseByKey((previous) => ({
+          ...previous,
+          [nextJob.copyGroupKey]: 'done'
+        }))
+
+        if (nextJob.isLastStep) {
+          setSaveAllSession(null)
+          setGroupSavePhaseByKey({})
+          setSummary(nextSummary)
+          setPreviewResult(null)
+          setGroupTitleInputs({})
+          setGroupCompanionsInputs({})
+          setGroupNotesInputs({})
+          setGroupAssignmentInputs({})
+          setGroupSelectedPhotoIds({})
+          setGroupSplitTitleInputs({})
+          setGroupCustomSplits({})
+          setPreviewImageLoadFailedByPhotoId({})
+          setWizardStepIndex(0)
+        }
+      } catch (error) {
+        setSaveAllSession(null)
+        setSaveJobQueue([])
+        setGroupSavePhaseByKey((previous) => {
+          const next: Record<string, GroupSavePhase> = { ...previous }
+          next[nextJob.copyGroupKey] = 'error'
+          for (const key of Object.keys(next)) {
+            if (next[key] === 'queued') {
+              next[key] = 'idle'
+            }
+          }
+          return next
+        })
+        setErrorMessage(
+          error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
+        )
+      } finally {
+        setRunningSaveGroupKey(null)
+      }
+    })()
+  }, [runningSaveGroupKey, saveJobQueue, sourceRoot, outputRoot, setLastLoadedIndex])
+
   async function selectSourceRoot(): Promise<void> {
     const selectedPath = await window.photoApp.selectDirectory(
       SOURCE_DIALOG_OPTIONS
@@ -385,6 +430,10 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
       setErrorMessage(null)
+      setSaveJobQueue([])
+      setRunningSaveGroupKey(null)
+      setSaveAllSession(null)
+      setGroupSavePhaseByKey({})
     }
   }
 
@@ -408,6 +457,10 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
       setErrorMessage(null)
+      setSaveJobQueue([])
+      setRunningSaveGroupKey(null)
+      setSaveAllSession(null)
+      setGroupSavePhaseByKey({})
     }
   }
 
@@ -458,6 +511,10 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
       const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
       setLastLoadedIndex(loadedIndex)
+      setSaveJobQueue([])
+      setRunningSaveGroupKey(null)
+      setSaveAllSession(null)
+      setGroupSavePhaseByKey({})
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -469,13 +526,96 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     }
   }
 
-  async function handleSaveStep(): Promise<void> {
+  function enqueueSaveAllGroups(): void {
     if (!sourceRoot || !outputRoot) {
       setErrorMessage('원본 사진 폴더와 출력 폴더를 먼저 선택하세요.')
       return
     }
 
-    const currentGroup = orderedPreviewGroups[wizardStepIndex]
+    if (!previewResult) {
+      setErrorMessage('먼저 정리 후보를 불러오세요.')
+      return
+    }
+
+    if (orderedPreviewGroups.length === 0) {
+      setErrorMessage('저장할 그룹이 없습니다.')
+      return
+    }
+
+    if (savePipelineBusy) {
+      return
+    }
+
+    for (const group of orderedPreviewGroups) {
+      if (group.assignmentMode === 'manual-existing-group') {
+        if (!(groupAssignmentInputs[group.groupKey]?.trim())) {
+          setErrorMessage(
+            '「기존 그룹에 넣기」가 필요한 그룹이 있습니다. 해당 그룹에서 합칠 그룹을 선택한 뒤 전체 저장을 사용하세요.'
+          )
+          return
+        }
+      }
+    }
+
+    const effectiveInputs = buildEffectiveOrganizeInputs(previewResult.groups, {
+      groupTitleInputs,
+      groupCompanionsInputs,
+      groupNotesInputs,
+      groupAssignmentInputs,
+      groupCustomSplits
+    })
+
+    const jobs: Array<{
+      copyGroupKey: string
+      isLastStep: boolean
+      snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
+    }> = []
+
+    for (let index = 0; index < orderedPreviewGroups.length; index += 1) {
+      const includedGroupKeySet = new Set(
+        orderedPreviewGroups.slice(0, index + 1).map((g) => g.groupKey)
+      )
+      const snapshotPayload = buildOrganizeScanPayload(
+        previewResult,
+        includedGroupKeySet,
+        effectiveInputs
+      )
+      const group = orderedPreviewGroups[index]
+
+      if (!group) {
+        continue
+      }
+
+      jobs.push({
+        copyGroupKey: group.groupKey,
+        isLastStep: index >= orderedPreviewGroups.length - 1,
+        snapshotPayload
+      })
+    }
+
+    setErrorMessage(null)
+    setSaveAllSession({ total: jobs.length, done: 0 })
+    const queuedPhases: Record<string, GroupSavePhase> = {}
+    for (const job of jobs) {
+      queuedPhases[job.copyGroupKey] = 'queued'
+    }
+    setGroupSavePhaseByKey((previous) => ({ ...previous, ...queuedPhases }))
+    setSaveJobQueue((previous) => [...previous, ...jobs])
+  }
+
+  function enqueueSaveCurrentGroup(): void {
+    if (!sourceRoot || !outputRoot) {
+      setErrorMessage('원본 사진 폴더와 출력 폴더를 먼저 선택하세요.')
+      return
+    }
+
+    if (!previewResult) {
+      setErrorMessage('먼저 정리 후보를 불러오세요.')
+      return
+    }
+
+    const snapshotStepIndex = wizardStepIndex
+    const currentGroup = orderedPreviewGroups[snapshotStepIndex]
 
     if (!currentGroup) {
       setErrorMessage('저장할 그룹을 찾을 수 없습니다.')
@@ -489,46 +629,48 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       }
     }
 
-    setIsScanning(true)
+    const includedGroupKeySet = new Set(
+      orderedPreviewGroups
+        .slice(0, snapshotStepIndex + 1)
+        .map((group) => group.groupKey)
+    )
+
+    const snapshotPayload = buildOrganizeScanPayload(previewResult, includedGroupKeySet, {
+      groupTitleInputs,
+      groupCompanionsInputs,
+      groupNotesInputs,
+      groupAssignmentInputs,
+      groupCustomSplits
+    })
+
+    const isLastStep = snapshotStepIndex >= orderedPreviewGroups.length - 1
+
     setErrorMessage(null)
 
-    try {
-      const nextSummary = await window.photoApp.scanPhotoLibrary({
-        sourceRoot,
-        outputRoot,
-        groupMetadataOverrides: previewMetadataOverrideEntries,
-        pendingGroupAssignments: pendingGroupAssignmentEntries,
-        pendingCustomGroupSplits: pendingCustomGroupSplitEntries,
-        defaultTitleManualPhotoIds: defaultTitleManualPhotoEntries,
-        copyGroupKeysInThisRun: [currentGroup.groupKey]
-      })
-      const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
+    const alreadyQueuedOrRunning =
+      runningSaveGroupKeyRef.current === currentGroup.groupKey ||
+      saveJobQueue.some((job) => job.copyGroupKey === currentGroup.groupKey)
 
-      const isLastStep = wizardStepIndex >= orderedPreviewGroups.length - 1
+    if (alreadyQueuedOrRunning) {
+      return
+    }
 
-      if (isLastStep) {
-        setSummary(nextSummary)
-        setLastLoadedIndex(loadedIndex)
-        setPreviewResult(null)
-        setGroupTitleInputs({})
-        setGroupCompanionsInputs({})
-        setGroupNotesInputs({})
-        setGroupAssignmentInputs({})
-        setGroupSelectedPhotoIds({})
-        setGroupSplitTitleInputs({})
-        setGroupCustomSplits({})
-        setPreviewImageLoadFailedByPhotoId({})
-        setWizardStepIndex(0)
-      } else {
-        setLastLoadedIndex(loadedIndex)
-        setWizardStepIndex((step) => step + 1)
+    setGroupSavePhaseByKey((previous) => ({
+      ...previous,
+      [currentGroup.groupKey]: 'queued'
+    }))
+
+    setSaveJobQueue((previous) => [
+      ...previous,
+      {
+        copyGroupKey: currentGroup.groupKey,
+        isLastStep,
+        snapshotPayload
       }
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
-      )
-    } finally {
-      setIsScanning(false)
+    ])
+
+    if (!isLastStep) {
+      setWizardStepIndex((step) => step + 1)
     }
   }
 
@@ -666,33 +808,18 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           <button
             type="button"
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-            disabled={isLoadingPreview || isScanning}
+            disabled={isLoadingPreview}
             onClick={() => void handlePreview()}
           >
             {isLoadingPreview ? '후보 불러오는 중...' : '정리 시작하기'}
           </button>
         ) : (
           <>
-            {hasPendingPreviewGroups ? (
-              <button
-                type="button"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-                disabled={isScanning}
-                onClick={() => void handleSaveStep()}
-              >
-                {isScanning
-                  ? '정리 중...'
-                  : orderedPreviewGroups.length > 0 &&
-                      wizardStepIndex >= orderedPreviewGroups.length - 1
-                    ? '마지막 그룹 저장'
-                    : '이 그룹 저장 및 복사'}
-              </button>
-            ) : null}
             {hasPendingPreviewGroups && orderedPreviewGroups.length > 1 ? (
               <button
                 type="button"
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
-                disabled={isScanning || wizardStepIndex === 0}
+                disabled={savePipelineBusy || wizardStepIndex === 0}
                 onClick={() => setWizardStepIndex((step) => Math.max(0, step - 1))}
               >
                 이전 그룹
@@ -701,11 +828,25 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
             <button
               type="button"
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
-              disabled={isLoadingPreview || isScanning}
+              disabled={isLoadingPreview || savePipelineBusy}
               onClick={() => void handlePreview()}
             >
               후보 다시 불러오기
             </button>
+            {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
+              <button
+                type="button"
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                disabled={
+                  isLoadingPreview ||
+                  savePipelineBusy ||
+                  orderedPreviewGroups.length === 0
+                }
+                onClick={() => enqueueSaveAllGroups()}
+              >
+                전체 그룹 저장 (추천 제목)
+              </button>
+            ) : null}
           </>
         )}
         <button
@@ -717,9 +858,10 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           조회 페이지 열기
         </button>
         <p className="text-sm text-slate-500">
-          그룹마다 메타 정보를 입력한 뒤 &quot;이 그룹 저장 및 복사&quot;로 해당
-          사진만 출력 폴더에 반영합니다. GPS 없는 그룹은 순서상 마지막에
-          나옵니다.
+          그룹마다 메타를 입력한 뒤 카드에서 한 그룹씩 저장하거나, 위의 전체
+          저장으로 추천 제목·입력값을 한 번에 적용해 모든 그룹을 순서대로
+          복사합니다. 진행이 길면 아래 진행 표시를 확인하세요. 완료 후 실행 결과
+          요약이 표시됩니다. GPS 없는 그룹은 순서상 마지막에 처리됩니다.
         </p>
       </div>
 
@@ -727,6 +869,40 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
         </div>
+      ) : null}
+
+      {saveAllSession && savePipelineBusy ? (
+        <section
+          className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"
+          aria-live="polite"
+          aria-busy={runningSaveGroupKey !== null}
+        >
+          <h2 className="text-sm font-semibold text-indigo-900">
+            전체 정리 저장 진행 중
+          </h2>
+          <p className="mt-1 text-sm text-indigo-800">
+            완료 {saveAllSession.done} / {saveAllSession.total} 그룹
+            {runningSaveGroupKey
+              ? ` · 현재: ${
+                  orderedPreviewGroups.find(
+                    (g) => g.groupKey === runningSaveGroupKey
+                  )?.displayTitle ?? runningSaveGroupKey
+                }`
+              : ''}
+          </p>
+          <progress
+            className="mt-3 h-2 w-full overflow-hidden rounded-full accent-indigo-600 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-indigo-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-indigo-600"
+            max={saveAllSession.total}
+            value={Math.min(
+              saveAllSession.done + (runningSaveGroupKey ? 1 : 0),
+              saveAllSession.total
+            )}
+          />
+          <p className="mt-2 text-xs text-indigo-700">
+            각 그룹 복사·인덱스 반영이 끝날 때마다 숫자가 올라갑니다. 잠시만
+            기다려 주세요.
+          </p>
+        </section>
       ) : null}
 
       {previewResult ? (
@@ -753,6 +929,50 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
               </div>
             </div>
 
+            {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
+              <div className="rounded-lg border border-sky-200 bg-white p-3">
+                <p className="text-xs font-semibold text-sky-900">
+                  그룹별 저장 상태
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {orderedPreviewGroups.map((g) => {
+                    const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
+                    const isCurrentRun = runningSaveGroupKey === g.groupKey
+                    return (
+                      <li
+                        key={g.groupKey}
+                        className={`flex flex-wrap items-center justify-between gap-2 text-xs ${
+                          phase === 'saving' || isCurrentRun
+                            ? 'font-medium text-sky-900'
+                            : 'text-slate-700'
+                        }`}
+                      >
+                        <span className="min-w-0 flex-1 truncate" title={g.displayTitle}>
+                          {g.displayTitle}
+                        </span>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 ${
+                            phase === 'saving' || isCurrentRun
+                              ? 'bg-amber-100 text-amber-900'
+                              : phase === 'done'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : phase === 'error'
+                                  ? 'bg-red-100 text-red-800'
+                                  : phase === 'queued'
+                                    ? 'bg-slate-200 text-slate-800'
+                                    : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {formatGroupSavePhaseLabel(phase)}
+                          {phase === 'saving' ? '…' : ''}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ) : null}
+
             {hasPendingPreviewGroups && wizardGroup ? (
               <div className="space-y-4">
                 {(() => {
@@ -766,6 +986,31 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                     mergeAssignmentCandidatesFromLoadedIndex.length > 0
                       ? mergeAssignmentCandidatesFromLoadedIndex
                       : group.existingGroupCandidates
+                  const phaseForGroup =
+                    groupSavePhaseByKey[group.groupKey] ?? 'idle'
+                  const saveBusyForThisGroup =
+                    runningSaveGroupKey === group.groupKey ||
+                    saveJobQueue.some((job) => job.copyGroupKey === group.groupKey) ||
+                    phaseForGroup === 'done'
+                  const isLastInWizard =
+                    orderedPreviewGroups.length > 0 &&
+                    wizardStepIndex >= orderedPreviewGroups.length - 1
+                  const saveButtonLabel = (() => {
+                    switch (phaseForGroup) {
+                      case 'saving':
+                        return '저장 중…'
+                      case 'queued':
+                        return '저장 대기'
+                      case 'done':
+                        return '저장 완료'
+                      case 'error':
+                        return '다시 저장'
+                      default:
+                        break
+                    }
+
+                    return isLastInWizard ? '마지막 그룹 저장' : '이 그룹 저장 및 복사'
+                  })()
 
                   return (
                   <article
@@ -794,6 +1039,17 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                               </span>
                             ) : null}
                           </div>
+                          {group.assignmentMode === 'manual-existing-group' ? (
+                            <p className="text-xs leading-relaxed text-slate-600">
+                              이 후보는 대표 GPS가 없어 지도에 새 점으로 묶을 수 없습니다.
+                              출력 라이브러리에는 이미 여러 그룹이 있으므로, 사진을{' '}
+                              <strong className="font-medium text-slate-800">
+                                어느 기존 그룹에 합칠지
+                              </strong>{' '}
+                              앱이 임의로 정할 수 없습니다. 아래에서 합칠 그룹을
+                              고르거나, 새 GPS 없는 그룹으로 두면 됩니다.
+                            </p>
+                          ) : null}
                           {getAssignmentModeDescription(group) ? (
                             <p className="text-xs text-slate-500">
                               {getAssignmentModeDescription(group)}
@@ -1083,6 +1339,19 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                           />
                         </label>
                       </div>
+
+                      {hasPendingPreviewGroups ? (
+                        <div className="flex justify-end border-t border-slate-100 pt-4">
+                          <button
+                            type="button"
+                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                            disabled={saveBusyForThisGroup}
+                            onClick={() => enqueueSaveCurrentGroup()}
+                          >
+                            {saveButtonLabel}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </article>
                   )

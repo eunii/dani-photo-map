@@ -277,7 +277,7 @@ describe('ScanPhotoLibraryUseCase', () => {
       outputRoot: 'C:\\output',
       groupMetadataOverrides: [
         {
-          groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+          groupKey: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
           title: '서울 산책',
           companions: ['Alice', ' Bob '],
           notes: '  봄 산책 메모  '
@@ -287,7 +287,7 @@ describe('ScanPhotoLibraryUseCase', () => {
 
     expect(getSavedIndex()?.groups[0]).toMatchObject({
       title: '서울 산책',
-      displayTitle: '2026-04-03 seoul',
+      displayTitle: '2026-04 seoul',
       companions: ['Alice', 'Bob'],
       notes: '봄 산책 메모'
     })
@@ -325,9 +325,25 @@ describe('ScanPhotoLibraryUseCase', () => {
         }
       ]
     })
-    dependencies.hasher.createSha256
-      .mockResolvedValueOnce('existing-hash')
-      .mockResolvedValueOnce('existing-hash')
+    dependencies.libraryIndexStore.load.mockResolvedValue({
+      version: 1,
+      generatedAt: '2026-04-03T12:00:00.000Z',
+      sourceRoot: 'C:/source',
+      outputRoot: 'C:/output',
+      photos: [
+        {
+          id: 'indexed-output',
+          sourcePath: 'C:/output/2026/04/busan/2026-04-01_090000_IMG_9999.JPG',
+          sourceFileName: '2026-04-01_090000_IMG_9999.JPG',
+          sha256: 'existing-hash',
+          outputRelativePath: '2026/04/busan/2026-04-01_090000_IMG_9999.JPG',
+          isDuplicate: false,
+          metadataIssues: []
+        }
+      ],
+      groups: []
+    })
+    dependencies.hasher.createSha256.mockResolvedValue('existing-hash')
 
     const useCase = new ScanPhotoLibraryUseCase(dependencies)
     const result = await useCase.execute({
@@ -340,6 +356,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     expect(result.copiedCount).toBe(0)
     expect(result.skippedExistingCount).toBe(1)
     expect(dependencies.fileSystem.copyFile).not.toHaveBeenCalled()
+    expect(dependencies.hasher.createSha256).toHaveBeenCalledTimes(1)
     expect(getSavedIndex()?.photos).toHaveLength(1)
     expect(getSavedIndex()?.photos[0]?.outputRelativePath).toBe(
       '2026/04/busan/2026-04-01_090000_IMG_9999.JPG'
@@ -418,10 +435,10 @@ describe('ScanPhotoLibraryUseCase', () => {
       ],
       groups: [
         {
-          id: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
-          groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+          id: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
+          groupKey: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
           title: '서울 산책',
-          displayTitle: '2026-04-03 seoul',
+          displayTitle: '2026-04 seoul',
           photoIds: ['stored-photo-1'],
           representativePhotoId: 'stored-photo-1',
           representativeGps: {
@@ -434,9 +451,8 @@ describe('ScanPhotoLibraryUseCase', () => {
         }
       ]
     })
-    dependencies.hasher.createSha256
-      .mockResolvedValueOnce('existing-hash')
-      .mockResolvedValueOnce('new-hash')
+    // Existing output hash comes from stored index; only the source file is hashed on disk.
+    dependencies.hasher.createSha256.mockResolvedValueOnce('new-hash')
     dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
 
     const useCase = new ScanPhotoLibraryUseCase(dependencies)
@@ -445,8 +461,8 @@ describe('ScanPhotoLibraryUseCase', () => {
       outputRoot: 'C:\\output',
       pendingGroupAssignments: [
         {
-          groupKey: 'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
-          targetGroupId: 'group|region=seoul|year=2026|month=04|day=03|slot=1'
+          groupKey: 'group|region=location-unknown|year=2026|month=04|day=00|slot=1',
+          targetGroupId: 'group|region=seoul|year=2026|month=04|day=00|slot=1'
         }
       ]
     })
@@ -500,13 +516,13 @@ describe('ScanPhotoLibraryUseCase', () => {
       outputRoot: 'C:\\output',
       pendingCustomGroupSplits: [
         {
-          groupKey: 'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+          groupKey: 'group|region=location-unknown|year=2026|month=04|day=00|slot=1',
           splitId: 'split-a',
           title: '카페',
           photoIds: ['photo-1']
         },
         {
-          groupKey: 'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+          groupKey: 'group|region=location-unknown|year=2026|month=04|day=00|slot=1',
           splitId: 'split-b',
           title: '실내',
           photoIds: ['photo-2']
@@ -515,7 +531,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     })
 
     expect(getSavedIndex()?.groups.map((group) => group.title).sort()).toEqual([
-      '2026-04-03 location-unknown',
+      '2026-04 location-unknown',
       '실내',
       '카페'
     ].sort())
@@ -524,7 +540,7 @@ describe('ScanPhotoLibraryUseCase', () => {
         (getSavedIndex()?.groups ?? []).map((group) => [group.title, group.photoIds])
       )
     ).toEqual({
-      '2026-04-03 location-unknown': ['photo-3'],
+      '2026-04 location-unknown': ['photo-3'],
       카페: ['photo-1'],
       실내: ['photo-2']
     })
@@ -638,14 +654,14 @@ describe('ScanPhotoLibraryUseCase', () => {
       outputRoot: 'C:\\output',
       groupMetadataOverrides: [
         {
-          groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+          groupKey: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
           title: '동일제목',
           companions: [],
           notes: undefined
         },
         {
           groupKey:
-            'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+            'group|region=location-unknown|year=2026|month=04|day=00|slot=1',
           title: '동일제목',
           companions: [],
           notes: undefined
@@ -682,10 +698,10 @@ describe('ScanPhotoLibraryUseCase', () => {
       .mockResolvedValueOnce({
         ...noGpsMeta,
         capturedAt: {
-          iso: '2026-04-04T10:00:00.000Z',
+          iso: '2026-05-02T10:00:00.000Z',
           year: '2026',
-          month: '04',
-          day: '04',
+          month: '05',
+          day: '02',
           time: '100000'
         }
       })
@@ -701,14 +717,14 @@ describe('ScanPhotoLibraryUseCase', () => {
       groupMetadataOverrides: [
         {
           groupKey:
-            'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+            'group|region=location-unknown|year=2026|month=04|day=00|slot=1',
           title: '무GPS동일제목',
           companions: [],
           notes: undefined
         },
         {
           groupKey:
-            'group|region=location-unknown|year=2026|month=04|day=04|slot=2',
+            'group|region=location-unknown|year=2026|month=05|day=00|slot=2',
           title: '무GPS동일제목',
           companions: [],
           notes: undefined
@@ -766,7 +782,7 @@ describe('ScanPhotoLibraryUseCase', () => {
       sourceRoot: 'C:\\source',
       outputRoot: 'C:\\output',
       copyGroupKeysInThisRun: [
-        'group|region=seoul|year=2026|month=04|day=03|slot=1'
+        'group|region=seoul|year=2026|month=04|day=00|slot=1'
       ]
     })
 

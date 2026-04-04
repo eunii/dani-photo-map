@@ -67,9 +67,9 @@ function createLibraryIndex(): LibraryIndex {
     groups: [
       {
         id: 'group-1',
-        groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
-        title: '2026-04-03 seoul',
-        displayTitle: '2026-04-03 seoul',
+        groupKey: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
+        title: '2026-04 seoul',
+        displayTitle: '2026-04 seoul',
         photoIds: ['photo-1', 'photo-2'],
         representativePhotoId: 'photo-1',
         representativeGps: {
@@ -143,7 +143,7 @@ describe('UpdatePhotoGroupUseCase', () => {
     })
 
     expect(updatedIndex.groups[0]).toMatchObject({
-      title: '2026-04-03 seoul',
+      title: '2026-04 seoul',
       notes: undefined
     })
   })
@@ -213,7 +213,7 @@ describe('UpdatePhotoGroupUseCase', () => {
 
     const updatedIndex = await useCase.execute({
       outputRoot: 'C:/photos/output',
-      groupId: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+      groupId: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
       title: '서울 산책',
       companions: ['Alice']
     })

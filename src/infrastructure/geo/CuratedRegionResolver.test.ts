@@ -74,6 +74,20 @@ describe('CachedRegionResolver', () => {
 })
 
 describe('CuratedRegionResolver finer regions', () => {
+  it('resolves Gangwon inje-gun', async () => {
+    const fallbackResolver: RegionResolverPort = {
+      resolveName: vi.fn().mockResolvedValue('location-unknown')
+    }
+    const resolver = new CuratedRegionResolver(fallbackResolver)
+
+    await expect(
+      resolver.resolveName({
+        latitude: 38.07,
+        longitude: 128.17
+      })
+    ).resolves.toBe('inje-gun')
+  })
+
   it('resolves Gyeonggi city before province', async () => {
     const fallbackResolver: RegionResolverPort = {
       resolveName: vi.fn().mockResolvedValue('location-unknown')

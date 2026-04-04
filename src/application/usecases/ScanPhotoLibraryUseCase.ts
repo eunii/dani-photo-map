@@ -29,6 +29,7 @@ import {
 import { selectCanonicalDuplicatePhoto } from '@domain/services/DuplicatePhotoPolicy'
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import { buildPhotoOutputRelativePath } from '@domain/services/PhotoNamingService'
+import { buildExistingOutputHashSet } from '@application/services/buildExistingOutputHashSet'
 import { mergeGroupsByMatchingTitle } from '@application/services/mergeGroupsByMatchingTitle'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
 import { movePhotosIntoGroup } from '@application/services/movePhotosIntoGroup'
@@ -94,10 +95,24 @@ export class ScanPhotoLibraryUseCase {
       paths.outputRoot
     )
     const storedIndex = await this.loadStoredLibraryIndexSafely(paths.outputRoot)
-    const existingOutputHashes = await this.createExistingOutputHashes(
-      existingOutputSnapshot,
-      issues
-    )
+    const existingOutputHashes = await buildExistingOutputHashSet({
+      snapshot: existingOutputSnapshot,
+      storedIndex,
+      hasher: this.dependencies.hasher,
+      onDiskHashFailure: ({ sourcePath, photoId, outputRelativePath, error }) => {
+        issues.push(
+          this.createIssue({
+            code: 'existing-output-hash-failed',
+            severity: 'warning',
+            stage: 'hash',
+            sourcePath,
+            photoId,
+            outputRelativePath,
+            message: this.getErrorMessage(error)
+          })
+        )
+      }
+    })
 
     const photoPaths = await this.dependencies.fileSystem.listPhotoFiles(
       paths.sourceRoot
@@ -432,33 +447,6 @@ export class ScanPhotoLibraryUseCase {
     } catch {
       return null
     }
-  }
-
-  private async createExistingOutputHashes(
-    snapshot: ExistingOutputLibrarySnapshot,
-    issues: ScanPhotoLibraryIssue[]
-  ): Promise<Set<string>> {
-    const hashes = new Set<string>()
-
-    for (const existingPhoto of snapshot.photos) {
-      try {
-        hashes.add(await this.dependencies.hasher.createSha256(existingPhoto.sourcePath))
-      } catch (error) {
-        issues.push(
-          this.createIssue({
-            code: 'existing-output-hash-failed',
-            severity: 'warning',
-            stage: 'hash',
-            sourcePath: existingPhoto.sourcePath,
-            photoId: existingPhoto.id,
-            outputRelativePath: existingPhoto.outputRelativePath,
-            message: this.getErrorMessage(error)
-          })
-        )
-      }
-    }
-
-    return hashes
   }
 
   private async buildMergedLibraryIndex(

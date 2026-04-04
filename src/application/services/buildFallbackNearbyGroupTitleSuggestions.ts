@@ -25,7 +25,6 @@ interface BuildFallbackNearbyGroupTitleSuggestionsInput {
   metadataReader: PhotoMetadataReaderPort
   maxDistanceKm?: number
   maxSuggestions?: number
-  maxTimeWindowMs?: number
 }
 
 function toRadians(value: number): number {
@@ -54,8 +53,8 @@ function calculateDistanceKm(
   )
 }
 
-function isSameDay(leftIso: string, rightIso: string): boolean {
-  return leftIso.slice(0, 10) === rightIso.slice(0, 10)
+function isSameYearMonth(leftIso: string, rightIso: string): boolean {
+  return leftIso.slice(0, 7) === rightIso.slice(0, 7)
 }
 
 function buildTitleByOutputRelativePath(
@@ -97,8 +96,7 @@ export async function buildFallbackNearbyGroupTitleSuggestions({
   titleSourceIndex,
   metadataReader,
   maxDistanceKm = 3,
-  maxSuggestions = 3,
-  maxTimeWindowMs = 60 * 60 * 1000
+  maxSuggestions = 3
 }: BuildFallbackNearbyGroupTitleSuggestionsInput): Promise<string[]> {
   if (!currentGroup?.representativeGps || !currentCapturedAtIso) {
     return []
@@ -118,25 +116,24 @@ export async function buildFallbackNearbyGroupTitleSuggestions({
     return []
   }
 
-  const timeFilteredCandidates = existingOutputPhotos.filter((photo) => {
+  const monthFilteredCandidates = existingOutputPhotos.filter((photo) => {
     const existingCapturedAtIso = photo.capturedAt?.iso
 
-    if (!existingCapturedAtIso || !isSameDay(existingCapturedAtIso, currentCapturedAtIso)) {
+    if (
+      !existingCapturedAtIso ||
+      !isSameYearMonth(existingCapturedAtIso, currentCapturedAtIso)
+    ) {
       return false
     }
 
     const existingCapturedAtMs = Date.parse(existingCapturedAtIso)
 
-    if (Number.isNaN(existingCapturedAtMs)) {
-      return false
-    }
-
-    return Math.abs(existingCapturedAtMs - currentCapturedAtMs) <= maxTimeWindowMs
+    return !Number.isNaN(existingCapturedAtMs)
   })
 
   const rankedCandidates: FallbackSuggestionCandidate[] = []
 
-  for (const candidate of timeFilteredCandidates) {
+  for (const candidate of monthFilteredCandidates) {
     const title = titleByOutputRelativePath.get(candidate.outputRelativePath)
 
     if (!title) {

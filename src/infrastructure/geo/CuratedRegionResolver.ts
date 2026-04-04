@@ -1,6 +1,7 @@
 import type { RegionResolverPort } from '@application/ports/RegionResolverPort'
 import type { GeoPoint } from '@domain/value-objects/GeoPoint'
 import { GYEONGGI_MUNICIPAL_REGIONS } from '@infrastructure/geo/gyeonggiMunicipalityRegions'
+import { SOUTH_KOREA_MUNICIPAL_REGIONS } from '@infrastructure/geo/southKoreaMunicipalRegions'
 
 interface GeoBoundingRegion {
   name: string
@@ -27,6 +28,7 @@ const SEOUL_GU_REGIONS: GeoBoundingRegion[] = [
   { name: 'seoul-gangbuk-gu', minLatitude: 37.63, maxLatitude: 37.67, minLongitude: 127.0, maxLongitude: 127.05 },
   { name: 'seoul-dobong-gu', minLatitude: 37.66, maxLatitude: 37.69, minLongitude: 127.02, maxLongitude: 127.06 },
   { name: 'seoul-nowon-gu', minLatitude: 37.64, maxLatitude: 37.68, minLongitude: 127.05, maxLongitude: 127.1 },
+  { name: 'seoul-jungnang-gu', minLatitude: 37.58, maxLatitude: 37.61, minLongitude: 127.08, maxLongitude: 127.11 },
   { name: 'seoul-seongdong-gu', minLatitude: 37.54, maxLatitude: 37.57, minLongitude: 127.02, maxLongitude: 127.07 },
   { name: 'seoul-dongdaemun-gu', minLatitude: 37.56, maxLatitude: 37.59, minLongitude: 127.02, maxLongitude: 127.07 },
   { name: 'seoul-gwangjin-gu', minLatitude: 37.54, maxLatitude: 37.56, minLongitude: 127.07, maxLongitude: 127.12 },
@@ -64,13 +66,13 @@ const SPECIFIC_REGIONS: GeoBoundingRegion[] = [
   ...SEOUL_GU_REGIONS,
   { name: 'seoul', minLatitude: 37.41, maxLatitude: 37.72, minLongitude: 126.73, maxLongitude: 127.27 },
   ...GYEONGGI_MUNICIPAL_REGIONS,
+  ...SOUTH_KOREA_MUNICIPAL_REGIONS,
   { name: 'incheon', minLatitude: 37.2, maxLatitude: 37.85, minLongitude: 126.3, maxLongitude: 126.85 },
   { name: 'busan', minLatitude: 35.03, maxLatitude: 35.39, minLongitude: 128.79, maxLongitude: 129.35 },
   { name: 'daegu', minLatitude: 35.73, maxLatitude: 36.02, minLongitude: 128.45, maxLongitude: 128.78 },
   { name: 'daejeon', minLatitude: 36.2, maxLatitude: 36.48, minLongitude: 127.28, maxLongitude: 127.53 },
   { name: 'gwangju', minLatitude: 35.05, maxLatitude: 35.24, minLongitude: 126.75, maxLongitude: 127.01 },
   { name: 'ulsan', minLatitude: 35.43, maxLatitude: 35.72, minLongitude: 129.14, maxLongitude: 129.47 },
-  { name: 'sejong', minLatitude: 36.45, maxLatitude: 36.7, minLongitude: 127.15, maxLongitude: 127.35 },
   { name: 'jeju-do', minLatitude: 33.1, maxLatitude: 33.6, minLongitude: 126.1, maxLongitude: 126.95 },
   { name: 'gyeonggi-do', minLatitude: 36.9, maxLatitude: 38.3, minLongitude: 126.4, maxLongitude: 127.9 },
   { name: 'gangwon-do', minLatitude: 37.0, maxLatitude: 38.65, minLongitude: 127.0, maxLongitude: 129.4 },

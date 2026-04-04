@@ -282,7 +282,7 @@ describe('PreviewPendingOrganizationUseCase', () => {
     expect(result.pendingPhotoCount).toBe(1)
     expect(result.skippedExistingCount).toBe(0)
     expect(result.groups[0]).toMatchObject({
-      displayTitle: '2026-04-03 seoul',
+      displayTitle: '2026-04 seoul',
       suggestedTitles: ['서울 산책'],
       photoCount: 1
     })
@@ -375,7 +375,7 @@ describe('PreviewPendingOrganizationUseCase', () => {
       ],
       groups: [
         {
-          id: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+          id: 'group|region=seoul|year=2026|month=04|day=03|slot=2',
           groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=2',
           title: '서울 산책',
           displayTitle: '2026-04-03 seoul',

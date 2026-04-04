@@ -12,6 +12,7 @@ import type {
 } from '@application/ports/PhotoMetadataReaderPort'
 import type { PhotoPreviewPort } from '@application/ports/PhotoPreviewPort'
 import type { RegionResolverPort } from '@application/ports/RegionResolverPort'
+import { buildExistingOutputHashSet } from '@application/services/buildExistingOutputHashSet'
 import { buildFallbackNearbyGroupTitleSuggestions } from '@application/services/buildFallbackNearbyGroupTitleSuggestions'
 import { buildNearbyGroupTitleSuggestions } from '@application/services/buildNearbyGroupTitleSuggestions'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
@@ -24,6 +25,7 @@ import { selectCanonicalDuplicatePhoto } from '@domain/services/DuplicatePhotoPo
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import type { Photo } from '@domain/entities/Photo'
+import { groupKeyIdentitySignature } from '@domain/services/groupKeyIdentity'
 import {
   getPathBaseName,
   normalizePathSeparators
@@ -107,10 +109,12 @@ export class PreviewPendingOrganizationUseCase {
     const existingOutputSnapshot = await this.dependencies.existingOutputScanner.scan(
       outputRoot
     )
-    const existingOutputHashes = await this.createExistingOutputHashes(
-      existingOutputSnapshot
-    )
     const storedIndex = await this.loadStoredLibraryIndexSafely(outputRoot)
+    const existingOutputHashes = await buildExistingOutputHashSet({
+      snapshot: existingOutputSnapshot,
+      storedIndex,
+      hasher: this.dependencies.hasher
+    })
     const existingIndex = this.buildExistingIndex(existingOutputSnapshot, storedIndex)
     const listedPhotoPaths = await this.dependencies.fileSystem.listPhotoFiles(sourceRoot)
     const candidatePhotos: Photo[] = []
@@ -247,7 +251,24 @@ export class PreviewPendingOrganizationUseCase {
     groupKey: string,
     storedIndex: LibraryIndex | null
   ): string | undefined {
-    const sameGroup = storedIndex?.groups.find((group) => group.groupKey === groupKey)
+    const groups = storedIndex?.groups
+
+    if (!groups?.length) {
+      return undefined
+    }
+
+    let sameGroup = groups.find((group) => group.groupKey === groupKey)
+
+    if (!sameGroup) {
+      const targetSignature = groupKeyIdentitySignature(groupKey)
+
+      if (targetSignature) {
+        sameGroup = groups.find(
+          (group) => groupKeyIdentitySignature(group.groupKey) === targetSignature
+        )
+      }
+    }
+
     const title = sameGroup?.title.trim()
 
     return title && title.length > 0 ? title : undefined
@@ -343,22 +364,6 @@ export class PreviewPendingOrganizationUseCase {
         })
         .filter((entry): entry is readonly [string, string] => entry !== null)
     )
-  }
-
-  private async createExistingOutputHashes(snapshot: {
-    photos: Array<{ sourcePath: string }>
-  }): Promise<Set<string>> {
-    const hashes = new Set<string>()
-
-    for (const photo of snapshot.photos) {
-      try {
-        hashes.add(await this.dependencies.hasher.createSha256(photo.sourcePath))
-      } catch {
-        // Ignore preview hash failures for existing output files.
-      }
-    }
-
-    return hashes
   }
 
   private async createPreviewDataUrlSafely(

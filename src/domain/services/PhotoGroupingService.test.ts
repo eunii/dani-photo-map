@@ -21,7 +21,7 @@ function createPhoto(overrides: Partial<Photo> & Pick<Photo, 'id' | 'sourceFileN
 }
 
 describe('PhotoGroupingService', () => {
-  it('creates separate loose groups when the time gap exceeds six hours', () => {
+  it('merges same region and calendar month into one group regardless of time gap', () => {
     const photos: Photo[] = [
       createPhoto({
         id: 'photo-1',
@@ -51,10 +51,9 @@ describe('PhotoGroupingService', () => {
 
     const groups = createPhotoGroups(photos)
 
-    expect(groups).toHaveLength(2)
-    expect(groups[0]?.groupKey).not.toBe(groups[1]?.groupKey)
-    expect(groups[0]?.displayTitle).toBe('2026-04-03 seoul')
-    expect(groups[1]?.displayTitle).toBe('2026-04-03 seoul')
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.displayTitle).toBe('2026-04 seoul')
+    expect(groups[0]?.photoIds).toEqual(['photo-1', 'photo-2'])
   })
 
   it('keeps location-unknown titles intact without parsing errors', () => {
@@ -75,9 +74,9 @@ describe('PhotoGroupingService', () => {
 
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({
-      title: '2026-04-03 location-unknown',
-      displayTitle: '2026-04-03 location-unknown',
-      groupKey: 'group|region=location-unknown|year=2026|month=04|day=03|slot=1'
+      title: '2026-04 location-unknown',
+      displayTitle: '2026-04 location-unknown',
+      groupKey: 'group|region=location-unknown|year=2026|month=04|day=00|slot=1'
     })
   })
 
@@ -105,8 +104,8 @@ describe('PhotoGroupingService', () => {
     const groups = createPhotoGroups(photos)
 
     expect(groups).toHaveLength(1)
-    expect(groups[0]?.displayTitle).toBe('2026-03-31 hwaseong-si')
-    expect(groups[0]?.title).toBe('2026-03-31 hwaseong-si')
+    expect(groups[0]?.displayTitle).toBe('2026-03 hwaseong-si')
+    expect(groups[0]?.title).toBe('2026-03 hwaseong-si')
   })
 
   it('selects a representative photo using gps and thumbnail quality', () => {
