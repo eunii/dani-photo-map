@@ -67,9 +67,15 @@ export interface UpdatePhotoGroupRequest {
 
 export interface MovePhotosToGroupRequest {
   outputRoot: string
-  sourceGroupId: string
-  destinationGroupId: string
   photoIds: string[]
+  /** 단일 소스(지도 그룹 상세 등). 생략 시 `photoIds`로 소스 그룹을 자동 분해합니다. */
+  sourceGroupId?: string
+  /** `newGroup`과 동시에 사용하지 않습니다. */
+  destinationGroupId?: string
+  /** 기존 목적지 대신 새 그룹을 만들고 그쪽으로 모읍니다. */
+  newGroup?: {
+    title: string
+  }
 }
 
 export interface MapGroupSummary {

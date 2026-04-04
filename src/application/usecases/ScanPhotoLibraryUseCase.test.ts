@@ -481,7 +481,7 @@ describe('ScanPhotoLibraryUseCase', () => {
       },
       locationSource: 'assigned-from-group',
       regionName: 'seoul',
-      outputRelativePath: '2026/04/seoul/2026-04-03_110000_IMG_2001_001.JPG'
+      outputRelativePath: '2026/04/서울_산책/2026-04-03_110000_IMG_2001_001.JPG'
     })
     expect(movedPhoto?.originalGps).toBeUndefined()
     expect(getSavedIndex()?.groups).toHaveLength(1)

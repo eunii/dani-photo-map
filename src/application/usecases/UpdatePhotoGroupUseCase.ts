@@ -95,6 +95,7 @@ export class UpdatePhotoGroupUseCase {
         ? {
             ...currentGroup,
             title: nextTitle,
+            displayTitle: nextTitle,
             companions: normalizeCompanions(validatedCommand.companions),
             notes: normalizeNotes(validatedCommand.notes),
             representativePhotoId,

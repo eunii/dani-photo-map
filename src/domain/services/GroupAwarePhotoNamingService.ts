@@ -1,14 +1,11 @@
 import type { Photo } from '@domain/entities/Photo'
 import type { OrganizationRules } from '@domain/policies/OrganizationRules'
 import type { PhotoTimestamp } from '@domain/value-objects/PhotoTimestamp'
-import { createOrganizedPhotoFileName } from '@domain/services/PhotoNamingService'
-
-function sanitizeFileNameSegment(value: string): string {
-  return value
-    .trim()
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
-    .replace(/\s+/g, '_')
-}
+import {
+  buildScanOutputDirectoryRelativePath,
+  createOrganizedPhotoFileName,
+  resolveGroupLabelForOutputFileName
+} from '@domain/services/PhotoNamingService'
 
 function splitFileName(originalFileName: string): {
   baseName: string
@@ -33,17 +30,6 @@ function formatSequenceNumber(sequenceNumber: number): string {
   return String(sequenceNumber).padStart(3, '0')
 }
 
-function resolvePhotoRegionSegment(
-  photo: Pick<Photo, 'gps' | 'regionName' | 'missingGpsCategory'>,
-  rules: OrganizationRules
-): string {
-  if (!photo.gps && photo.missingGpsCategory === 'capture') {
-    return rules.captureRegionLabel
-  }
-
-  return photo.regionName ?? rules.unknownRegionLabel
-}
-
 /**
  * 그룹 이동·이름 변경 시 파일명: `YYYY-MM-DD_HHMMSS_원본베이스_시퀀스.확장자` (시퀀스는 최소 001).
  */
@@ -57,6 +43,10 @@ export function createGroupAwarePhotoFileName(
   return createOrganizedPhotoFileName(originalFileName, timestamp, suffix)
 }
 
+/**
+ * 그룹 이동 후 경로: 스캔 출력과 같이 `년/월/[그룹 라벨]/파일명`.
+ * 라벨은 합쳐진 그룹 제목에서 파생하며, 지리적 `regionName`(예: base)만 쓰지 않습니다.
+ */
 export function buildGroupAwarePhotoOutputRelativePath(
   photo: Pick<
     Photo,
@@ -66,25 +56,22 @@ export function buildGroupAwarePhotoOutputRelativePath(
     | 'sourceFileName'
     | 'missingGpsCategory'
   >,
-  _groupTitle: string,
+  groupTitle: string,
   sequenceNumber: number,
   rules: OrganizationRules
 ): string {
-  const regionName = sanitizeFileNameSegment(resolvePhotoRegionSegment(photo, rules))
-  const safeTimestamp = photo.capturedAt ?? {
-    iso: '0000-00-00T00:00:00.000Z',
-    year: '0000',
-    month: '00',
-    day: '00',
-    time: '000000'
-  }
+  const groupLabel = resolveGroupLabelForOutputFileName(
+    { displayTitle: groupTitle },
+    rules
+  )
+  const directory = buildScanOutputDirectoryRelativePath(photo, groupLabel, rules)
   const fileName = createGroupAwarePhotoFileName(
     photo.sourceFileName,
     sequenceNumber,
     photo.capturedAt
   )
 
-  return [safeTimestamp.year, safeTimestamp.month, regionName, fileName].join('/')
+  return [directory, fileName].join('/')
 }
 
 /** `createOrganizedPhotoFileName`과 동일한 stem + `_NNN` 확장 패턴으로 충돌 탐지용. */

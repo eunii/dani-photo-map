@@ -23,7 +23,7 @@ describe('GroupAwarePhotoNamingService', () => {
     expect(fileName).toBe('2026-04-03_101112_IMG_1001_001.JPG')
   })
 
-  it('builds output paths using the existing year, month, and region folders', () => {
+  it('builds output paths as year/month/group-label from the merged group title', () => {
     const relativePath = buildGroupAwarePhotoOutputRelativePath(
       {
         sourceFileName: 'IMG_1001.JPG',
@@ -41,6 +41,6 @@ describe('GroupAwarePhotoNamingService', () => {
       defaultOrganizationRules
     )
 
-    expect(relativePath).toBe('2026/04/seoul/2026-04-03_101112_IMG_1001_012.JPG')
+    expect(relativePath).toBe('2026/04/서울_산책/2026-04-03_101112_IMG_1001_012.JPG')
   })
 })

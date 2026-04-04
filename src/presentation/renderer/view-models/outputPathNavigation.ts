@@ -50,6 +50,29 @@ export interface SubfolderEntry {
   photoCount: number
 }
 
+/**
+ * `pathSegments` 바로 아래 `subfolderSegment` 폴더(또는 그 하위)에 있는 사진이 속한 첫 그룹 id.
+ * (예: `2026/04` + `서울_산책` → 해당 경로 접두사를 가진 첫 사진의 그룹)
+ */
+export function findFirstGroupIdUnderSubfolder(
+  rows: FlatPhotoRow[],
+  pathSegments: string[],
+  subfolderSegment: string
+): string | undefined {
+  const prefix = [...pathSegments, subfolderSegment]
+  for (const row of rows) {
+    const parsed = parseOutputDir(row.photo.outputRelativePath)
+    if (parsed.kind !== 'nested') {
+      continue
+    }
+    if (!pathStartsWith(parsed.segments, prefix)) {
+      continue
+    }
+    return row.groupId
+  }
+  return undefined
+}
+
 export function listSubfoldersAtPath(
   rows: FlatPhotoRow[],
   currentPath: string[]
