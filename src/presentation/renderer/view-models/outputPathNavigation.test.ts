@@ -3,6 +3,7 @@
 import type { FlatPhotoRow } from '@presentation/renderer/view-models/flattenLibraryPhotos'
 import {
   buildOutputFolderTree,
+  countPhotosInSubtree,
   filterRowsAtPath,
   formatPathSegmentLabel,
   listSubfoldersAtPath,
@@ -85,6 +86,24 @@ describe('formatPathSegmentLabel', () => {
       '출력 폴더 바로 아래'
     )
     expect(formatPathSegmentLabel('2026')).toBe('2026')
+  })
+})
+
+describe('countPhotosInSubtree', () => {
+  it('counts all rows at library root', () => {
+    const rows = [row('1', '2026/a.jpg'), row('2', '2025/b.jpg')]
+    expect(countPhotosInSubtree(rows, [])).toBe(2)
+  })
+
+  it('includes nested folders under prefix', () => {
+    const rows = [
+      row('1', '2026/04/seoul/a.jpg'),
+      row('2', '2026/04/seoul/b.jpg'),
+      row('3', '2026/04/busan/c.jpg'),
+      row('4', '2025/x.jpg')
+    ]
+    expect(countPhotosInSubtree(rows, ['2026', '04'])).toBe(3)
+    expect(countPhotosInSubtree(rows, ['2026', '04', 'seoul'])).toBe(2)
   })
 })
 

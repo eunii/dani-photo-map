@@ -19,6 +19,7 @@ import {
 } from '@presentation/renderer/view-models/flattenLibraryPhotos'
 import {
   buildOutputFolderTree,
+  countPhotosInSubtree,
   filterRowsAtPath,
   formatPathSegmentLabel
 } from '@presentation/renderer/view-models/outputPathNavigation'
@@ -147,6 +148,10 @@ export function FileListPage() {
 
   const totalCount = sortedRows.length
   const folderCount = rowsInFolder.length
+  const subtreeCount = useMemo(
+    () => countPhotosInSubtree(sortedRows, pathSegments),
+    [sortedRows, pathSegments]
+  )
 
   const breadcrumbPathLabel = useMemo(() => {
     if (pathSegments.length === 0) {
@@ -217,12 +222,25 @@ export function FileListPage() {
           <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
             전체 {totalCount}장
           </div>
-          <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
-            이 위치 {folderCount}장
-          </div>
+          {pathSegments.length > 0 ? (
+            <div
+              className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700"
+              title="가장 안쪽 폴더에 있는 파일까지 모두 더한 수입니다."
+            >
+              이 경로 합계 {subtreeCount}장
+            </div>
+          ) : null}
+          {pathSegments.length > 0 && folderCount < subtreeCount ? (
+            <div
+              className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600"
+              title="이 경로 폴더에 직접 들어 있는 파일만. 목록에도 이 기준으로만 나옵니다."
+            >
+              이 폴더에만 {folderCount}장
+            </div>
+          ) : null}
           {hasMore ? (
             <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500">
-              목록 표시 {visibleRows.length} / {folderCount}
+              목록 표시 {visibleRows.length} / 직접 {folderCount}
             </div>
           ) : null}
           <label className="ml-auto flex items-center gap-2 text-sm text-slate-600">

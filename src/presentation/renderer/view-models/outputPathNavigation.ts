@@ -120,6 +120,30 @@ export function filterRowsAtPath(
   })
 }
 
+/**
+ * `pathSegments` 기준으로, 그 안쪽 폴더에 들어 있는 파일까지 모두 합친 사진 수.
+ * 트리 노드의 `totalPhotoCount`와 같은 기준입니다.
+ */
+export function countPhotosInSubtree(
+  rows: FlatPhotoRow[],
+  pathSegments: string[]
+): number {
+  if (pathSegments.length === 0) {
+    return rows.length
+  }
+  if (pathSegments.length === 1 && pathSegments[0] === NO_OUTPUT_PATH_SEGMENT) {
+    return rows.filter(
+      (row) => parseOutputDir(row.photo.outputRelativePath).kind === 'orphan'
+    ).length
+  }
+  if (pathSegments.length === 1 && pathSegments[0] === ROOT_LEVEL_FILES_SEGMENT) {
+    return rows.filter(
+      (row) => parseOutputDir(row.photo.outputRelativePath).kind === 'rootFile'
+    ).length
+  }
+  return countPhotosUnderPrefix(rows, pathSegments)
+}
+
 export function formatPathSegmentLabel(segment: string): string {
   if (segment === NO_OUTPUT_PATH_SEGMENT) return '출력 경로 없음'
   if (segment === ROOT_LEVEL_FILES_SEGMENT) return '출력 폴더 바로 아래'
@@ -137,7 +161,7 @@ export interface OutputFolderTreeNode {
   segmentKey: string
   directRows: FlatPhotoRow[]
   children: OutputFolderTreeNode[]
-  /** Photos in this folder or any descendant. */
+  /** 직접 이 폴더에 있는 파일 + 자식 폴더들에 합산된 수(최안쪽 파일까지 합침). */
   totalPhotoCount: number
 }
 

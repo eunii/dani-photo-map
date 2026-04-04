@@ -71,8 +71,11 @@ function TreeBranch({
           onClick={() => onSelectPath(node.pathSegments)}
         >
           {formatPathSegmentLabel(node.segmentKey || node.displayLabel)}
-          <span className="ml-1 text-xs font-normal text-slate-500">
-            ({node.totalPhotoCount})
+          <span
+            className="ml-1 shrink-0 text-xs font-normal text-slate-500"
+            title="가장 안쪽 폴더에 있는 파일까지 모두 더한 합계입니다."
+          >
+            ({node.totalPhotoCount}장)
           </span>
         </button>
       </div>
