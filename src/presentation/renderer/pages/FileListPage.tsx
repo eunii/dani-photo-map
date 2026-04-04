@@ -858,12 +858,17 @@ export function FileListPage() {
                               <button
                                 type="button"
                                 onClick={() => setSelectedPhotoId(row.photo.id)}
-                                className="min-w-0 flex-1 px-2 py-2 text-left"
+                                className="w-full min-w-0 flex-1 px-2 py-2 text-left"
                               >
-                                <p className="line-clamp-2 text-xs font-medium text-slate-900">
+                                <p className="truncate text-xs font-medium text-slate-900">
                                   {row.photo.sourceFileName}
                                 </p>
-                                <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">
+                                <p
+                                  className="mt-0.5 truncate text-[11px] text-slate-500"
+                                  title={
+                                    `${formatCapturedLabel(row.photo.capturedAtIso)} · ${row.groupDisplayTitle}`
+                                  }
+                                >
                                   {formatCapturedLabel(row.photo.capturedAtIso)} ·{' '}
                                   {row.groupDisplayTitle}
                                 </p>
