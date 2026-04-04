@@ -126,7 +126,7 @@ describe('MovePhotosToGroupUseCase', () => {
       },
       locationSource: 'assigned-from-group',
       regionName: 'seoul',
-      outputRelativePath: '2026/04/seoul/2026-04-03_1100_서울_산책_001.JPG'
+      outputRelativePath: '2026/04/seoul/2026-04-03_110000_IMG_0001_001.JPG'
     })
     expect(movedPhoto?.originalGps).toBeUndefined()
     expect(updatedIndex.groups.find((group) => group.id === 'group-source')).toBeUndefined()

@@ -206,7 +206,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     ])
     expect(dependencies.fileSystem.copyFile).toHaveBeenCalledWith(
       'C:/source/IMG_0001.JPG',
-      'C:/output/2026/04/2026-04-03_080000_base.JPG'
+      'C:/output/2026/04/2026-04-03_080000_IMG_0001.JPG'
     )
   })
 
@@ -293,7 +293,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     })
     expect(dependencies.fileSystem.copyFile).toHaveBeenCalledWith(
       'C:/source/IMG_1001.JPG',
-      'C:/output/2026/04/서울_산책/2026-04-03_080000_서울_산책.JPG'
+      'C:/output/2026/04/서울_산책/2026-04-03_080000_IMG_1001.JPG'
     )
   })
 
@@ -481,7 +481,7 @@ describe('ScanPhotoLibraryUseCase', () => {
       },
       locationSource: 'assigned-from-group',
       regionName: 'seoul',
-      outputRelativePath: '2026/04/seoul/2026-04-03_1100_서울_산책_001.JPG'
+      outputRelativePath: '2026/04/seoul/2026-04-03_110000_IMG_2001_001.JPG'
     })
     expect(movedPhoto?.originalGps).toBeUndefined()
     expect(getSavedIndex()?.groups).toHaveLength(1)

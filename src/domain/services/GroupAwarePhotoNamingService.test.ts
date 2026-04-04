@@ -10,7 +10,6 @@ describe('GroupAwarePhotoNamingService', () => {
   it('creates grouped file names with a three-digit sequence number', () => {
     const fileName = createGroupAwarePhotoFileName(
       'IMG_1001.JPG',
-      '부산 여행',
       1,
       {
         iso: '2026-04-03T10:11:12.000Z',
@@ -21,7 +20,7 @@ describe('GroupAwarePhotoNamingService', () => {
       }
     )
 
-    expect(fileName).toBe('2026-04-03_1011_부산_여행_001.JPG')
+    expect(fileName).toBe('2026-04-03_101112_IMG_1001_001.JPG')
   })
 
   it('builds output paths using the existing year, month, and region folders', () => {
@@ -42,6 +41,6 @@ describe('GroupAwarePhotoNamingService', () => {
       defaultOrganizationRules
     )
 
-    expect(relativePath).toBe('2026/04/seoul/2026-04-03_1011_서울_산책_012.JPG')
+    expect(relativePath).toBe('2026/04/seoul/2026-04-03_101112_IMG_1001_012.JPG')
   })
 })

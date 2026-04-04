@@ -117,10 +117,10 @@ describe('UpdatePhotoGroupUseCase', () => {
       representativeThumbnailRelativePath: '.photo-organizer/thumbnails/photo-2.webp'
     })
     expect(updatedIndex.photos[0]?.outputRelativePath).toBe(
-      '2026/04/seoul/2026-04-03_0800_부산_당일치기_001.JPG'
+      '2026/04/seoul/2026-04-03_080000_IMG_0001_001.JPG'
     )
     expect(updatedIndex.photos[1]?.outputRelativePath).toBe(
-      '2026/04/busan/2026-04-03_0900_부산_당일치기_001.JPG'
+      '2026/04/busan/2026-04-03_090000_IMG_0002_001.JPG'
     )
     expect(fileSystem.moveFile).toHaveBeenCalled()
     expect(savedIndexes).toHaveLength(1)
@@ -152,8 +152,8 @@ describe('UpdatePhotoGroupUseCase', () => {
     const fileSystem = createFileSystem()
     fileSystem.listDirectoryFileNames
       .mockResolvedValueOnce([
-        '2026-04-03_0800_부산_당일치기_001.JPG',
-        '2026-04-03_0800_부산_당일치기_003.JPG'
+        '2026-04-03_080000_IMG_0001_001.JPG',
+        '2026-04-03_080000_IMG_0001_003.JPG'
       ])
       .mockResolvedValueOnce([])
     const store = {
@@ -170,7 +170,7 @@ describe('UpdatePhotoGroupUseCase', () => {
     })
 
     expect(updatedIndex.photos[0]?.outputRelativePath).toBe(
-      '2026/04/seoul/2026-04-03_0800_부산_당일치기_004.JPG'
+      '2026/04/seoul/2026-04-03_080000_IMG_0001_004.JPG'
     )
   })
 

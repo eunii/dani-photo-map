@@ -31,7 +31,7 @@ describe('assignGroupDisplayTitledOutputRelativePaths', () => {
     const p2 = photo({
       id: 'b',
       sourcePath: 'C:/s/b.jpg',
-      sourceFileName: 'b.jpg',
+      sourceFileName: 'a.jpg',
       capturedAt: {
         iso: '2026-04-03T10:00:00.000Z',
         year: '2026',
@@ -54,10 +54,10 @@ describe('assignGroupDisplayTitledOutputRelativePaths', () => {
     })
 
     expect(map.get('a')).toBe(
-      '2026/04/seoul/2026-04-03_100000_seoul.jpg'
+      '2026/04/seoul/2026-04-03_100000_a.jpg'
     )
     expect(map.get('b')).toBe(
-      '2026/04/seoul/2026-04-03_100000_seoul_001.jpg'
+      '2026/04/seoul/2026-04-03_100000_a_001.jpg'
     )
   })
 })

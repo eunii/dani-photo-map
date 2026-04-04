@@ -3,7 +3,7 @@ import type { Photo } from '@domain/entities/Photo'
 import type { OrganizationRules } from '@domain/policies/OrganizationRules'
 import {
   buildGroupAwarePhotoOutputRelativePath,
-  createGroupAwarePhotoFileNamePrefix
+  buildOrganizedNamePatternPrefix
 } from '@domain/services/GroupAwarePhotoNamingService'
 import {
   getPathBaseName,
@@ -96,11 +96,7 @@ export async function createGroupAwareRenamePlan(params: {
       targetDirectoryAbsolutePath,
       targetDirectoryPath
     })
-    const nextSequenceNumber = findNextSequenceNumber(
-      occupiedFileNames,
-      photo,
-      groupTitle
-    )
+    const nextSequenceNumber = findNextSequenceNumber(occupiedFileNames, photo)
     const nextOutputRelativePath = buildGroupAwarePhotoOutputRelativePath(
       photo,
       groupTitle,
@@ -178,15 +174,17 @@ async function getOccupiedFileNames(params: {
 
 function findNextSequenceNumber(
   occupiedFileNames: Set<string>,
-  photo: Photo,
-  groupTitle: string
+  photo: Photo
 ): number {
-  const prefix = createGroupAwarePhotoFileNamePrefix(groupTitle, photo.capturedAt)
-  const fileName = photo.sourceFileName
-  const lastDotIndex = fileName.lastIndexOf('.')
-  const extension = lastDotIndex > 0 ? fileName.slice(lastDotIndex) : ''
+  const stem = buildOrganizedNamePatternPrefix(
+    photo.sourceFileName,
+    photo.capturedAt
+  )
+  const lastDotIndex = photo.sourceFileName.lastIndexOf('.')
+  const extension =
+    lastDotIndex > 0 ? photo.sourceFileName.slice(lastDotIndex) : ''
   const pattern = new RegExp(
-    `^${escapeRegExp(prefix)}_(\\d+)${escapeRegExp(extension)}$`
+    `^${escapeRegExp(stem)}_(\\d{3})${escapeRegExp(extension)}$`
   )
   let maxSequenceNumber = 0
 

@@ -115,7 +115,9 @@ function resolvePhotoRegionSegment(
 
 export function createOrganizedPhotoFileName(
   originalFileName: string,
-  timestamp?: PhotoTimestamp
+  timestamp?: PhotoTimestamp,
+  /** 동일 폴더 내 충돌 시 `''`, `'_001'`, `'_002'` … */
+  nameCollisionSuffix = ''
 ): string {
   const safeTimestamp = getSafeTimestamp(timestamp)
   const { baseName, extension } = splitFileName(originalFileName)
@@ -124,7 +126,7 @@ export function createOrganizedPhotoFileName(
     `${safeTimestamp.year}-${safeTimestamp.month}-${safeTimestamp.day}` +
     `_${safeTimestamp.time}`
 
-  return `${datePrefix}_${sanitizeFileNameSegment(baseName)}${extension}`
+  return `${datePrefix}_${sanitizeFileNameSegment(baseName)}${nameCollisionSuffix}${extension}`
 }
 
 export function buildPhotoOutputRelativePath(
@@ -182,7 +184,8 @@ export function buildScanOutputDirectoryRelativePath(
 }
 
 /**
- * 스캔 복사 최종 상대 경로: 그룹 라벨 폴더 + base 시 `year/month/파일명`.
+ * 스캔 복사 최종 상대 경로: 그룹 라벨로 `year/month[/그룹]` 폴더만 나누고,
+ * 파일명은 `YYYY-MM-DD_HHMMSS_원본파일명`(충돌 시 `_001` 등).
  */
 export function buildScanPhotoOutputRelativePath(
   photo: Pick<Photo, 'capturedAt' | 'sourceFileName'>,
@@ -191,33 +194,12 @@ export function buildScanPhotoOutputRelativePath(
   nameCollisionSuffix: string
 ): string {
   const directory = buildScanOutputDirectoryRelativePath(photo, groupFileLabel, rules)
-  const fileName = buildGroupDisplayTitledPhotoFileName(
-    groupFileLabel,
-    photo.capturedAt,
+  const fileName = createOrganizedPhotoFileName(
     photo.sourceFileName,
+    photo.capturedAt,
     nameCollisionSuffix
   )
 
   return [directory, fileName].join('/')
-}
-
-/**
- * 그룹 표시명 + 촬영 시각 + 원본 확장자 기준 파일명.
- * `nameCollisionSuffix`: 동일 디렉터리 내 충돌 시 `''`, `'_001'`, `'_002'` …
- */
-export function buildGroupDisplayTitledPhotoFileName(
-  groupDisplayTitle: string,
-  capturedAt: PhotoTimestamp | undefined,
-  sourceFileName: string,
-  nameCollisionSuffix: string
-): string {
-  const safeTimestamp = getSafeTimestamp(capturedAt)
-  const { extension } = splitFileName(sourceFileName)
-  const titlePart = sanitizeGroupDisplayTitleForFileName(groupDisplayTitle) || 'group'
-  const datePrefix =
-    `${safeTimestamp.year}-${safeTimestamp.month}-${safeTimestamp.day}` +
-    `_${safeTimestamp.time}`
-
-  return `${datePrefix}_${titlePart}${nameCollisionSuffix}${extension}`
 }
 

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  buildGroupDisplayTitledPhotoFileName,
   buildScanPhotoOutputRelativePath,
   createOrganizedPhotoFileName,
   resolveGroupLabelForOutputFileName,
@@ -59,26 +58,9 @@ describe('PhotoNamingService', () => {
     ).toBe(defaultOrganizationRules.unknownRegionLabel)
   })
 
-  it('builds group-display-titled file name with original extension', () => {
-    const fileName = buildGroupDisplayTitledPhotoFileName(
-      'seoul',
-      {
-        iso: '2025-04-03T10:11:12.000Z',
-        year: '2025',
-        month: '04',
-        day: '03',
-        time: '101112'
-      },
-      'IMG_1001.JPG',
-      ''
-    )
-
-    expect(fileName).toBe('2025-04-03_101112_seoul.JPG')
-  })
-
   it('applies collision suffix before extension', () => {
-    const fileName = buildGroupDisplayTitledPhotoFileName(
-      'base',
+    const fileName = createOrganizedPhotoFileName(
+      'x.png',
       {
         iso: '2025-04-03T10:11:12.000Z',
         year: '2025',
@@ -86,11 +68,10 @@ describe('PhotoNamingService', () => {
         day: '03',
         time: '101112'
       },
-      'x.png',
       '_001'
     )
 
-    expect(fileName).toBe('2025-04-03_101112_base_001.png')
+    expect(fileName).toBe('2025-04-03_101112_x_001.png')
   })
 
   it('builds scan output path with year, month, group label folder', () => {
@@ -111,7 +92,7 @@ describe('PhotoNamingService', () => {
     )
 
     expect(relativePath).toBe(
-      '2025/04/seoul/2025-04-03_101112_seoul.JPG'
+      '2025/04/seoul/2025-04-03_101112_IMG_1001.JPG'
     )
   })
 
@@ -132,7 +113,7 @@ describe('PhotoNamingService', () => {
       ''
     )
 
-    expect(relativePath).toBe('2025/04/2025-04-03_101112_base.JPG')
+    expect(relativePath).toBe('2025/04/2025-04-03_101112_a.JPG')
   })
 
   it('routes capture label to capture subfolder', () => {
@@ -153,7 +134,7 @@ describe('PhotoNamingService', () => {
     )
 
     expect(relativePath).toBe(
-      '2025/04/capture/2025-04-03_101112_capture.png'
+      '2025/04/capture/2025-04-03_101112_shot.png'
     )
   })
 })
