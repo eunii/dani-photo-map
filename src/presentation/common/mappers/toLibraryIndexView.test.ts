@@ -38,7 +38,7 @@ function createLibraryIndex(): LibraryIndex {
         id: 'photo-2',
         sourcePath: 'C:/photos/source/IMG_0002.JPG',
         sourceFileName: 'IMG_0002.JPG',
-        outputRelativePath: '2026/04/location-unknown/IMG_0002.JPG',
+        outputRelativePath: '2026/04/base/IMG_0002.JPG',
         isDuplicate: false,
         metadataIssues: []
       }

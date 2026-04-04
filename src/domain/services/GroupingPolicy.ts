@@ -1,4 +1,5 @@
 import type { Photo } from '@domain/entities/Photo'
+import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import {
   isUsableCapturedAtValue,
   pickEarliestUsableCapturedAtFromPhotos
@@ -21,7 +22,7 @@ interface GroupSeed {
 }
 
 function getPhotoRegionName(photo: Photo): string {
-  return photo.regionName ?? 'location-unknown'
+  return photo.regionName ?? defaultOrganizationRules.unknownRegionLabel
 }
 
 function getPhotoYear(photo: Photo): string {

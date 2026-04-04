@@ -12,7 +12,7 @@ export interface OrganizationRules {
 export const defaultOrganizationRules: OrganizationRules = {
   duplicateStrategy: 'exact-binary',
   fileOperation: 'copy',
-  unknownRegionLabel: 'location-unknown',
+  unknownRegionLabel: 'base',
   captureRegionLabel: 'capture',
   outputIndexRelativePath: '.photo-organizer/index.json',
   outputThumbnailsRelativePath: '.photo-organizer/thumbnails',

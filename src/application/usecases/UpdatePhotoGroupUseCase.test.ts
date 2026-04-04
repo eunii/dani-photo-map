@@ -260,7 +260,7 @@ describe('UpdatePhotoGroupUseCase', () => {
             day: '03',
             time: '090000'
           },
-          outputRelativePath: '2026/04/location-unknown/IMG_0002.JPG',
+          outputRelativePath: '2026/04/base/IMG_0002.JPG',
           thumbnailRelativePath: '.photo-organizer/thumbnails/photo-2.webp',
           isDuplicate: false,
           metadataIssues: ['gps-missing'],
@@ -287,9 +287,9 @@ describe('UpdatePhotoGroupUseCase', () => {
         {
           id: 'group-unknown',
           groupKey:
-            'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+            'group|region=base|year=2026|month=04|day=03|slot=1',
           title: '임시제목',
-          displayTitle: '2026-04-03 location-unknown',
+          displayTitle: '2026-04-03 base',
           photoIds: ['photo-2'],
           companions: [],
           notes: undefined

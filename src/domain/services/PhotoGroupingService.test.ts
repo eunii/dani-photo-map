@@ -56,12 +56,12 @@ describe('PhotoGroupingService', () => {
     expect(groups[0]?.photoIds).toEqual(['photo-1', 'photo-2'])
   })
 
-  it('keeps location-unknown titles intact without parsing errors', () => {
+  it('keeps base titles intact without parsing errors', () => {
     const groups = createPhotoGroups([
       createPhoto({
         id: 'photo-1',
         sourceFileName: 'IMG_0001.JPG',
-        regionName: 'location-unknown',
+        regionName: 'base',
         capturedAt: {
           iso: '2026-04-03T08:00:00.000Z',
           year: '2026',
@@ -74,9 +74,9 @@ describe('PhotoGroupingService', () => {
 
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({
-      title: '2026-04 location-unknown',
-      displayTitle: '2026-04 location-unknown',
-      groupKey: 'group|region=location-unknown|year=2026|month=04|day=00|slot=1'
+      title: '2026-04 base',
+      displayTitle: '2026-04 base',
+      groupKey: 'group|region=base|year=2026|month=04|day=00|slot=1'
     })
   })
 

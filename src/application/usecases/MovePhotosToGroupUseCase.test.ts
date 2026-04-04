@@ -25,7 +25,7 @@ function createLibraryIndex(): LibraryIndex {
     photos: [
       {
         id: 'source-photo-1',
-        sourcePath: 'C:/photos/output/2026/04/location-unknown/IMG_0001.JPG',
+        sourcePath: 'C:/photos/output/2026/04/base/IMG_0001.JPG',
         sourceFileName: 'IMG_0001.JPG',
         sha256: 'hash-1',
         capturedAt: {
@@ -35,7 +35,7 @@ function createLibraryIndex(): LibraryIndex {
           day: '03',
           time: '110000'
         },
-        outputRelativePath: '2026/04/location-unknown/IMG_0001.JPG',
+        outputRelativePath: '2026/04/base/IMG_0001.JPG',
         isDuplicate: false,
         metadataIssues: ['gps-missing'],
         missingGpsCategory: 'missing-original-gps',
@@ -72,9 +72,9 @@ function createLibraryIndex(): LibraryIndex {
     groups: [
       {
         id: 'group-source',
-        groupKey: 'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
-        title: '2026-04-03 location-unknown',
-        displayTitle: '2026-04-03 location-unknown',
+        groupKey: 'group|region=base|year=2026|month=04|day=03|slot=1',
+        title: '2026-04-03 base',
+        displayTitle: '2026-04-03 base',
         photoIds: ['source-photo-1'],
         companions: [],
         notes: undefined

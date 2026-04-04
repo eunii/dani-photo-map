@@ -98,7 +98,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     dependencies.fileSystem.copyFile
       .mockRejectedValueOnce(
         new PhotoFileConflictError(
-          'C:/output/0000/00/location-unknown/0000-00-00_000000_IMG_0001.JPG'
+          'C:/output/0000/00/base/0000-00-00_000000_IMG_0001.JPG'
         )
       )
       .mockResolvedValueOnce(undefined)
@@ -206,7 +206,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     ])
     expect(dependencies.fileSystem.copyFile).toHaveBeenCalledWith(
       'C:/source/IMG_0001.JPG',
-      'C:/output/2026/04/location-unknown/2026-04-03_080000_IMG_0001.JPG'
+      'C:/output/2026/04/base/2026-04-03_080000_IMG_0001.JPG'
     )
   })
 
@@ -242,7 +242,7 @@ describe('ScanPhotoLibraryUseCase', () => {
       stage: 'region-resolve'
     })
     expect(getSavedIndex()?.photos[0]).toMatchObject({
-      regionName: 'location-unknown',
+      regionName: 'base',
       metadataIssues: ['region-resolve-failed']
     })
   })
@@ -461,7 +461,7 @@ describe('ScanPhotoLibraryUseCase', () => {
       outputRoot: 'C:\\output',
       pendingGroupAssignments: [
         {
-          groupKey: 'group|region=location-unknown|year=2026|month=04|day=00|slot=1',
+          groupKey: 'group|region=base|year=2026|month=04|day=00|slot=1',
           targetGroupId: 'group|region=seoul|year=2026|month=04|day=00|slot=1'
         }
       ]
@@ -516,13 +516,13 @@ describe('ScanPhotoLibraryUseCase', () => {
       outputRoot: 'C:\\output',
       pendingCustomGroupSplits: [
         {
-          groupKey: 'group|region=location-unknown|year=2026|month=04|day=00|slot=1',
+          groupKey: 'group|region=base|year=2026|month=04|day=00|slot=1',
           splitId: 'split-a',
           title: '카페',
           photoIds: ['photo-1']
         },
         {
-          groupKey: 'group|region=location-unknown|year=2026|month=04|day=00|slot=1',
+          groupKey: 'group|region=base|year=2026|month=04|day=00|slot=1',
           splitId: 'split-b',
           title: '실내',
           photoIds: ['photo-2']
@@ -531,7 +531,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     })
 
     expect(getSavedIndex()?.groups.map((group) => group.title).sort()).toEqual([
-      '2026-04 location-unknown',
+      '2026-04 base',
       '실내',
       '카페'
     ].sort())
@@ -540,7 +540,7 @@ describe('ScanPhotoLibraryUseCase', () => {
         (getSavedIndex()?.groups ?? []).map((group) => [group.title, group.photoIds])
       )
     ).toEqual({
-      '2026-04 location-unknown': ['photo-3'],
+      '2026-04 base': ['photo-3'],
       카페: ['photo-1'],
       실내: ['photo-2']
     })
@@ -661,7 +661,7 @@ describe('ScanPhotoLibraryUseCase', () => {
         },
         {
           groupKey:
-            'group|region=location-unknown|year=2026|month=04|day=00|slot=1',
+            'group|region=base|year=2026|month=04|day=00|slot=1',
           title: '동일제목',
           companions: [],
           notes: undefined
@@ -717,14 +717,14 @@ describe('ScanPhotoLibraryUseCase', () => {
       groupMetadataOverrides: [
         {
           groupKey:
-            'group|region=location-unknown|year=2026|month=04|day=00|slot=1',
+            'group|region=base|year=2026|month=04|day=00|slot=1',
           title: '무GPS동일제목',
           companions: [],
           notes: undefined
         },
         {
           groupKey:
-            'group|region=location-unknown|year=2026|month=05|day=00|slot=2',
+            'group|region=base|year=2026|month=05|day=00|slot=2',
           title: '무GPS동일제목',
           companions: [],
           notes: undefined

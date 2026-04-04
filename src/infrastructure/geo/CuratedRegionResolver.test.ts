@@ -7,7 +7,7 @@ import { CuratedRegionResolver } from '@infrastructure/geo/CuratedRegionResolver
 describe('CuratedRegionResolver', () => {
   it('resolves a curated metropolitan region when coordinates match', async () => {
     const fallbackResolver: RegionResolverPort = {
-      resolveName: vi.fn().mockResolvedValue('location-unknown')
+      resolveName: vi.fn().mockResolvedValue('base')
     }
     const resolver = new CuratedRegionResolver(fallbackResolver)
 
@@ -21,7 +21,7 @@ describe('CuratedRegionResolver', () => {
 
   it('falls back to a broader country-level region when no detailed box matches', async () => {
     const fallbackResolver: RegionResolverPort = {
-      resolveName: vi.fn().mockResolvedValue('location-unknown')
+      resolveName: vi.fn().mockResolvedValue('base')
     }
     const resolver = new CuratedRegionResolver(fallbackResolver)
 
@@ -35,7 +35,7 @@ describe('CuratedRegionResolver', () => {
 
   it('delegates to the fallback resolver when no curated region matches', async () => {
     const fallbackResolver: RegionResolverPort = {
-      resolveName: vi.fn().mockResolvedValue('location-unknown')
+      resolveName: vi.fn().mockResolvedValue('base')
     }
     const resolver = new CuratedRegionResolver(fallbackResolver)
 
@@ -44,7 +44,7 @@ describe('CuratedRegionResolver', () => {
         latitude: -33.8688,
         longitude: 151.2093
       })
-    ).resolves.toBe('location-unknown')
+    ).resolves.toBe('base')
     expect(fallbackResolver.resolveName).toHaveBeenCalledOnce()
   })
 })
@@ -76,7 +76,7 @@ describe('CachedRegionResolver', () => {
 describe('CuratedRegionResolver finer regions', () => {
   it('resolves Gangwon inje-gun', async () => {
     const fallbackResolver: RegionResolverPort = {
-      resolveName: vi.fn().mockResolvedValue('location-unknown')
+      resolveName: vi.fn().mockResolvedValue('base')
     }
     const resolver = new CuratedRegionResolver(fallbackResolver)
 
@@ -90,7 +90,7 @@ describe('CuratedRegionResolver finer regions', () => {
 
   it('resolves Gyeonggi city before province', async () => {
     const fallbackResolver: RegionResolverPort = {
-      resolveName: vi.fn().mockResolvedValue('location-unknown')
+      resolveName: vi.fn().mockResolvedValue('base')
     }
     const resolver = new CuratedRegionResolver(fallbackResolver)
 
@@ -104,7 +104,7 @@ describe('CuratedRegionResolver finer regions', () => {
 
   it('resolves US city before state', async () => {
     const fallbackResolver: RegionResolverPort = {
-      resolveName: vi.fn().mockResolvedValue('location-unknown')
+      resolveName: vi.fn().mockResolvedValue('base')
     }
     const resolver = new CuratedRegionResolver(fallbackResolver)
 

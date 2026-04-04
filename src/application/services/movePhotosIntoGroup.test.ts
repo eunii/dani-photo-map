@@ -37,8 +37,8 @@ describe('movePhotosIntoGroup', () => {
     const movingPhoto = basePhoto({
       id: 'move-1',
       gps: undefined,
-      regionName: 'location-unknown',
-      outputRelativePath: '0000/00/location-unknown/p_001.jpg',
+      regionName: 'base',
+      outputRelativePath: '0000/00/base/p_001.jpg',
       locationSource: 'none'
     })
     const destinationGroup: PhotoGroup = {
@@ -108,7 +108,7 @@ describe('movePhotosIntoGroup', () => {
     })
     const movingPhoto = basePhoto({
       id: 'move-2',
-      outputRelativePath: '0000/00/location-unknown/p_002.jpg',
+      outputRelativePath: '0000/00/base/p_002.jpg',
       locationSource: 'none'
     })
     const destinationGroup: PhotoGroup = {
