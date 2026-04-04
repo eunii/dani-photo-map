@@ -100,6 +100,15 @@ describe('LoadLibraryIndexUseCase', () => {
         longitude: 126.978
       }
     })
+    expect(libraryIndexStore.save).toHaveBeenCalledTimes(1)
+    expect(libraryIndexStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputRoot: 'C:/photos/output',
+        groups: expect.arrayContaining([
+          expect.objectContaining({ title: '서울 산책' })
+        ])
+      })
+    )
   })
 
   it('falls back to scanning existing output when index loading fails', async () => {
@@ -140,5 +149,6 @@ describe('LoadLibraryIndexUseCase', () => {
     expect(existingOutputScanner.scan).toHaveBeenCalledWith('C:/photos/output')
     expect(result.source).toBe('fallback')
     expect(result.index?.groups).toHaveLength(1)
+    expect(libraryIndexStore.save).not.toHaveBeenCalled()
   })
 })

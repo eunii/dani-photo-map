@@ -36,9 +36,23 @@ export class LoadLibraryIndexUseCase {
       }
     }
 
+    const mergedIndex = mergeStoredLibraryMetadata(rebuiltIndex, storedIndex)
+
+    if (storedIndex) {
+      const toPersist: LibraryIndex = {
+        ...mergedIndex,
+        generatedAt: new Date().toISOString()
+      }
+      await this.libraryIndexStore.save(toPersist)
+      return {
+        index: toPersist,
+        source: 'merged'
+      }
+    }
+
     return {
-      index: mergeStoredLibraryMetadata(rebuiltIndex, storedIndex),
-      source: storedIndex ? 'merged' : 'fallback'
+      index: mergedIndex,
+      source: 'fallback'
     }
   }
 

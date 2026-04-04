@@ -214,10 +214,6 @@ export async function movePhotosIntoGroup(params: {
   }
 
   if (!destinationRegionName) {
-    if (destinationGps) {
-      throw new Error('Destination group region could not be resolved.')
-    }
-
     destinationRegionName = rules.unknownRegionLabel
   }
 

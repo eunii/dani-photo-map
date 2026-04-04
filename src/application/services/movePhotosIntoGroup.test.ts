@@ -160,4 +160,78 @@ describe('movePhotosIntoGroup', () => {
     expect(moved?.capturedAt?.day).toBe('10')
     expect(moved?.capturedAtSource).toBe('inferred-from-group-title')
   })
+
+  it('uses unknown region label when destination has GPS but region cannot be inferred from paths', async () => {
+    const destCaptured = {
+      iso: '2026-03-31T12:00:00.000Z',
+      year: '2026',
+      month: '03',
+      day: '31',
+      time: '120000'
+    }
+    const destPhoto = basePhoto({
+      id: 'dest-no-region-path',
+      capturedAt: destCaptured,
+      capturedAtSource: 'exif-date-time-original',
+      gps: { latitude: 37.3, longitude: 127.0 },
+      regionName: undefined,
+      outputRelativePath: '2026/03/2026-03-31_120000_dest.jpg',
+      locationSource: 'exif'
+    })
+    const movingPhoto = basePhoto({
+      id: 'move-no-region-fallback',
+      gps: undefined,
+      regionName: 'base',
+      outputRelativePath: '0000/00/base/p_003.jpg',
+      locationSource: 'none'
+    })
+    const destinationGroup: PhotoGroup = {
+      id: 'g-dest-noregion',
+      groupKey: 'gk-dest-noregion',
+      title: '2026-03-31 seoul',
+      displayTitle: '2026-03-31 seoul',
+      photoIds: ['dest-no-region-path'],
+      representativePhotoId: 'dest-no-region-path',
+      representativeGps: destPhoto.gps,
+      companions: []
+    }
+    const sourceGroup: PhotoGroup = {
+      id: 'g-src-noregion',
+      groupKey: 'gk-src-noregion',
+      title: 'pending',
+      displayTitle: 'pending',
+      photoIds: ['move-no-region-fallback'],
+      representativePhotoId: 'move-no-region-fallback',
+      companions: []
+    }
+    const index: LibraryIndex = {
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      sourceRoot: 'C:/in',
+      outputRoot: 'C:/out',
+      photos: [destPhoto, movingPhoto],
+      groups: [destinationGroup, sourceGroup]
+    }
+    const fileSystem = {
+      ensureDirectory: vi.fn().mockResolvedValue(undefined),
+      listDirectoryFileNames: vi.fn().mockResolvedValue([]),
+      moveFile: vi.fn().mockResolvedValue(undefined)
+    }
+
+    const result = await movePhotosIntoGroup({
+      index,
+      outputRoot: 'C:/out',
+      sourceGroupId: 'g-src-noregion',
+      destinationGroupId: 'g-dest-noregion',
+      photoIds: ['move-no-region-fallback'],
+      fileSystem,
+      rules: defaultOrganizationRules
+    })
+
+    const moved = result.photos.find((photo) => photo.id === 'move-no-region-fallback')
+
+    expect(moved?.gps).toEqual(destPhoto.gps)
+    expect(moved?.regionName).toBe('base')
+    expect(moved?.outputRelativePath?.startsWith('2026/03/')).toBe(true)
+  })
 })
