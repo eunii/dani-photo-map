@@ -214,7 +214,7 @@ export function FileListPage() {
 
   const breadcrumbPathLabel = useMemo(() => {
     if (pathSegments.length === 0) {
-      return '출력'
+      return '홈'
     }
     return pathSegments.map(formatPathSegmentLabel).join(' / ')
   }, [pathSegments])
@@ -231,12 +231,12 @@ export function FileListPage() {
   const destinationListContextLabel = useMemo(() => {
     if (moveDestinationUsesChildFolders) {
       if (pathSegments.length === 0) {
-        return '출력'
+        return '홈'
       }
       return pathSegments.map(formatPathSegmentLabel).join(' / ')
     }
     if (pathSegments.length <= 1) {
-      return '출력'
+      return '홈'
     }
     return pathSegments
       .slice(0, -1)
@@ -637,7 +637,7 @@ export function FileListPage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_minmax(260px,360px)] lg:items-start">
+          <div className="grid gap-4 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] lg:items-start">
             <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
               <OutputFolderTreePanel
                 folderTreeRoot={folderTree}
@@ -646,19 +646,19 @@ export function FileListPage() {
               />
             </div>
 
-            <div className="space-y-3 min-w-0">
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="flex flex-wrap items-start gap-2 border-b border-slate-100 px-3 py-2 sm:items-center">
+            <div className="flex min-w-0 flex-col gap-3">
+              <div className="w-full overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-2 py-1.5">
                   <nav
-                    className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-sm text-slate-700"
-                    aria-label="출력 경로"
+                    className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5 text-xs text-slate-700"
+                    aria-label="폴더 경로"
                   >
                     <button
                       type="button"
-                      className="rounded-md px-2 py-1 font-medium text-sky-700 hover:bg-sky-50"
+                      className="rounded px-1.5 py-0.5 font-medium text-sky-700 hover:bg-sky-50"
                       onClick={() => setPathSegments([])}
                     >
-                      출력
+                      홈
                     </button>
                     {pathSegments.map((segment, index) => (
                       <span key={`${segment}-${index}`} className="flex items-center gap-1">
@@ -667,7 +667,7 @@ export function FileListPage() {
                         </span>
                         <button
                           type="button"
-                          className="max-w-[min(200px,28vw)] truncate rounded-md px-2 py-1 font-medium text-sky-700 hover:bg-sky-50"
+                          className="max-w-[min(200px,28vw)] truncate rounded px-1.5 py-0.5 font-medium text-sky-700 hover:bg-sky-50"
                           title={formatPathSegmentLabel(segment)}
                           onClick={() =>
                             setPathSegments(pathSegments.slice(0, index + 1))
@@ -681,7 +681,7 @@ export function FileListPage() {
                   {pathSegments.length > 0 && libraryIndex ? (
                     <button
                       type="button"
-                      className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="shrink-0 rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={
                         isDeletingFolder || isDeletingPhotos || isMovingPhotos
                       }
@@ -691,20 +691,13 @@ export function FileListPage() {
                     </button>
                   ) : null}
                 </div>
-                <p className="border-b border-slate-50 px-3 py-2 text-xs text-slate-500">
-                  {breadcrumbPathLabel}
-                </p>
 
                 {folderCount > 0 && libraryIndex ? (
-                  <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-between sm:gap-4">
-                    <div className="flex min-w-0 flex-col gap-2 sm:flex-1">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                        이동 · 이름
-                      </span>
-                      <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col gap-1.5 border-t border-slate-50 px-2 py-1.5 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between lg:gap-3">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                         <button
                           type="button"
-                          className="inline-flex min-h-[2.25rem] items-center justify-center rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          className="inline-flex items-center justify-center rounded-md bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                           disabled={selectedForMove.size === 0 || isMovingPhotos}
                           onClick={() => {
                             const first = moveDestinationFolderOptions[0]
@@ -725,7 +718,7 @@ export function FileListPage() {
                         {canRenameGroupFolderFromTree ? (
                           <button
                             type="button"
-                            className="inline-flex min-h-[2.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={
                               folderCount === 0 ||
                               groupsInCurrentFolder.length === 0 ||
@@ -751,17 +744,12 @@ export function FileListPage() {
                             이름 변경
                           </button>
                         ) : null}
-                      </div>
                     </div>
-                    <div className="hidden w-px shrink-0 bg-slate-200 sm:block sm:self-stretch" aria-hidden />
-                    <div className="flex min-w-0 flex-col gap-2 sm:flex-1">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                        선택 · 삭제
-                      </span>
-                      <div className="flex flex-wrap gap-2">
+                    <div className="hidden w-px shrink-0 self-stretch bg-slate-200 lg:block" aria-hidden />
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:justify-end">
                         <button
                           type="button"
-                          className="inline-flex min-h-[2.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={visibleRows.length === 0}
                           onClick={() => toggleSelectAllVisible()}
                         >
@@ -769,7 +757,7 @@ export function FileListPage() {
                         </button>
                         <button
                           type="button"
-                          className="inline-flex min-h-[2.25rem] items-center justify-center rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-900 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-900 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={
                             selectedForMove.size === 0 ||
                             isDeletingPhotos ||
@@ -779,19 +767,19 @@ export function FileListPage() {
                         >
                           선택 삭제
                         </button>
-                      </div>
                     </div>
                   </div>
                 ) : null}
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="border-b border-slate-100 px-3 py-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    이 폴더의 사진
-                  </h3>
-                </div>
-                <div className="max-h-[min(55vh,720px)] overflow-y-auto">
+              <div className="grid min-h-0 w-full min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,380px)] lg:items-start">
+                <div className="min-h-0 min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <div className="border-b border-slate-100 px-3 py-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      이 폴더의 사진
+                    </h3>
+                  </div>
+                  <div className="max-h-[min(55vh,720px)] overflow-y-auto">
                   {folderCount === 0 ? (
                     <p className="px-4 py-8 text-center text-sm text-slate-500">
                       이 경로에 직접 있는 사진이 없습니다. 왼쪽 트리에서 다른
@@ -886,61 +874,66 @@ export function FileListPage() {
                       ) : null}
                     </>
                   )}
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <h2 className="text-sm font-semibold text-slate-900">미리보기</h2>
-              {!selectedRow ? (
-                <p className="mt-4 text-sm text-slate-600">
-                  목록에서 사진을 선택하면 썸네일 미리보기가 표시됩니다.
-                </p>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                    {previewThumbUrl ? (
-                      <img
-                        src={previewThumbUrl}
-                        alt={selectedRow.photo.sourceFileName}
-                        loading="lazy"
-                        decoding="async"
-                        className="max-h-[min(50vh,480px)] w-full object-contain"
-                      />
+                <div className="min-h-0 min-w-0 lg:sticky lg:top-4 lg:self-start">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <h2 className="text-sm font-semibold text-slate-900">미리보기</h2>
+                    {!selectedRow ? (
+                      <p className="mt-4 text-sm text-slate-600">
+                        목록에서 사진을 선택하면 썸네일 미리보기가 표시됩니다.
+                      </p>
                     ) : (
-                      <div className="flex min-h-[200px] items-center justify-center text-sm text-slate-500">
-                        미리보기를 불러올 수 없습니다.
+                      <div className="mt-4 space-y-3">
+                        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                          {previewThumbUrl ? (
+                            <img
+                              src={previewThumbUrl}
+                              alt={selectedRow.photo.sourceFileName}
+                              loading="lazy"
+                              decoding="async"
+                              className="max-h-[min(42vh,400px)] w-full object-contain"
+                            />
+                          ) : (
+                            <div className="flex min-h-[160px] items-center justify-center text-sm text-slate-500">
+                              미리보기를 불러올 수 없습니다.
+                            </div>
+                          )}
+                        </div>
+                        <dl className="space-y-2 text-sm">
+                          <div>
+                            <dt className="text-xs text-slate-500">파일명</dt>
+                            <dd className="break-all font-medium text-slate-900">
+                              {selectedRow.photo.sourceFileName}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">촬영 시각</dt>
+                            <dd className="text-slate-800">
+                              {formatCapturedLabel(selectedRow.photo.capturedAtIso)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-slate-500">폴더(그룹)</dt>
+                            <dd className="text-slate-800">
+                              {selectedRow.groupDisplayTitle}
+                            </dd>
+                          </div>
+                          {selectedRow.photo.outputRelativePath ? (
+                            <div>
+                              <dt className="text-xs text-slate-500">출력 상대 경로</dt>
+                              <dd className="break-all font-mono text-xs text-slate-700">
+                                {selectedRow.photo.outputRelativePath}
+                              </dd>
+                            </div>
+                          ) : null}
+                        </dl>
                       </div>
                     )}
                   </div>
-                  <dl className="space-y-2 text-sm">
-                    <div>
-                      <dt className="text-xs text-slate-500">파일명</dt>
-                      <dd className="break-all font-medium text-slate-900">
-                        {selectedRow.photo.sourceFileName}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-slate-500">촬영 시각</dt>
-                      <dd className="text-slate-800">
-                        {formatCapturedLabel(selectedRow.photo.capturedAtIso)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-slate-500">폴더(그룹)</dt>
-                      <dd className="text-slate-800">{selectedRow.groupDisplayTitle}</dd>
-                    </div>
-                    {selectedRow.photo.outputRelativePath ? (
-                      <div>
-                        <dt className="text-xs text-slate-500">출력 상대 경로</dt>
-                        <dd className="break-all font-mono text-xs text-slate-700">
-                          {selectedRow.photo.outputRelativePath}
-                        </dd>
-                      </div>
-                    ) : null}
-                  </dl>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}

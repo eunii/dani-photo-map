@@ -154,7 +154,7 @@ export function OutputFolderTreePanel({
           }`}
           onClick={() => onSelectPath([])}
         >
-          출력 (전체 보기)
+          홈 (전체 보기)
         </button>
         <ul className="space-y-0.5">
           {folderTreeRoot.children.map((node) => (
