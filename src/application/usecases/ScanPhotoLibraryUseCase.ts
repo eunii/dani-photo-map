@@ -4,6 +4,8 @@ import {
   scanPhotoLibraryCommandSchema
 } from '@application/dto/ScanPhotoLibraryCommand'
 import type {
+  ExistingOutputSkipDetail,
+  InBatchDuplicateDetail,
   ScanPhotoLibraryIssue,
   ScanPhotoLibraryResult
 } from '@application/dto/ScanPhotoLibraryResult'
@@ -79,6 +81,8 @@ interface FinalizedScanResult {
   copiedCount: number
   duplicateCount: number
   skippedExistingCount: number
+  inBatchDuplicateDetails: InBatchDuplicateDetail[]
+  existingOutputSkipDetails: ExistingOutputSkipDetail[]
 }
 
 export class ScanPhotoLibraryUseCase {
@@ -100,24 +104,25 @@ export class ScanPhotoLibraryUseCase {
       paths.outputRoot
     )
     const storedIndex = await this.loadStoredLibraryIndexSafely(paths.outputRoot)
-    const existingOutputHashes = await buildExistingOutputHashSet({
-      snapshot: existingOutputSnapshot,
-      storedIndex,
-      hasher: this.dependencies.hasher,
-      onDiskHashFailure: ({ sourcePath, photoId, outputRelativePath, error }) => {
-        issues.push(
-          this.createIssue({
-            code: 'existing-output-hash-failed',
-            severity: 'warning',
-            stage: 'hash',
-            sourcePath,
-            photoId,
-            outputRelativePath,
-            message: this.getErrorMessage(error)
-          })
-        )
-      }
-    })
+    const { hashes: existingOutputHashes, hashToOutputRelativePath } =
+      await buildExistingOutputHashSet({
+        snapshot: existingOutputSnapshot,
+        storedIndex,
+        hasher: this.dependencies.hasher,
+        onDiskHashFailure: ({ sourcePath, photoId, outputRelativePath, error }) => {
+          issues.push(
+            this.createIssue({
+              code: 'existing-output-hash-failed',
+              severity: 'warning',
+              stage: 'hash',
+              sourcePath,
+              photoId,
+              outputRelativePath,
+              message: this.getErrorMessage(error)
+            })
+          )
+        }
+      })
 
     const photoPaths = await this.dependencies.fileSystem.listPhotoFiles(
       paths.sourceRoot
@@ -165,12 +170,15 @@ export class ScanPhotoLibraryUseCase {
             copiedPhotos: [] as Photo[],
             copiedCount: 0,
             duplicateCount: 0,
-            skippedExistingCount: 0
+            skippedExistingCount: 0,
+            inBatchDuplicateDetails: [] as InBatchDuplicateDetail[],
+            existingOutputSkipDetails: [] as ExistingOutputSkipDetail[]
           }
         : await this.finalizePreparedPhotos(
             preparedPhotoRecords,
             paths.outputRoot,
             existingOutputHashes,
+            hashToOutputRelativePath,
             issues,
             copyFilter,
             onScanProgress
@@ -199,6 +207,8 @@ export class ScanPhotoLibraryUseCase {
       warningCount: issues.filter((issue) => issue.severity === 'warning').length,
       failureCount: issues.filter((issue) => issue.severity === 'error').length,
       issues,
+      inBatchDuplicateDetails: finalizedScanResult.inBatchDuplicateDetails,
+      existingOutputSkipDetails: finalizedScanResult.existingOutputSkipDetails,
       mapGroups: groups
         .filter((group) => group.representativeGps)
         .map((group) => ({
@@ -321,6 +331,7 @@ export class ScanPhotoLibraryUseCase {
     preparedPhotoRecords: PreparedPhotoRecord[],
     outputRoot: string,
     existingOutputHashes: Set<string>,
+    existingOutputHashToPath: Map<string, string>,
     issues: ScanPhotoLibraryIssue[],
     copyFilter:
       | {
@@ -344,6 +355,8 @@ export class ScanPhotoLibraryUseCase {
     const copiedPhotos: Photo[] = []
     let duplicateCount = 0
     let skippedExistingCount = 0
+    const inBatchDuplicateDetails: InBatchDuplicateDetail[] = []
+    const existingOutputSkipDetails: ExistingOutputSkipDetail[] = []
 
     const recordsToFinalize = copyFilter?.keys.size
       ? preparedPhotoRecords.filter((record) => {
@@ -364,6 +377,10 @@ export class ScanPhotoLibraryUseCase {
         outputRoot,
         canonicalPhotoIdByHash,
         existingOutputHashes,
+        existingOutputHashToPath,
+        preparedPhotoRecords,
+        inBatchDuplicateDetails,
+        existingOutputSkipDetails,
         issues
       )
 
@@ -393,7 +410,9 @@ export class ScanPhotoLibraryUseCase {
       copiedPhotos,
       copiedCount: copiedPhotos.length,
       duplicateCount,
-      skippedExistingCount
+      skippedExistingCount,
+      inBatchDuplicateDetails,
+      existingOutputSkipDetails
     }
   }
 
@@ -427,6 +446,10 @@ export class ScanPhotoLibraryUseCase {
     outputRoot: string,
     canonicalPhotoIdByHash: Map<string, string>,
     existingOutputHashes: Set<string>,
+    existingOutputHashToPath: Map<string, string>,
+    preparedPhotoRecords: PreparedPhotoRecord[],
+    inBatchDuplicateDetails: InBatchDuplicateDetail[],
+    existingOutputSkipDetails: ExistingOutputSkipDetail[],
     issues: ScanPhotoLibraryIssue[]
   ): Promise<Photo | 'duplicate' | 'existing-output-duplicate' | null> {
     const photo = {
@@ -439,11 +462,30 @@ export class ScanPhotoLibraryUseCase {
     photo.isDuplicate = Boolean(canonicalPhotoId && canonicalPhotoId !== photo.id)
     photo.duplicateOfPhotoId = photo.isDuplicate ? canonicalPhotoId : undefined
 
-    if (photo.isDuplicate) {
+    if (photo.isDuplicate && canonicalPhotoId) {
+      const canonicalRecord = preparedPhotoRecords.find(
+        (record) => record.photo.id === canonicalPhotoId
+      )
+
+      inBatchDuplicateDetails.push({
+        duplicatePhotoId: photo.id,
+        canonicalPhotoId,
+        duplicateSourcePath: preparedPhotoRecord.context.sourcePath,
+        canonicalSourcePath: canonicalRecord?.context.sourcePath ?? ''
+      })
+
       return 'duplicate'
     }
 
     if (photo.sha256 && existingOutputHashes.has(photo.sha256)) {
+      existingOutputSkipDetails.push({
+        sourcePhotoId: photo.id,
+        sourcePath: preparedPhotoRecord.context.sourcePath,
+        sha256: photo.sha256,
+        existingOutputRelativePath:
+          existingOutputHashToPath.get(photo.sha256) ?? ''
+      })
+
       return 'existing-output-duplicate'
     }
 

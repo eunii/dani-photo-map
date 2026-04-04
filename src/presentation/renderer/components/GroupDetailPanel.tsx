@@ -181,7 +181,7 @@ export function GroupDetailPanel({
 
             <div className="grid gap-4">
               <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <p className="text-sm font-medium text-slate-900">추천 그룹명</p>
+                <p className="text-sm font-medium text-slate-900">기본 그룹명 제안</p>
                 {titleSuggestions.length > 0 ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {titleSuggestions.map((suggestedTitle) => (
@@ -197,7 +197,7 @@ export function GroupDetailPanel({
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-slate-500">
-                    가까운 GPS 그룹에서 추천할 제목이 없어서 직접 입력합니다.
+                    가까운 GPS 그룹에서 기본 제안 제목이 없어 직접 입력합니다.
                   </p>
                 )}
               </div>

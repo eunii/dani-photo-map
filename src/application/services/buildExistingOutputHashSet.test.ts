@@ -48,7 +48,7 @@ describe('buildExistingOutputHashSet', () => {
   it('adds hashes from stored index without calling hasher for those paths', async () => {
     const createSha256 = vi.fn().mockResolvedValue('disk-hash')
 
-    const hashes = await buildExistingOutputHashSet({
+    const { hashes } = await buildExistingOutputHashSet({
       snapshot: {
         outputRoot: 'C:/o',
         photos: [
@@ -88,7 +88,7 @@ describe('buildExistingOutputHashSet', () => {
   it('falls back to hasher when stored index has no hash for that path', async () => {
     const createSha256 = vi.fn().mockResolvedValue('from-disk')
 
-    const hashes = await buildExistingOutputHashSet({
+    const { hashes, hashToOutputRelativePath } = await buildExistingOutputHashSet({
       snapshot: {
         outputRoot: 'C:/o',
         photos: [
@@ -105,6 +105,7 @@ describe('buildExistingOutputHashSet', () => {
     })
 
     expect(hashes.has('from-disk')).toBe(true)
+    expect(hashToOutputRelativePath.get('from-disk')).toBe('2026/04/a.jpg')
     expect(createSha256).toHaveBeenCalledOnce()
     expect(createSha256).toHaveBeenCalledWith('C:/o/2026/04/a.jpg')
   })

@@ -1,3 +1,5 @@
+import { pathToFileURL } from 'node:url'
+
 import { ipcRenderer } from 'electron'
 
 import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
@@ -22,6 +24,15 @@ export const preloadBridge: PreloadBridge = {
   },
   async ping() {
     return 'pong'
+  },
+  pathToFileUrl(absolutePath: string) {
+    const trimmed = absolutePath.trim()
+
+    if (!trimmed) {
+      return ''
+    }
+
+    return pathToFileURL(trimmed).href
   },
   async selectDirectory(options) {
     return ipcRenderer.invoke(IPC_CHANNELS.selectDirectory, options)

@@ -110,7 +110,7 @@ export class PreviewPendingOrganizationUseCase {
       outputRoot
     )
     const storedIndex = await this.loadStoredLibraryIndexSafely(outputRoot)
-    const existingOutputHashes = await buildExistingOutputHashSet({
+    const { hashes: existingOutputHashes } = await buildExistingOutputHashSet({
       snapshot: existingOutputSnapshot,
       storedIndex,
       hasher: this.dependencies.hasher

@@ -39,27 +39,48 @@ export interface BuildExistingOutputHashSetParams {
   }) => void
 }
 
+export interface BuildExistingOutputHashSetResult {
+  hashes: Set<string>
+  /** First output-relative path seen for each hash (for skip/compare UI). */
+  hashToOutputRelativePath: Map<string, string>
+}
+
+function recordHash(
+  hashes: Set<string>,
+  hashToOutputRelativePath: Map<string, string>,
+  hash: string,
+  outputRelativePath: string
+): void {
+  hashes.add(hash)
+
+  if (!hashToOutputRelativePath.has(hash)) {
+    hashToOutputRelativePath.set(hash, outputRelativePath)
+  }
+}
+
 /**
  * Builds the set of SHA-256 hashes for files already present under the output root.
  * Prefer hashes from `storedIndex` when `outputRelativePath` matches; otherwise hashes the file on disk.
  */
 export async function buildExistingOutputHashSet(
   params: BuildExistingOutputHashSetParams
-): Promise<Set<string>> {
+): Promise<BuildExistingOutputHashSetResult> {
   const { snapshot, storedIndex, hasher, onDiskHashFailure } = params
   const hashes = new Set<string>()
+  const hashToOutputRelativePath = new Map<string, string>()
   const fromIndex = sha256ByOutputRelativePathFromStoredIndex(storedIndex)
 
   for (const existingPhoto of snapshot.photos) {
     const indexed = fromIndex.get(existingPhoto.outputRelativePath)
 
     if (indexed) {
-      hashes.add(indexed)
+      recordHash(hashes, hashToOutputRelativePath, indexed, existingPhoto.outputRelativePath)
       continue
     }
 
     try {
-      hashes.add(await hasher.createSha256(existingPhoto.sourcePath))
+      const hash = await hasher.createSha256(existingPhoto.sourcePath)
+      recordHash(hashes, hashToOutputRelativePath, hash, existingPhoto.outputRelativePath)
     } catch (error) {
       onDiskHashFailure?.({
         sourcePath: existingPhoto.sourcePath,
@@ -70,5 +91,5 @@ export async function buildExistingOutputHashSet(
     }
   }
 
-  return hashes
+  return { hashes, hashToOutputRelativePath }
 }

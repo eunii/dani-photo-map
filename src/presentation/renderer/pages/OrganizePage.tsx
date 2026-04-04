@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
 import type {
   PendingOrganizationPreviewPhoto,
   PreviewPendingOrganizationResult,
   ScanPhotoLibrarySummary
 } from '@shared/types/preload'
+import type { InBatchDuplicateDetail } from '@application/dto/ScanPhotoLibraryResult'
 import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
 
 import {
   buildOrganizeScanPayload,
   type OrganizeCustomSplitInput
 } from '@presentation/renderer/pages/organizeScanPayload'
+import { joinPathSegments, normalizePathSeparators } from '@shared/utils/path'
 
 const SOURCE_DIALOG_OPTIONS = {
   title: '원본 사진 폴더 선택',
@@ -24,6 +27,106 @@ const OUTPUT_DIALOG_OPTIONS = {
 
 const EMPTY_GROUP_ASSIGNMENTS: Record<string, string> = {}
 const EMPTY_CUSTOM_SPLITS: Record<string, OrganizeCustomSplitInput[]> = {}
+
+function fileUrlFromAbsolutePath(absolutePath: string): string {
+  const normalized = normalizePathSeparators(absolutePath)
+  const withSlashes = normalized.replace(/\\/g, '/')
+
+  if (/^[a-zA-Z]:\//.test(withSlashes)) {
+    return `file:///${encodeURI(withSlashes)}`
+  }
+
+  return `file://${encodeURI(withSlashes)}`
+}
+
+/** Prefer preload `pathToFileURL` so Windows paths load in the renderer with `webSecurity` relaxed. */
+function localImageFileUrl(absolutePath: string): string {
+  const fromPreload = window.photoApp.pathToFileUrl(absolutePath)
+
+  if (fromPreload) {
+    return fromPreload
+  }
+
+  return fileUrlFromAbsolutePath(absolutePath)
+}
+
+function computeGlobalBarProgress(
+  offset: number,
+  groupPhotoCount: number,
+  payload: ScanPhotoLibraryProgressPayload
+): number {
+  if (groupPhotoCount <= 0) {
+    return offset
+  }
+
+  if (payload.kind === 'prepare') {
+    const denom = payload.total > 0 ? payload.total : 1
+
+    return offset + Math.round((payload.completed / denom) * 0.5 * groupPhotoCount)
+  }
+
+  const denom = payload.total > 0 ? payload.total : 1
+  const halfGroup = 0.5 * groupPhotoCount
+  const filePortion = (payload.completed / denom) * 0.5 * groupPhotoCount
+
+  return offset + Math.round(halfGroup + filePortion)
+}
+
+function mergeScanSummaries(
+  previous: ScanPhotoLibrarySummary | null,
+  next: ScanPhotoLibrarySummary
+): ScanPhotoLibrarySummary {
+  if (!previous) {
+    return next
+  }
+
+  return {
+    scannedCount: Math.max(previous.scannedCount, next.scannedCount),
+    duplicateCount: previous.duplicateCount + next.duplicateCount,
+    keptCount: previous.keptCount + next.keptCount,
+    copiedCount: previous.copiedCount + next.copiedCount,
+    skippedExistingCount: previous.skippedExistingCount + next.skippedExistingCount,
+    groupCount: next.groupCount,
+    warningCount: previous.warningCount + next.warningCount,
+    failureCount: previous.failureCount + next.failureCount,
+    issues: [...previous.issues, ...next.issues],
+    inBatchDuplicateDetails: [
+      ...previous.inBatchDuplicateDetails,
+      ...next.inBatchDuplicateDetails
+    ],
+    existingOutputSkipDetails: [
+      ...previous.existingOutputSkipDetails,
+      ...next.existingOutputSkipDetails
+    ],
+    mapGroups: next.mapGroups
+  }
+}
+
+function groupInBatchDuplicateDetails(rows: InBatchDuplicateDetail[]) {
+  const map = new Map<
+    string,
+    { canonicalSourcePath: string; duplicateSourcePaths: string[] }
+  >()
+
+  for (const row of rows) {
+    const existing = map.get(row.canonicalPhotoId)
+
+    if (!existing) {
+      map.set(row.canonicalPhotoId, {
+        canonicalSourcePath: row.canonicalSourcePath,
+        duplicateSourcePaths: [row.duplicateSourcePath]
+      })
+    } else {
+      existing.duplicateSourcePaths.push(row.duplicateSourcePath)
+    }
+  }
+
+  return [...map.entries()].map(([canonicalPhotoId, value]) => ({
+    canonicalPhotoId,
+    canonicalSourcePath: value.canonicalSourcePath,
+    duplicateSourcePaths: value.duplicateSourcePaths
+  }))
+}
 
 function getMissingGpsCategoryLabel(
   category?: PreviewPendingOrganizationResult['groups'][number]['missingGpsCategory']
@@ -69,8 +172,60 @@ function formatGroupSavePhaseLabel(phase: GroupSavePhase): string {
   }
 }
 
+function getGroupLinePercent(
+  phase: GroupSavePhase,
+  runningKey: string | null,
+  groupKey: string,
+  meta: { progressOffsetBeforeJob: number; groupPhotoCount: number } | null,
+  photosSavedCount: number
+): number {
+  if (phase === 'done') {
+    return 100
+  }
+
+  if (phase === 'error') {
+    return 0
+  }
+
+  if (phase === 'queued' || phase === 'idle') {
+    return 0
+  }
+
+  if (
+    phase === 'saving' &&
+    runningKey === groupKey &&
+    meta &&
+    meta.groupPhotoCount > 0
+  ) {
+    return Math.min(
+      100,
+      Math.max(
+        0,
+        Math.round(
+          ((photosSavedCount - meta.progressOffsetBeforeJob) /
+            meta.groupPhotoCount) *
+            100
+        )
+      )
+    )
+  }
+
+  return 0
+}
+
 interface OrganizePageProps {
   onNavigateToBrowse?: () => void
+}
+
+function effectiveGroupTitle(
+  group: PreviewPendingOrganizationResult['groups'][number],
+  groupTitleInputs: Record<string, string>
+): string {
+  return (
+    groupTitleInputs[group.groupKey]?.trim() ||
+    group.suggestedTitles[0] ||
+    group.displayTitle
+  )
 }
 
 function buildEffectiveOrganizeInputs(
@@ -162,13 +317,13 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       copyGroupKeysInThisRun: string[]
       isLastStep: boolean
       snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
+      progressOffsetBeforeJob: number
     }>
   >([])
-  const [runningSaveTarget, setRunningSaveTarget] = useState<
-    'all' | string | null
-  >(null)
-  const runningSaveTargetRef = useRef<'all' | string | null>(null)
+  const [runningSaveTarget, setRunningSaveTarget] = useState<string | null>(null)
+  const runningSaveTargetRef = useRef<string | null>(null)
   const [bulkSaveActive, setBulkSaveActive] = useState(false)
+  const bulkSaveActiveRef = useRef(false)
   const [prepareProgress, setPrepareProgress] = useState<{
     completed: number
     total: number
@@ -180,10 +335,32 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   const [hidePreviewPanelWhileSaving, setHidePreviewPanelWhileSaving] =
     useState(false)
   const [photosSavedCount, setPhotosSavedCount] = useState(0)
+  const [openScanResultDetail, setOpenScanResultDetail] = useState<
+    null | 'inBatchDup' | 'existingSkip' | 'warnings' | 'failures'
+  >(null)
+  const [activeSaveJobMeta, setActiveSaveJobMeta] = useState<{
+    progressOffsetBeforeJob: number
+    groupPhotoCount: number
+  } | null>(null)
+
+  const saveJobQueueRef = useRef(saveJobQueue)
+  const mergedBulkSummaryRef = useRef<ScanPhotoLibrarySummary | null>(null)
+  const cancelRemainingBulkJobsRef = useRef(false)
+  const bulkSaveStartIndexRef = useRef(0)
+  const bulkRunTotalPhotosRef = useRef<number | null>(null)
+  const [bulkRunStartIndex, setBulkRunStartIndex] = useState<number | null>(null)
+
+  useEffect(() => {
+    saveJobQueueRef.current = saveJobQueue
+  }, [saveJobQueue])
 
   useEffect(() => {
     runningSaveTargetRef.current = runningSaveTarget
   }, [runningSaveTarget])
+
+  useEffect(() => {
+    bulkSaveActiveRef.current = bulkSaveActive
+  }, [bulkSaveActive])
   const [previewImageLoadFailedByPhotoId, setPreviewImageLoadFailedByPhotoId] =
     useState<Record<string, boolean>>({})
   const [wizardStepIndex, setWizardStepIndex] = useState(0)
@@ -203,6 +380,14 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     () =>
       orderedPreviewGroups.reduce((sum, group) => sum + group.photoCount, 0),
     [orderedPreviewGroups]
+  )
+
+  const groupedInBatchDuplicates = useMemo(
+    () =>
+      summary
+        ? groupInBatchDuplicateDetails(summary.inBatchDuplicateDetails)
+        : [],
+    [summary]
   )
 
   const hasPendingPreviewGroups = (previewResult?.groups.length ?? 0) > 0
@@ -230,34 +415,79 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       return
     }
 
-    const nextJob = saveJobQueue[0]
+    const queueSnapshot = saveJobQueue
+    const nextJob = queueSnapshot[0]
 
-    setSaveJobQueue((previous) => previous.slice(1))
-
-    const isBulkRun = nextJob.copyGroupKeysInThisRun.length > 1
-    setRunningSaveTarget(isBulkRun ? 'all' : nextJob.copyGroupKeysInThisRun[0]!)
-
-    if (isBulkRun) {
-      setGroupSavePhaseByKey(
-        Object.fromEntries(
-          orderedPreviewGroups.map((g) => [g.groupKey, 'saving' as const])
-        )
-      )
-    } else {
-      const onlyKey = nextJob.copyGroupKeysInThisRun[0]
-      if (onlyKey) {
-        setGroupSavePhaseByKey((previous) => ({
-          ...previous,
-          [onlyKey]: 'saving'
-        }))
-      }
+    if (!nextJob) {
+      return
     }
 
-    setPhotosSavedCount(0)
-    setPhotoFlowTotal(totalPhotosInPreview)
+    const remainderQueue = queueSnapshot.slice(1)
+    saveJobQueueRef.current = remainderQueue
+    setSaveJobQueue(remainderQueue)
+
+    const onlyKey = nextJob.copyGroupKeysInThisRun[0]
+    setRunningSaveTarget(onlyKey ?? null)
+
+    const groupPhotoCountForJob =
+      onlyKey !== undefined
+        ? (orderedPreviewGroups.find((g) => g.groupKey === onlyKey)?.photoCount ??
+          0)
+        : 0
+
+    setActiveSaveJobMeta(
+      onlyKey
+        ? {
+            progressOffsetBeforeJob: nextJob.progressOffsetBeforeJob,
+            groupPhotoCount: groupPhotoCountForJob
+          }
+        : null
+    )
+
+    if (bulkSaveActive && onlyKey) {
+      const jobIndex = orderedPreviewGroups.findIndex(
+        (g) => g.groupKey === onlyKey
+      )
+      const bulkStart = bulkSaveStartIndexRef.current
+      const remainingKeys = new Set(
+        remainderQueue.map((j) => j.copyGroupKeysInThisRun[0]).filter(Boolean)
+      )
+      setGroupSavePhaseByKey(
+        Object.fromEntries(
+          orderedPreviewGroups.map((g, i) => {
+            if (i < bulkStart) {
+              return [g.groupKey, 'idle' as const]
+            }
+            if (jobIndex >= 0 && i < jobIndex) {
+              return [g.groupKey, 'done' as const]
+            }
+            if (g.groupKey === onlyKey) {
+              return [g.groupKey, 'saving' as const]
+            }
+            if (remainingKeys.has(g.groupKey)) {
+              return [g.groupKey, 'queued' as const]
+            }
+            return [g.groupKey, 'idle' as const]
+          })
+        )
+      )
+    } else if (onlyKey) {
+      setGroupSavePhaseByKey((previous) => ({
+        ...previous,
+        [onlyKey]: 'saving'
+      }))
+    }
+
+    setPhotosSavedCount(nextJob.progressOffsetBeforeJob)
+    setPhotoFlowTotal(
+      bulkRunTotalPhotosRef.current ?? totalPhotosInPreview
+    )
     setPrepareProgress(null)
 
     void (async () => {
+      const offset = nextJob.progressOffsetBeforeJob
+      const flowTotal =
+        bulkRunTotalPhotosRef.current ?? totalPhotosInPreview
       const unsubscribe = window.photoApp.onScanPhotoLibraryProgress(
         (payload) => {
           if (payload.kind === 'prepare') {
@@ -266,10 +496,13 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
               total: payload.total
             })
           } else {
-            setPhotosSavedCount(payload.completed)
-            setPhotoFlowTotal(payload.total)
             setPrepareProgress(null)
           }
+
+          setPhotosSavedCount(
+            computeGlobalBarProgress(offset, groupPhotoCountForJob, payload)
+          )
+          setPhotoFlowTotal(flowTotal)
         }
       )
 
@@ -284,29 +517,59 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
         setLastLoadedIndex(loadedIndex)
 
-        if (isBulkRun) {
-          setGroupSavePhaseByKey(
-            Object.fromEntries(
-              orderedPreviewGroups.map((g) => [g.groupKey, 'done' as const])
-            )
+        if (bulkSaveActiveRef.current) {
+          mergedBulkSummaryRef.current = mergeScanSummaries(
+            mergedBulkSummaryRef.current,
+            nextSummary
           )
-        } else {
-          const onlyKey = nextJob.copyGroupKeysInThisRun[0]
-          if (onlyKey) {
-            setGroupSavePhaseByKey((previous) => ({
-              ...previous,
-              [onlyKey]: 'done'
-            }))
-          }
         }
 
-        if (nextJob.isLastStep) {
+        if (onlyKey) {
+          setGroupSavePhaseByKey((previous) => ({
+            ...previous,
+            [onlyKey]: 'done'
+          }))
+        }
+
+        const noMoreJobs = saveJobQueueRef.current.length === 0
+
+        if (bulkSaveActiveRef.current && noMoreJobs) {
+          const cancelledBulk = cancelRemainingBulkJobsRef.current
+          cancelRemainingBulkJobsRef.current = false
+          bulkSaveActiveRef.current = false
           setBulkSaveActive(false)
+          bulkRunTotalPhotosRef.current = null
+          bulkSaveStartIndexRef.current = 0
+          setBulkRunStartIndex(null)
           setGroupSavePhaseByKey({})
           setHidePreviewPanelWhileSaving(false)
           setPhotosSavedCount(0)
           setPhotoFlowTotal(0)
           setPrepareProgress(null)
+          setActiveSaveJobMeta(null)
+          setSummary(mergedBulkSummaryRef.current ?? nextSummary)
+          mergedBulkSummaryRef.current = null
+          setPreviewResult(null)
+          setGroupTitleInputs({})
+          setGroupCompanionsInputs({})
+          setGroupNotesInputs({})
+          setPreviewImageLoadFailedByPhotoId({})
+          setWizardStepIndex(0)
+          if (cancelledBulk) {
+            setErrorMessage(
+              '남은 저장 작업을 취소했습니다. 완료된 그룹까지 결과가 반영되었습니다.'
+            )
+          }
+        } else if (!bulkSaveActiveRef.current && nextJob.isLastStep) {
+          bulkRunTotalPhotosRef.current = null
+          bulkSaveStartIndexRef.current = 0
+          setBulkRunStartIndex(null)
+          setGroupSavePhaseByKey({})
+          setHidePreviewPanelWhileSaving(false)
+          setPhotosSavedCount(0)
+          setPhotoFlowTotal(0)
+          setPrepareProgress(null)
+          setActiveSaveJobMeta(null)
           setSummary(nextSummary)
           setPreviewResult(null)
           setGroupTitleInputs({})
@@ -316,12 +579,19 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           setWizardStepIndex(0)
         }
       } catch (error) {
+        bulkSaveActiveRef.current = false
         setBulkSaveActive(false)
+        bulkRunTotalPhotosRef.current = null
+        bulkSaveStartIndexRef.current = 0
+        setBulkRunStartIndex(null)
+        cancelRemainingBulkJobsRef.current = false
+        mergedBulkSummaryRef.current = null
         setSaveJobQueue([])
         setHidePreviewPanelWhileSaving(false)
         setPhotosSavedCount(0)
         setPhotoFlowTotal(0)
         setPrepareProgress(null)
+        setActiveSaveJobMeta(null)
         setGroupSavePhaseByKey((previous) => {
           const next: Record<string, GroupSavePhase> = { ...previous }
           for (const key of nextJob.copyGroupKeysInThisRun) {
@@ -349,7 +619,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     outputRoot,
     setLastLoadedIndex,
     orderedPreviewGroups,
-    totalPhotosInPreview
+    totalPhotosInPreview,
+    bulkSaveActive
   ])
 
   async function selectSourceRoot(): Promise<void> {
@@ -366,15 +637,21 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupNotesInputs({})
       setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
+      setOpenScanResultDetail(null)
       setErrorMessage(null)
       setSaveJobQueue([])
       setRunningSaveTarget(null)
+      bulkSaveActiveRef.current = false
       setBulkSaveActive(false)
+      bulkRunTotalPhotosRef.current = null
+      bulkSaveStartIndexRef.current = 0
+      setBulkRunStartIndex(null)
       setGroupSavePhaseByKey({})
       setHidePreviewPanelWhileSaving(false)
       setPhotosSavedCount(0)
       setPhotoFlowTotal(0)
       setPrepareProgress(null)
+      setActiveSaveJobMeta(null)
     }
   }
 
@@ -393,15 +670,21 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupNotesInputs({})
       setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
+      setOpenScanResultDetail(null)
       setErrorMessage(null)
       setSaveJobQueue([])
       setRunningSaveTarget(null)
+      bulkSaveActiveRef.current = false
       setBulkSaveActive(false)
+      bulkRunTotalPhotosRef.current = null
+      bulkSaveStartIndexRef.current = 0
+      setBulkRunStartIndex(null)
       setGroupSavePhaseByKey({})
       setHidePreviewPanelWhileSaving(false)
       setPhotosSavedCount(0)
       setPhotoFlowTotal(0)
       setPrepareProgress(null)
+      setActiveSaveJobMeta(null)
     }
   }
 
@@ -442,12 +725,18 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setLastLoadedIndex(loadedIndex)
       setSaveJobQueue([])
       setRunningSaveTarget(null)
+      bulkSaveActiveRef.current = false
       setBulkSaveActive(false)
+      bulkRunTotalPhotosRef.current = null
+      bulkSaveStartIndexRef.current = 0
+      setBulkRunStartIndex(null)
       setGroupSavePhaseByKey({})
       setHidePreviewPanelWhileSaving(false)
       setPhotosSavedCount(0)
       setPhotoFlowTotal(0)
       setPrepareProgress(null)
+      setActiveSaveJobMeta(null)
+      setOpenScanResultDetail(null)
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -485,34 +774,92 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       groupNotesInputs
     })
 
-    const includedGroupKeySet = new Set(
-      orderedPreviewGroups.map((g) => g.groupKey)
-    )
-    const snapshotPayload = buildOrganizeScanPayload(
-      previewResult,
-      includedGroupKeySet,
-      effectiveInputs
-    )
-    const copyGroupKeysInThisRun = orderedPreviewGroups.map((g) => g.groupKey)
-
     setErrorMessage(null)
+    mergedBulkSummaryRef.current = null
+    cancelRemainingBulkJobsRef.current = false
+    bulkSaveActiveRef.current = true
     setBulkSaveActive(true)
+
+    const startIndex = Math.min(
+      wizardStepIndex,
+      Math.max(0, orderedPreviewGroups.length - 1)
+    )
+    bulkSaveStartIndexRef.current = startIndex
+    setBulkRunStartIndex(startIndex)
+
+    const remainingGroups = orderedPreviewGroups.slice(startIndex)
+    const totalPhotosInThisBulk = remainingGroups.reduce(
+      (sum, g) => sum + g.photoCount,
+      0
+    )
+    bulkRunTotalPhotosRef.current = totalPhotosInThisBulk
+
     const queuedPhases: Record<string, GroupSavePhase> = {}
-    for (const key of copyGroupKeysInThisRun) {
-      queuedPhases[key] = 'queued'
+    for (let i = 0; i < orderedPreviewGroups.length; i += 1) {
+      const g = orderedPreviewGroups[i]
+      if (i >= startIndex) {
+        queuedPhases[g.groupKey] = 'queued'
+      }
     }
     setGroupSavePhaseByKey((previous) => ({ ...previous, ...queuedPhases }))
     setHidePreviewPanelWhileSaving(true)
     setPhotosSavedCount(0)
-    setPhotoFlowTotal(totalPhotosInPreview)
-    setSaveJobQueue((previous) => [
-      ...previous,
-      {
-        copyGroupKeysInThisRun,
-        isLastStep: true,
-        snapshotPayload
+    setPhotoFlowTotal(totalPhotosInThisBulk)
+    setActiveSaveJobMeta(null)
+
+    const jobs: Array<{
+      copyGroupKeysInThisRun: string[]
+      isLastStep: boolean
+      snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
+      progressOffsetBeforeJob: number
+    }> = []
+
+    let progressOffsetBeforeJob = 0
+
+    for (let index = startIndex; index < orderedPreviewGroups.length; index += 1) {
+      const includedGroupKeySet = new Set(
+        orderedPreviewGroups.slice(0, index + 1).map((g) => g.groupKey)
+      )
+      const snapshotPayload = buildOrganizeScanPayload(
+        previewResult,
+        includedGroupKeySet,
+        effectiveInputs
+      )
+      const group = orderedPreviewGroups[index]
+
+      if (!group) {
+        continue
       }
-    ])
+
+      jobs.push({
+        copyGroupKeysInThisRun: [group.groupKey],
+        isLastStep: index >= orderedPreviewGroups.length - 1,
+        snapshotPayload,
+        progressOffsetBeforeJob
+      })
+      progressOffsetBeforeJob += group.photoCount
+    }
+
+    if (jobs.length === 0) {
+      bulkSaveActiveRef.current = false
+      setBulkSaveActive(false)
+      bulkRunTotalPhotosRef.current = null
+      setBulkRunStartIndex(null)
+      setErrorMessage('이후에 저장할 그룹이 없습니다.')
+      return
+    }
+
+    setSaveJobQueue((previous) => [...previous, ...jobs])
+  }
+
+  function cancelRemainingSaveJobs(): void {
+    if (!savePipelineBusy) {
+      return
+    }
+
+    cancelRemainingBulkJobsRef.current = true
+    saveJobQueueRef.current = []
+    setSaveJobQueue([])
   }
 
   function enqueueSaveCurrentGroup(): void {
@@ -557,11 +904,14 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
     const isLastStep = snapshotStepIndex >= orderedPreviewGroups.length - 1
 
+    const progressOffsetBeforeJob = orderedPreviewGroups
+      .slice(0, snapshotStepIndex)
+      .reduce((sum, g) => sum + g.photoCount, 0)
+
     setErrorMessage(null)
 
     const alreadyQueuedOrRunning =
       runningSaveTargetRef.current === currentGroup.groupKey ||
-      runningSaveTargetRef.current === 'all' ||
       saveJobQueue.some(
         (job) =>
           job.copyGroupKeysInThisRun.length === 1 &&
@@ -582,7 +932,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       {
         copyGroupKeysInThisRun: [currentGroup.groupKey],
         isLastStep,
-        snapshotPayload
+        snapshotPayload,
+        progressOffsetBeforeJob
       }
     ])
 
@@ -685,7 +1036,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                 }
                 onClick={() => enqueueSaveAllGroups()}
               >
-                전체 그룹 저장 (추천 제목)
+                이후 그룹 전체 저장하기
               </button>
             ) : null}
           </>
@@ -699,10 +1050,11 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           조회 페이지 열기
         </button>
         <p className="text-sm text-slate-500">
-          그룹마다 메타를 입력한 뒤 카드에서 한 그룹씩 저장하거나, 위의 전체
-          저장으로 추천 제목·입력값을 한 번에 적용해 모든 그룹을 순서대로
-          복사합니다. 진행이 길면 아래 진행 표시를 확인하세요. 완료 후 실행 결과
-          요약이 표시됩니다. GPS 없는 그룹은 순서상 마지막에 처리됩니다.
+          그룹마다 메타를 입력한 뒤 카드에서 한 그룹씩 저장하거나, 위의
+          「이후 그룹 전체 저장하기」로 현재 카드 그룹부터 끝까지 입력값을
+          한 번에 적용해 순서대로 복사합니다. 진행이 길면 아래 진행 표시를
+          확인하세요. 완료 후 실행 결과 요약이 표시됩니다. GPS 없는 그룹은
+          순서상 마지막에 처리됩니다.
         </p>
       </div>
 
@@ -718,50 +1070,101 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           aria-live="polite"
           aria-busy={runningSaveTarget !== null}
         >
-          <h2 className="text-sm font-semibold text-indigo-900">
-            전체 정리 저장 진행 중
-          </h2>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h2 className="text-sm font-semibold text-indigo-900">
+              이후 그룹 일괄 저장 진행 중
+            </h2>
+            <button
+              type="button"
+              className="shrink-0 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-medium text-indigo-900"
+              onClick={() => cancelRemainingSaveJobs()}
+            >
+              남은 작업 취소
+            </button>
+          </div>
           <p className="mt-1 text-sm text-indigo-800">
-            모든 그룹을 한 번에 복사·인덱스 반영합니다.
-            {runningSaveTarget === 'all'
-              ? ' · 파일마다 저장이 끝날 때마다 진행이 올라갑니다.'
-              : ''}
+            현재 위저드 위치부터 남은 그룹만 복사·인덱스에 반영합니다. 막대에는
+            원본 읽기·해시와 복사·썸네일이 함께 반영됩니다.
           </p>
           {prepareProgress ? (
             <p className="mt-2 text-xs text-indigo-700">
-              원본 읽기·해시{' '}
+              원본 읽기·해시 (현재 그룹){' '}
               {prepareProgress.completed} / {prepareProgress.total}장
             </p>
           ) : null}
           {(() => {
             const denom =
               photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview || 1
+            const overallPct = Math.min(
+              100,
+              Math.round((photosSavedCount / denom) * 100)
+            )
 
             return (
               <>
+                <p className="mt-2 text-xs font-medium text-indigo-900">
+                  전체 진행 {overallPct}%
+                </p>
                 <progress
-                  className="mt-3 h-2 w-full overflow-hidden rounded-full accent-indigo-600 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-indigo-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-indigo-600"
+                  className="mt-2 h-2 w-full overflow-hidden rounded-full accent-indigo-600 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-indigo-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-indigo-600"
                   max={denom}
                   value={Math.min(photosSavedCount, denom)}
                 />
-                <p className="mt-2 text-sm text-indigo-800">
-                  사진 저장 완료{' '}
+                <p className="mt-1 text-sm text-indigo-800">
+                  단위 진행{' '}
                   <span className="font-semibold text-indigo-950">
                     {photosSavedCount}
                   </span>{' '}
-                  / {denom}장 (
-                  {Math.min(
-                    100,
-                    Math.round((photosSavedCount / denom) * 100)
-                  )}
-                  %)
+                  / {denom} ({overallPct}%)
                 </p>
+                <div className="mt-4 rounded-lg border border-indigo-200 bg-white/70 p-3">
+                  <p className="text-xs font-semibold text-indigo-900">
+                    그룹별 진행
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {(bulkRunStartIndex != null
+                      ? orderedPreviewGroups.slice(bulkRunStartIndex)
+                      : orderedPreviewGroups
+                    ).map((g) => {
+                      const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
+                      const linePct = getGroupLinePercent(
+                        phase,
+                        runningSaveTarget,
+                        g.groupKey,
+                        activeSaveJobMeta,
+                        photosSavedCount
+                      )
+                      const titleLabel = effectiveGroupTitle(g, groupTitleInputs)
+
+                      return (
+                        <li key={g.groupKey}>
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-indigo-900">
+                            <span
+                              className="min-w-0 flex-1 truncate font-medium"
+                              title={titleLabel}
+                            >
+                              {titleLabel}
+                            </span>
+                            <span className="shrink-0 text-indigo-800">
+                              {linePct}% · {formatGroupSavePhaseLabel(phase)}
+                            </span>
+                          </div>
+                          <progress
+                            className="mt-1 h-1.5 w-full overflow-hidden rounded-full accent-indigo-500 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-indigo-100 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-indigo-500"
+                            max={100}
+                            value={linePct}
+                          />
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
               </>
             )
           })()}
           <p className="mt-2 text-xs text-indigo-700">
-            저장 진행률은 복사·썸네일까지 끝낸 파일만 반영합니다. 잠시만 기다려
-            주세요.
+            현재 그룹마다 원본 처리(절반)와 저장(절반)을 합산해 전체 막대가
+            움직입니다. 진행 중인 그룹은 끝날 때까지 걸릴 수 있습니다.
           </p>
         </section>
       ) : null}
@@ -772,63 +1175,80 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       hasPendingPreviewGroups &&
       !bulkSaveActive ? (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900">저장 진행 중</h2>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-900">저장 진행 중</h2>
+            <button
+              type="button"
+              className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800"
+              onClick={() => cancelRemainingSaveJobs()}
+            >
+              남은 작업 취소
+            </button>
+          </div>
           {prepareProgress ? (
             <p className="mt-1 text-xs text-slate-600">
-              원본 읽기·해시 {prepareProgress.completed} / {prepareProgress.total}장
+              원본 읽기·해시 (현재 그룹) {prepareProgress.completed} /{' '}
+              {prepareProgress.total}장
             </p>
           ) : null}
-          <p className="mt-1 text-xs text-slate-600">
-            사진 저장 완료{' '}
-            <span className="font-medium text-slate-900">{photosSavedCount}</span> /{' '}
-            {(photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview) || '—'}장
-            {(photoFlowTotal > 0 || totalPhotosInPreview > 0
-              ? ` (${Math.min(
-                  100,
-                  Math.round(
-                    (photosSavedCount /
-                      (photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview)) *
-                      100
-                  )
-                )}%)`
-              : '')}
-          </p>
+          {(() => {
+            const denom =
+              photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview || 1
+            const overallPct =
+              denom > 0
+                ? Math.min(100, Math.round((photosSavedCount / denom) * 100))
+                : 0
+
+            return (
+              <>
+                <p className="mt-2 text-xs font-medium text-slate-800">
+                  전체 진행 {overallPct}%
+                </p>
+                <progress
+                  className="mt-2 h-2 w-full overflow-hidden rounded-full accent-sky-600 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-slate-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-sky-600"
+                  max={denom}
+                  value={Math.min(photosSavedCount, denom)}
+                />
+                <p className="mt-1 text-xs text-slate-600">
+                  단위 진행{' '}
+                  <span className="font-medium text-slate-900">{photosSavedCount}</span>{' '}
+                  / {denom} ({overallPct}%)
+                </p>
+              </>
+            )
+          })()}
           <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs font-semibold text-slate-900">그룹별 저장 상태</p>
-            <ul className="mt-2 space-y-1.5">
+            <p className="text-xs font-semibold text-slate-900">그룹별 진행</p>
+            <ul className="mt-2 space-y-2">
               {orderedPreviewGroups.map((g) => {
                 const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
-                const isCurrentRun =
-                  runningSaveTarget === g.groupKey ||
-                  runningSaveTarget === 'all'
+                const linePct = getGroupLinePercent(
+                  phase,
+                  runningSaveTarget,
+                  g.groupKey,
+                  activeSaveJobMeta,
+                  photosSavedCount
+                )
+                const titleLabel = effectiveGroupTitle(g, groupTitleInputs)
+
                 return (
-                  <li
-                    key={g.groupKey}
-                    className={`flex flex-wrap items-center justify-between gap-2 text-xs ${
-                      phase === 'saving' || isCurrentRun
-                        ? 'font-medium text-sky-900'
-                        : 'text-slate-700'
-                    }`}
-                  >
-                    <span className="min-w-0 flex-1 truncate" title={g.displayTitle}>
-                      {g.displayTitle}
-                    </span>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 ${
-                        phase === 'saving' || isCurrentRun
-                          ? 'bg-amber-100 text-amber-900'
-                          : phase === 'done'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : phase === 'error'
-                              ? 'bg-red-100 text-red-800'
-                              : phase === 'queued'
-                                ? 'bg-slate-200 text-slate-800'
-                                : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {formatGroupSavePhaseLabel(phase)}
-                      {phase === 'saving' ? '…' : ''}
-                    </span>
+                  <li key={g.groupKey}>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-800">
+                      <span
+                        className="min-w-0 flex-1 truncate font-medium"
+                        title={titleLabel}
+                      >
+                        {titleLabel}
+                      </span>
+                      <span className="shrink-0 text-slate-700">
+                        {linePct}% · {formatGroupSavePhaseLabel(phase)}
+                      </span>
+                    </div>
+                    <progress
+                      className="mt-1 h-1.5 w-full overflow-hidden rounded-full accent-sky-500 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-slate-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-sky-500"
+                      max={100}
+                      value={linePct}
+                    />
                   </li>
                 )
               })}
@@ -869,9 +1289,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                 <ul className="mt-2 space-y-1.5">
                   {orderedPreviewGroups.map((g) => {
                     const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
-                    const isCurrentRun =
-                  runningSaveTarget === g.groupKey ||
-                  runningSaveTarget === 'all'
+                    const isCurrentRun = runningSaveTarget === g.groupKey
+                    const titleLabel = effectiveGroupTitle(g, groupTitleInputs)
                     return (
                       <li
                         key={g.groupKey}
@@ -881,8 +1300,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             : 'text-slate-700'
                         }`}
                       >
-                        <span className="min-w-0 flex-1 truncate" title={g.displayTitle}>
-                          {g.displayTitle}
+                        <span className="min-w-0 flex-1 truncate" title={titleLabel}>
+                          {titleLabel}
                         </span>
                         <span
                           className={`shrink-0 rounded-full px-2 py-0.5 ${
@@ -926,7 +1345,6 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                     groupSavePhaseByKey[group.groupKey] ?? 'idle'
                   const saveBusyForThisGroup =
                     runningSaveTarget === group.groupKey ||
-                    runningSaveTarget === 'all' ||
                     saveJobQueue.some(
                       (job) =>
                         job.copyGroupKeysInThisRun.includes(group.groupKey)
@@ -961,7 +1379,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
                           <h3 className="text-sm font-semibold text-slate-900">
-                            {group.displayTitle}
+                            {effectiveGroupTitle(group, groupTitleInputs)}
                           </h3>
                           <p className="text-sm text-slate-600">
                             사진 {group.photoCount}장
@@ -1026,7 +1444,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                       <div className="space-y-3">
                         <div className="space-y-2">
                           <p className="text-sm font-medium text-slate-800">
-                            추천 그룹명
+                            기본 그룹명 제안
                           </p>
                           {group.suggestedTitles.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
@@ -1056,7 +1474,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
                         <label className="space-y-2">
                           <span className="text-sm font-medium text-slate-800">
-                            기본 그룹명
+                            그룹명 (저장 시 적용)
                           </span>
                           <input
                             value={groupTitleInputs[group.groupKey] ?? ''}
@@ -1173,36 +1591,296 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                 </p>
               </div>
               <div className="rounded-lg bg-white px-4 py-3">
-                <p className="text-xs text-slate-500">중복 수</p>
-                <p className="text-xl font-semibold text-slate-900">
-                  {summary.duplicateCount}
-                </p>
-              </div>
-              <div className="rounded-lg bg-white px-4 py-3">
-                <p className="text-xs text-slate-500">기존 중복 스킵 수</p>
-                <p className="text-xl font-semibold text-slate-900">
-                  {summary.skippedExistingCount}
-                </p>
-              </div>
-              <div className="rounded-lg bg-white px-4 py-3">
                 <p className="text-xs text-slate-500">그룹 수</p>
                 <p className="text-xl font-semibold text-slate-900">
                   {summary.groupCount}
                 </p>
               </div>
-              <div className="rounded-lg bg-white px-4 py-3">
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <button
+                type="button"
+                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                  openScanResultDetail === 'inBatchDup'
+                    ? 'border-emerald-500 bg-emerald-100'
+                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+                onClick={() =>
+                  setOpenScanResultDetail((current) =>
+                    current === 'inBatchDup' ? null : 'inBatchDup'
+                  )
+                }
+              >
+                <p className="text-xs text-slate-500">중복 (같은 실행 내)</p>
+                <p className="text-xl font-semibold text-slate-900">
+                  {summary.duplicateCount}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">탭하여 쌍 비교</p>
+              </button>
+              <button
+                type="button"
+                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                  openScanResultDetail === 'existingSkip'
+                    ? 'border-emerald-500 bg-emerald-100'
+                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+                onClick={() =>
+                  setOpenScanResultDetail((current) =>
+                    current === 'existingSkip' ? null : 'existingSkip'
+                  )
+                }
+              >
+                <p className="text-xs text-slate-500">기존 출력과 동일 (스킵)</p>
+                <p className="text-xl font-semibold text-slate-900">
+                  {summary.skippedExistingCount}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">탭하여 경로 비교</p>
+              </button>
+              <button
+                type="button"
+                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                  openScanResultDetail === 'warnings'
+                    ? 'border-emerald-500 bg-emerald-100'
+                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+                onClick={() =>
+                  setOpenScanResultDetail((current) =>
+                    current === 'warnings' ? null : 'warnings'
+                  )
+                }
+              >
                 <p className="text-xs text-slate-500">경고 수</p>
                 <p className="text-xl font-semibold text-slate-900">
                   {summary.warningCount}
                 </p>
-              </div>
-              <div className="rounded-lg bg-white px-4 py-3">
+                <p className="mt-1 text-[11px] text-slate-500">탭하여 목록</p>
+              </button>
+              <button
+                type="button"
+                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                  openScanResultDetail === 'failures'
+                    ? 'border-emerald-500 bg-emerald-100'
+                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+                onClick={() =>
+                  setOpenScanResultDetail((current) =>
+                    current === 'failures' ? null : 'failures'
+                  )
+                }
+              >
                 <p className="text-xs text-slate-500">실패 수</p>
                 <p className="text-xl font-semibold text-slate-900">
                   {summary.failureCount}
                 </p>
-              </div>
+                <p className="mt-1 text-[11px] text-slate-500">탭하여 목록</p>
+              </button>
             </div>
+
+            {openScanResultDetail === 'inBatchDup' ? (
+              <div className="rounded-lg border border-emerald-200 bg-white p-4">
+                <p className="text-xs font-semibold text-slate-800">
+                  같은 실행 안에서 동일 파일(해시) — 대표 1장만 저장, 나머지는 복사
+                  생략
+                </p>
+                {groupedInBatchDuplicates.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-600">해당 없음</p>
+                ) : (
+                  <ul className="mt-3 space-y-4">
+                    {groupedInBatchDuplicates.map((dupGroup) => (
+                      <li
+                        key={dupGroup.canonicalPhotoId}
+                        className="rounded-md border border-slate-200 p-3"
+                      >
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                          <div className="sm:w-2/5">
+                            <p className="text-[11px] font-medium text-slate-600">
+                              대표(저장)
+                            </p>
+                            <div className="mt-1 overflow-hidden rounded border border-slate-200 bg-slate-100">
+                              <img
+                                src={localImageFileUrl(dupGroup.canonicalSourcePath)}
+                                alt=""
+                                className="h-40 w-full object-contain"
+                              />
+                            </div>
+                            <p className="mt-1 break-all text-[11px] text-slate-700">
+                              {dupGroup.canonicalSourcePath}
+                            </p>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-medium text-slate-600">
+                              중복(복사 생략){' '}
+                              {dupGroup.duplicateSourcePaths.length}장
+                            </p>
+                            <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                              {dupGroup.duplicateSourcePaths.map((path, idx) => (
+                                <div
+                                  key={`${path}-${idx}`}
+                                  className="overflow-hidden rounded border border-slate-200 bg-slate-100"
+                                >
+                                  <img
+                                    src={localImageFileUrl(path)}
+                                    alt=""
+                                    className="h-16 w-full object-cover"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                            <ul className="mt-2 space-y-1">
+                              {dupGroup.duplicateSourcePaths.map((path) => (
+                                <li
+                                  key={path}
+                                  className="break-all text-[11px] text-slate-600"
+                                >
+                                  {path}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+
+            {openScanResultDetail === 'existingSkip' ? (
+              <div className="rounded-lg border border-emerald-200 bg-white p-4">
+                <p className="text-xs font-semibold text-slate-800">
+                  출력 폴더에 이미 동일 해시가 있어 복사를 건너뜀
+                </p>
+                {summary.existingOutputSkipDetails.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-600">해당 없음</p>
+                ) : (
+                  <ul className="mt-3 space-y-3">
+                    {summary.existingOutputSkipDetails.map((row, index) => (
+                      <li
+                        key={`${row.sourcePhotoId}-${index}`}
+                        className="rounded-md border border-slate-200 p-3 text-sm text-slate-800"
+                      >
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <p className="text-[11px] font-medium text-slate-600">
+                              원본
+                            </p>
+                            <div className="mt-1 overflow-hidden rounded border border-slate-200 bg-slate-100">
+                              <img
+                                src={localImageFileUrl(row.sourcePath)}
+                                alt=""
+                                className="h-28 w-full object-contain"
+                              />
+                            </div>
+                            <p className="mt-1 break-all text-[11px]">{row.sourcePath}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-medium text-slate-600">
+                              기존 출력
+                            </p>
+                            <div className="mt-1 overflow-hidden rounded border border-slate-200 bg-slate-100">
+                              <img
+                                src={localImageFileUrl(
+                                  outputRoot
+                                    ? joinPathSegments(
+                                        outputRoot,
+                                        row.existingOutputRelativePath
+                                      )
+                                    : row.existingOutputRelativePath
+                                )}
+                                alt=""
+                                className="h-28 w-full object-contain"
+                              />
+                            </div>
+                            <p className="mt-1 break-all text-[11px]">
+                              {outputRoot
+                                ? joinPathSegments(
+                                    outputRoot,
+                                    row.existingOutputRelativePath
+                                  )
+                                : row.existingOutputRelativePath}
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              SHA-256: {row.sha256}
+                            </p>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+
+            {openScanResultDetail === 'warnings' ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <p className="text-xs font-semibold text-amber-950">경고 목록</p>
+                {summary.issues.filter((i) => i.severity === 'warning').length ===
+                0 ? (
+                  <p className="mt-2 text-sm text-slate-600">해당 없음</p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {summary.issues
+                      .filter((i) => i.severity === 'warning')
+                      .map((issue, index) => (
+                        <li
+                          key={`${issue.sourcePath}-${issue.code}-${index}`}
+                          className="rounded border border-amber-200 bg-white p-2 text-xs text-slate-800"
+                        >
+                          <p className="font-mono text-[11px] text-slate-600">
+                            {issue.code} · {issue.stage}
+                          </p>
+                          <p className="mt-1 break-all">{issue.sourcePath}</p>
+                          {issue.photoId ? (
+                            <p className="text-slate-500">photoId: {issue.photoId}</p>
+                          ) : null}
+                          <p className="mt-1 text-slate-700">{issue.message}</p>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+
+            {openScanResultDetail === 'failures' ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <p className="text-xs font-semibold text-red-950">실패 목록</p>
+                {summary.issues.filter((i) => i.severity === 'error').length ===
+                0 ? (
+                  <p className="mt-2 text-sm text-slate-600">해당 없음</p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {summary.issues
+                      .filter((i) => i.severity === 'error')
+                      .map((issue, index) => (
+                        <li
+                          key={`${issue.sourcePath}-${issue.code}-${index}`}
+                          className="rounded border border-red-200 bg-white p-2 text-xs text-slate-800"
+                        >
+                          <p className="font-mono text-[11px] text-slate-600">
+                            {issue.code} · {issue.stage}
+                          </p>
+                          <p className="mt-1 break-all">{issue.sourcePath}</p>
+                          {issue.photoId ? (
+                            <p className="text-slate-500">photoId: {issue.photoId}</p>
+                          ) : null}
+                          {issue.outputRelativePath ? (
+                            <p className="break-all text-slate-600">
+                              출력 상대경로: {issue.outputRelativePath}
+                            </p>
+                          ) : null}
+                          {issue.destinationPath ? (
+                            <p className="break-all text-slate-600">
+                              대상 경로: {issue.destinationPath}
+                            </p>
+                          ) : null}
+                          <p className="mt-1 text-slate-800">{issue.message}</p>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}

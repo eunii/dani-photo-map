@@ -1,7 +1,12 @@
 import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
+import type {
+  ExistingOutputSkipDetail,
+  InBatchDuplicateDetail
+} from '@application/dto/ScanPhotoLibraryResult'
 import type { MissingGpsCategory } from '@domain/entities/Photo'
 
 export type { ScanPhotoLibraryProgressPayload }
+export type { ExistingOutputSkipDetail, InBatchDuplicateDetail }
 
 export interface AppInfo {
   name: string
@@ -147,6 +152,8 @@ export interface ScanPhotoLibrarySummary {
   warningCount: number
   failureCount: number
   issues: ScanPhotoLibraryIssue[]
+  inBatchDuplicateDetails: InBatchDuplicateDetail[]
+  existingOutputSkipDetails: ExistingOutputSkipDetail[]
   mapGroups: MapGroupSummary[]
 }
 
@@ -202,6 +209,7 @@ export interface PreviewPendingOrganizationResult {
 export interface PreloadBridge {
   getAppInfo: () => Promise<AppInfo>
   ping: () => Promise<string>
+  pathToFileUrl: (absolutePath: string) => string
   selectDirectory: (
     options: DirectorySelectionOptions
   ) => Promise<string | null>

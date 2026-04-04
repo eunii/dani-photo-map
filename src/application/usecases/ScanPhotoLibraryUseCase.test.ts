@@ -861,4 +861,89 @@ describe('ScanPhotoLibraryUseCase', () => {
       { kind: 'fileFlowComplete', completed: 1, total: 1 }
     ])
   })
+
+  it('returns inBatchDuplicateDetails when two source files share a hash in the same run', async () => {
+    const { dependencies } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\A.JPG',
+      'C:\\source\\B.JPG'
+    ])
+    const meta = {
+      metadataIssues: [],
+      gps: { latitude: 37.5, longitude: 127.0 },
+      capturedAt: {
+        iso: '2026-04-03T10:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '03',
+        time: '100000'
+      }
+    }
+    dependencies.metadataReader.read.mockResolvedValue(meta)
+    dependencies.hasher.createSha256.mockResolvedValue('same-hash')
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output'
+    })
+
+    expect(result.duplicateCount).toBe(1)
+    expect(result.inBatchDuplicateDetails).toHaveLength(1)
+    expect(result.inBatchDuplicateDetails[0]).toMatchObject({
+      duplicatePhotoId: 'photo-2',
+      canonicalPhotoId: 'photo-1',
+      duplicateSourcePath: 'C:/source/B.JPG',
+      canonicalSourcePath: 'C:/source/A.JPG'
+    })
+  })
+
+  it('returns existingOutputSkipDetails when hash already exists in output', async () => {
+    const { dependencies } = createUseCaseDependencies()
+
+    dependencies.existingOutputScanner.scan.mockResolvedValue({
+      outputRoot: 'C:/output',
+      photos: [
+        {
+          id: 'out-1',
+          sourcePath: 'C:/output/existing/x.jpg',
+          sourceFileName: 'x.jpg',
+          outputRelativePath: '2026/04/x.jpg'
+        }
+      ]
+    })
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue(['C:\\source\\NEW.JPG'])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      gps: { latitude: 37.5, longitude: 127.0 },
+      capturedAt: {
+        iso: '2026-04-03T10:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '03',
+        time: '100000'
+      }
+    })
+    dependencies.hasher.createSha256
+      .mockResolvedValueOnce('dup-hash')
+      .mockResolvedValueOnce('dup-hash')
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output'
+    })
+
+    expect(result.skippedExistingCount).toBe(1)
+    expect(result.existingOutputSkipDetails).toHaveLength(1)
+    expect(result.existingOutputSkipDetails[0]).toMatchObject({
+      sourcePhotoId: 'photo-1',
+      sha256: 'dup-hash',
+      existingOutputRelativePath: '2026/04/x.jpg'
+    })
+  })
 })
