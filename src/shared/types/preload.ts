@@ -29,6 +29,12 @@ export interface ScanPhotoLibraryRequest {
     title: string
     photoIds: string[]
   }>
+  defaultTitleManualPhotoIds?: Array<{
+    photoId: string
+    title: string
+  }>
+  /** When set, only these preview group keys are copied to output in this scan (Organize wizard). */
+  copyGroupKeysInThisRun?: string[]
 }
 
 export interface LoadLibraryIndexRequest {
@@ -156,7 +162,8 @@ export interface PendingOrganizationAssignmentCandidate {
   title: string
   displayTitle: string
   photoCount: number
-  representativeGps: {
+  /** Present when the output group has a GPS-backed representative (map / move target). */
+  representativeGps?: {
     latitude: number
     longitude: number
   }

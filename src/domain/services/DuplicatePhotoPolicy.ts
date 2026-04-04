@@ -4,9 +4,13 @@ function getCapturedAtSourceScore(photo: Photo): number {
   switch (photo.capturedAtSource) {
     case 'exif-date-time-original':
       return 3
+    case 'exif-date-time-digitized':
     case 'exif-create-date':
+    case 'xmp-capture-date':
       return 2
+    case 'exif-modify-date':
     case 'file-modified-at':
+    case 'inferred-from-group-title':
       return 1
     default:
       return 0

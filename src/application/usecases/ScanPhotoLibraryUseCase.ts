@@ -29,6 +29,7 @@ import {
 import { selectCanonicalDuplicatePhoto } from '@domain/services/DuplicatePhotoPolicy'
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import { buildPhotoOutputRelativePath } from '@domain/services/PhotoNamingService'
+import { mergeGroupsByMatchingTitle } from '@application/services/mergeGroupsByMatchingTitle'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
 import { movePhotosIntoGroup } from '@application/services/movePhotosIntoGroup'
 import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
@@ -121,12 +122,32 @@ export class ScanPhotoLibraryUseCase {
       }
     }
 
-    const finalizedScanResult = await this.finalizePreparedPhotos(
+    const photoIdToGroupKey = this.computePhotoIdToGroupKeyMap(
       preparedPhotoRecords,
-      paths.outputRoot,
-      existingOutputHashes,
-      issues
+      validatedCommand.pendingCustomGroupSplits ?? [],
+      validatedCommand.defaultTitleManualPhotoIds ?? []
     )
+    const copyKeys = validatedCommand.copyGroupKeysInThisRun
+    const copyFilter =
+      copyKeys !== undefined
+        ? { keys: new Set(copyKeys), photoIdToGroupKey }
+        : undefined
+
+    const finalizedScanResult =
+      copyKeys !== undefined && copyKeys.length === 0
+        ? {
+            copiedPhotos: [] as Photo[],
+            copiedCount: 0,
+            duplicateCount: 0,
+            skippedExistingCount: 0
+          }
+        : await this.finalizePreparedPhotos(
+            preparedPhotoRecords,
+            paths.outputRoot,
+            existingOutputHashes,
+            issues,
+            copyFilter
+          )
     const index = await this.buildMergedLibraryIndex(
       paths,
       existingOutputSnapshot,
@@ -134,7 +155,8 @@ export class ScanPhotoLibraryUseCase {
       finalizedScanResult.copiedPhotos,
       validatedCommand.groupMetadataOverrides ?? [],
       validatedCommand.pendingGroupAssignments ?? [],
-      validatedCommand.pendingCustomGroupSplits ?? []
+      validatedCommand.pendingCustomGroupSplits ?? [],
+      validatedCommand.defaultTitleManualPhotoIds ?? []
     )
     const groups = index.groups
 
@@ -235,20 +257,75 @@ export class ScanPhotoLibraryUseCase {
     }
   }
 
+  private computePhotoIdToGroupKeyMap(
+    preparedPhotoRecords: PreparedPhotoRecord[],
+    pendingCustomGroupSplits: Array<{
+      groupKey: string
+      splitId: string
+      title: string
+      photoIds: string[]
+    }>,
+    defaultTitleManualPhotoIds: Array<{
+      photoId: string
+      title: string
+    }>
+  ): Map<string, string> {
+    const photos = preparedPhotoRecords.map((record) => ({ ...record.photo }))
+    const afterSplits = this.applyPendingCustomGroupSplits(
+      photos,
+      pendingCustomGroupSplits
+    )
+    const afterManual = this.applyDefaultTitleManualGrouping(
+      afterSplits,
+      defaultTitleManualPhotoIds
+    )
+    const map = new Map<string, string>()
+
+    for (const group of createPhotoGroups(afterManual)) {
+      for (const photoId of group.photoIds) {
+        map.set(photoId, group.groupKey)
+      }
+    }
+
+    return map
+  }
+
   private async finalizePreparedPhotos(
     preparedPhotoRecords: PreparedPhotoRecord[],
     outputRoot: string,
     existingOutputHashes: Set<string>,
-    issues: ScanPhotoLibraryIssue[]
+    issues: ScanPhotoLibraryIssue[],
+    copyFilter?: {
+      keys: Set<string>
+      photoIdToGroupKey: Map<string, string>
+    }
   ): Promise<FinalizedScanResult> {
-    const canonicalPhotoIdByHash = this.createCanonicalPhotoIdByHash(
-      preparedPhotoRecords.map((record) => record.photo)
-    )
+    const photosForCanonical = copyFilter?.keys.size
+      ? preparedPhotoRecords
+          .filter((record) => {
+            const key = copyFilter.photoIdToGroupKey.get(record.photo.id)
+
+            return key !== undefined && copyFilter.keys.has(key)
+          })
+          .map((record) => record.photo)
+      : preparedPhotoRecords.map((record) => record.photo)
+    const canonicalPhotoIdByHash =
+      this.createCanonicalPhotoIdByHash(photosForCanonical)
     const copiedPhotos: Photo[] = []
     let duplicateCount = 0
     let skippedExistingCount = 0
 
     for (const preparedPhotoRecord of preparedPhotoRecords) {
+      if (copyFilter?.keys.size) {
+        const groupKey = copyFilter.photoIdToGroupKey.get(
+          preparedPhotoRecord.photo.id
+        )
+
+        if (groupKey === undefined || !copyFilter.keys.has(groupKey)) {
+          continue
+        }
+      }
+
       const finalizedPhoto = await this.finalizePreparedPhoto(
         preparedPhotoRecord,
         outputRoot,
@@ -404,15 +481,23 @@ export class ScanPhotoLibraryUseCase {
       splitId: string
       title: string
       photoIds: string[]
+    }>,
+    defaultTitleManualPhotoIds: Array<{
+      photoId: string
+      title: string
     }>
   ): Promise<LibraryIndex> {
     const rebuiltExistingIndex = rebuildLibraryIndexFromExistingOutput(
       existingOutputSnapshot
     )
     const mergedBasePhotos = rebuiltExistingIndex?.photos ?? []
-    const customizedCopiedPhotos = this.applyPendingCustomGroupSplits(
+    const afterSplits = this.applyPendingCustomGroupSplits(
       copiedPhotos,
       pendingCustomGroupSplits
+    )
+    const customizedCopiedPhotos = this.applyDefaultTitleManualGrouping(
+      afterSplits,
+      defaultTitleManualPhotoIds
     )
     const rebuiltIndex: LibraryIndex = {
       version: LIBRARY_INDEX_VERSION,
@@ -429,12 +514,19 @@ export class ScanPhotoLibraryUseCase {
       groupMetadataOverrides
     )
 
-    return this.applyPendingGroupAssignments(
+    const afterAssignments = await this.applyPendingGroupAssignments(
       metadataAppliedIndex,
       customizedCopiedPhotos,
       paths.outputRoot,
       pendingGroupAssignments
     )
+
+    return mergeGroupsByMatchingTitle({
+      index: afterAssignments,
+      outputRoot: paths.outputRoot,
+      fileSystem: this.dependencies.fileSystem,
+      rules: this.rules
+    })
   }
 
   private applyPendingCustomGroupSplits(
@@ -494,6 +586,78 @@ export class ScanPhotoLibraryUseCase {
             manualGroupTitle: split.title
           }
         : photo
+    })
+  }
+
+  private normalizeDefaultGroupTitle(title: string): string {
+    return title.trim().replace(/\s+/g, ' ')
+  }
+
+  private applyDefaultTitleManualGrouping(
+    photos: Photo[],
+    entries: Array<{
+      photoId: string
+      title: string
+    }>
+  ): Photo[] {
+    if (photos.length === 0 || entries.length === 0) {
+      return photos
+    }
+
+    const normalizedToManualId = new Map<string, string>()
+    const normalizedToDisplayTitle = new Map<string, string>()
+
+    for (const entry of entries) {
+      const normalized = this.normalizeDefaultGroupTitle(entry.title)
+
+      if (normalized.length === 0) {
+        continue
+      }
+
+      if (!normalizedToManualId.has(normalized)) {
+        normalizedToManualId.set(
+          normalized,
+          `manual-default-title|${encodeURIComponent(normalized)}`
+        )
+        normalizedToDisplayTitle.set(normalized, entry.title.trim())
+      }
+    }
+
+    const photoIdToNormalized = new Map<string, string>()
+
+    for (const entry of entries) {
+      const normalized = this.normalizeDefaultGroupTitle(entry.title)
+
+      if (normalized.length === 0) {
+        continue
+      }
+
+      photoIdToNormalized.set(entry.photoId, normalized)
+    }
+
+    return photos.map((photo) => {
+      if (photo.manualGroupId) {
+        return photo
+      }
+
+      const normalized = photoIdToNormalized.get(photo.id)
+
+      if (!normalized) {
+        return photo
+      }
+
+      const manualGroupId = normalizedToManualId.get(normalized)
+      const manualGroupTitle = normalizedToDisplayTitle.get(normalized)
+
+      if (!manualGroupId || !manualGroupTitle) {
+        return photo
+      }
+
+      return {
+        ...photo,
+        manualGroupId,
+        manualGroupTitle
+      }
     })
   }
 
@@ -569,35 +733,33 @@ export class ScanPhotoLibraryUseCase {
 
   private async applyPendingGroupAssignments(
     index: LibraryIndex,
-    copiedPhotos: Photo[],
+    _copiedPhotos: Photo[],
     outputRoot: string,
     pendingGroupAssignments: Array<{
       groupKey: string
       targetGroupId: string
     }>
   ): Promise<LibraryIndex> {
-    if (copiedPhotos.length === 0 || pendingGroupAssignments.length === 0) {
+    if (pendingGroupAssignments.length === 0) {
       return index
     }
 
-    const pendingGroups = createPhotoGroups(copiedPhotos)
-    const pendingPhotoIdsByGroupKey = new Map(
-      pendingGroups.map((group) => [group.groupKey, group.photoIds] as const)
-    )
     let nextIndex = index
 
     for (const assignment of pendingGroupAssignments) {
-      const movingPhotoIds = pendingPhotoIdsByGroupKey.get(assignment.groupKey) ?? []
+      const sourceGroup = nextIndex.groups.find(
+        (group) => group.groupKey === assignment.groupKey
+      )
 
-      if (movingPhotoIds.length === 0) {
+      if (!sourceGroup || sourceGroup.photoIds.length === 0) {
         continue
       }
 
-      const sourceGroup = nextIndex.groups.find((group) =>
-        movingPhotoIds.every((photoId) => group.photoIds.includes(photoId))
+      const destinationGroup = nextIndex.groups.find(
+        (group) => group.id === assignment.targetGroupId
       )
 
-      if (!sourceGroup) {
+      if (!destinationGroup) {
         continue
       }
 
@@ -606,9 +768,10 @@ export class ScanPhotoLibraryUseCase {
         outputRoot,
         sourceGroupId: sourceGroup.id,
         destinationGroupId: assignment.targetGroupId,
-        photoIds: movingPhotoIds,
+        photoIds: sourceGroup.photoIds,
         fileSystem: this.dependencies.fileSystem,
-        rules: this.rules
+        rules: this.rules,
+        allowDestinationWithoutGps: !destinationGroup.representativeGps
       })
     }
 

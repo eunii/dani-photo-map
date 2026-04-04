@@ -1,4 +1,8 @@
 import type { Photo } from '@domain/entities/Photo'
+import {
+  isUsableCapturedAtValue,
+  pickEarliestUsableCapturedAtFromPhotos
+} from '@domain/services/groupingDateHelpers'
 
 const MAX_GROUP_TIME_GAP_MS = 6 * 60 * 60 * 1000
 
@@ -64,6 +68,33 @@ function buildGroupKey(seed: GroupSeed): string {
   return baseKey.join('|')
 }
 
+function finalizeGroupSeed(photos: Photo[], seed: GroupSeed): GroupSeed {
+  const manual = photos.find(
+    (photo) => photo.manualGroupId && photo.manualGroupTitle?.trim()
+  )
+
+  if (manual?.manualGroupTitle && manual.manualGroupId) {
+    return {
+      ...seed,
+      manualGroupId: manual.manualGroupId,
+      manualGroupTitle: manual.manualGroupTitle.trim()
+    }
+  }
+
+  const earliest = pickEarliestUsableCapturedAtFromPhotos(photos)
+
+  if (!earliest) {
+    return seed
+  }
+
+  return {
+    ...seed,
+    year: earliest.year,
+    month: earliest.month,
+    day: earliest.day
+  }
+}
+
 function comparePhotosByTimeline(left: Photo, right: Photo): number {
   const leftIso = left.capturedAt?.iso ?? ''
   const rightIso = right.capturedAt?.iso ?? ''
@@ -83,7 +114,14 @@ function shouldStartNewGroup(
     return true
   }
 
-  if (getPhotoDay(previousPhoto) !== getPhotoDay(nextPhoto)) {
+  const previousUsable = isUsableCapturedAtValue(previousPhoto.capturedAt)
+  const nextUsable = isUsableCapturedAtValue(nextPhoto.capturedAt)
+
+  if (
+    previousUsable &&
+    nextUsable &&
+    getPhotoDay(previousPhoto) !== getPhotoDay(nextPhoto)
+  ) {
     return true
   }
 
@@ -126,9 +164,11 @@ export function groupPhotosByPolicy(photos: Photo[]): PhotoGroupBucket[] {
     for (const photo of sortedPhotos) {
       if (shouldStartNewGroup(currentPhotos.at(-1), photo)) {
         if (currentSeed && currentPhotos.length > 0) {
+          const finalizedSeed = finalizeGroupSeed(currentPhotos, currentSeed)
+
           buckets.push({
-            groupKey: buildGroupKey(currentSeed),
-            displayTitle: buildGroupDisplayTitle(currentSeed),
+            groupKey: buildGroupKey(finalizedSeed),
+            displayTitle: buildGroupDisplayTitle(finalizedSeed),
             photos: currentPhotos
           })
         }
@@ -150,9 +190,11 @@ export function groupPhotosByPolicy(photos: Photo[]): PhotoGroupBucket[] {
     }
 
     if (currentSeed && currentPhotos.length > 0) {
+      const finalizedSeed = finalizeGroupSeed(currentPhotos, currentSeed)
+
       buckets.push({
-        groupKey: buildGroupKey(currentSeed),
-        displayTitle: buildGroupDisplayTitle(currentSeed),
+        groupKey: buildGroupKey(finalizedSeed),
+        displayTitle: buildGroupDisplayTitle(finalizedSeed),
         photos: currentPhotos
       })
     }

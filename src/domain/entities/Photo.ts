@@ -3,8 +3,12 @@ import type { PhotoTimestamp } from '@domain/value-objects/PhotoTimestamp'
 
 export const photoCapturedAtSources = [
   'exif-date-time-original',
+  'exif-date-time-digitized',
   'exif-create-date',
-  'file-modified-at'
+  'xmp-capture-date',
+  'exif-modify-date',
+  'file-modified-at',
+  'inferred-from-group-title'
 ] as const
 
 export type PhotoCapturedAtSource = typeof photoCapturedAtSources[number]

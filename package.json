@@ -1,8 +1,8 @@
 {
-  "name": "photo-organizer",
+  "name": "dani-photo-map",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron desktop app for organizing local photo libraries.",
+  "description": "Dani Photo Map — local photo library organizer with map and groups.",
   "type": "module",
   "main": "dist/main/index.js",
   "scripts": {
@@ -14,7 +14,8 @@
     "test:watch": "vitest"
   },
   "build": {
-    "appId": "com.photo.organizer",
+    "appId": "com.dani.photomap",
+    "productName": "Dani Photo Map",
     "files": [
       "dist/**/*",
       "package.json"

@@ -5,6 +5,7 @@ import {
 import type { ExistingOutputScannerPort } from '@application/ports/ExistingOutputScannerPort'
 import type { PhotoLibraryFileSystemPort } from '@application/ports/PhotoLibraryFileSystemPort'
 import type { LibraryIndexStorePort } from '@application/ports/LibraryIndexStorePort'
+import { mergeGroupsByMatchingTitle } from '@application/services/mergeGroupsByMatchingTitle'
 import { movePhotosIntoGroup } from '@application/services/movePhotosIntoGroup'
 import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
@@ -23,7 +24,7 @@ export class MovePhotosToGroupUseCase {
     const validatedCommand = movePhotosToGroupCommandSchema.parse(command)
     const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
     const index = await this.loadEditableIndex(outputRoot)
-    const updatedIndex = await movePhotosIntoGroup({
+    const afterMove = await movePhotosIntoGroup({
       index,
       outputRoot,
       sourceGroupId: validatedCommand.sourceGroupId,
@@ -33,9 +34,16 @@ export class MovePhotosToGroupUseCase {
       rules: this.rules
     })
 
-    await this.libraryIndexStore.save(updatedIndex)
+    const mergedIndex = await mergeGroupsByMatchingTitle({
+      index: afterMove,
+      outputRoot,
+      fileSystem: this.fileSystem,
+      rules: this.rules
+    })
 
-    return updatedIndex
+    await this.libraryIndexStore.save(mergedIndex)
+
+    return mergedIndex
   }
 
   private async loadEditableIndex(outputRoot: string): Promise<LibraryIndex> {

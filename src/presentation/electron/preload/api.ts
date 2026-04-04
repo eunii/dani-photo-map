@@ -14,7 +14,7 @@ const IPC_CHANNELS = {
 export const preloadBridge: PreloadBridge = {
   async getAppInfo() {
     return {
-      name: 'Photo Organizer',
+      name: 'Dani Photo Map',
       version: '0.1.0'
     }
   },

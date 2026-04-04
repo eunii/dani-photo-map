@@ -53,7 +53,7 @@ export interface PendingOrganizationPreviewGroup {
     title: string
     displayTitle: string
     photoCount: number
-    representativeGps: {
+    representativeGps?: {
       latitude: number
       longitude: number
     }
@@ -407,7 +407,7 @@ export class PreviewPendingOrganizationUseCase {
     title: string
     displayTitle: string
     photoCount: number
-    representativeGps: {
+    representativeGps?: {
       latitude: number
       longitude: number
     }
@@ -415,31 +415,42 @@ export class PreviewPendingOrganizationUseCase {
     const photosById = new Map(photos.map((photo) => [photo.id, photo] as const))
     const currentCapturedAt = currentPhoto?.capturedAt?.iso
 
-    return groups
-      .filter((group) => Boolean(group.representativeGps))
-      .map((group) => ({
-        group,
-        representativeCapturedAt: group.representativePhotoId
-          ? photosById.get(group.representativePhotoId)?.capturedAt?.iso
-          : undefined
-      }))
-      .sort((left, right) =>
-        this.compareGroupCandidateByCapturedAt(
-          left.representativeCapturedAt,
-          right.representativeCapturedAt,
-          currentCapturedAt,
-          left.group.title,
-          right.group.title
-        )
+    const decorated = groups.map((group) => ({
+      group,
+      representativeCapturedAt: group.representativePhotoId
+        ? photosById.get(group.representativePhotoId)?.capturedAt?.iso
+        : undefined,
+      hasRepresentativeGps: Boolean(group.representativeGps)
+    }))
+
+    const sortByTimeAndTitle = (
+      left: (typeof decorated)[number],
+      right: (typeof decorated)[number]
+    ) =>
+      this.compareGroupCandidateByCapturedAt(
+        left.representativeCapturedAt,
+        right.representativeCapturedAt,
+        currentCapturedAt,
+        left.group.title,
+        right.group.title
       )
-      .slice(0, 8)
-      .map(({ group }) => ({
-        id: group.id,
-        title: group.title,
-        displayTitle: group.displayTitle,
-        photoCount: group.photoIds.length,
-        representativeGps: group.representativeGps!
-      }))
+
+    const withGps = decorated
+      .filter((entry) => entry.hasRepresentativeGps)
+      .sort(sortByTimeAndTitle)
+    const withoutGps = decorated
+      .filter((entry) => !entry.hasRepresentativeGps)
+      .sort(sortByTimeAndTitle)
+
+    return [...withGps, ...withoutGps].map(({ group }) => ({
+      id: group.id,
+      title: group.title,
+      displayTitle: group.displayTitle,
+      photoCount: group.photoIds.length,
+      ...(group.representativeGps
+        ? { representativeGps: group.representativeGps }
+        : {})
+    }))
   }
 
   private compareGroupCandidateByCapturedAt(

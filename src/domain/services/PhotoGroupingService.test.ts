@@ -81,6 +81,34 @@ describe('PhotoGroupingService', () => {
     })
   })
 
+  it('merges dated and undated photos in the same region into one bucket with earliest valid date in title', () => {
+    const photos: Photo[] = [
+      createPhoto({
+        id: 'photo-a',
+        sourceFileName: 'A.JPG',
+        regionName: 'hwaseong-si',
+        capturedAt: {
+          iso: '2026-03-31T10:00:00.000Z',
+          year: '2026',
+          month: '03',
+          day: '31',
+          time: '100000'
+        }
+      }),
+      createPhoto({
+        id: 'photo-b',
+        sourceFileName: 'B.JPG',
+        regionName: 'hwaseong-si'
+      })
+    ]
+
+    const groups = createPhotoGroups(photos)
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.displayTitle).toBe('2026-03-31 hwaseong-si')
+    expect(groups[0]?.title).toBe('2026-03-31 hwaseong-si')
+  })
+
   it('selects a representative photo using gps and thumbnail quality', () => {
     const groups = createPhotoGroups([
       createPhoto({

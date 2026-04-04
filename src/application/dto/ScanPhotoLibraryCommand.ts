@@ -30,7 +30,17 @@ export const scanPhotoLibraryCommandSchema = z.object({
         photoIds: z.array(z.string().min(1)).min(1)
       })
     )
-    .optional()
+    .optional(),
+  defaultTitleManualPhotoIds: z
+    .array(
+      z.object({
+        photoId: z.string().min(1),
+        title: z.string().min(1)
+      })
+    )
+    .optional(),
+  /** If set, only photos whose logical groupKey is in this list are copied this run (wizard steps). Omit for full copy. */
+  copyGroupKeysInThisRun: z.array(z.string().min(1)).optional()
 })
 
 export type ScanPhotoLibraryCommand = z.infer<

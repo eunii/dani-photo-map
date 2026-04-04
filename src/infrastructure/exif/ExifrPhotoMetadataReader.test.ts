@@ -79,9 +79,33 @@ describe('ExifrPhotoMetadataReader', () => {
     )
 
     await expect(reader.read('C:/photos/IMG_0004.JPG')).resolves.toMatchObject({
-      capturedAtSource: 'exif-create-date',
+      capturedAtSource: 'exif-date-time-digitized',
       gps: undefined,
       metadataIssues: ['gps-invalid']
+    })
+  })
+
+  it('uses XMP/Photoshop date when EXIF originals are absent', async () => {
+    const reader = new ExifrPhotoMetadataReader(
+      vi.fn().mockResolvedValue({
+        photoshop: {
+          DateCreated: new Date('2023-08-15T12:30:00.000Z')
+        },
+        latitude: 37.5665,
+        longitude: 126.978
+      }),
+      vi.fn()
+    )
+
+    await expect(reader.read('C:/photos/IMG_0005.JPG')).resolves.toMatchObject({
+      capturedAt: {
+        iso: '2023-08-15T12:30:00.000Z',
+        year: '2023',
+        month: '08',
+        day: '15'
+      },
+      capturedAtSource: 'xmp-capture-date',
+      metadataIssues: []
     })
   })
 })

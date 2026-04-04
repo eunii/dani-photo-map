@@ -5,6 +5,7 @@ import type {
   PhotoMetadata,
   PhotoMetadataReaderPort
 } from '@application/ports/PhotoMetadataReaderPort'
+import type { PhotoCapturedAtSource } from '@domain/entities/Photo'
 import type { PhotoTimestamp } from '@domain/value-objects/PhotoTimestamp'
 
 function toPhotoTimestamp(value: Date): PhotoTimestamp {
@@ -51,6 +52,42 @@ function isLikelyCapturePath(sourcePath: string): boolean {
   ].some((keyword) => normalizedPath.includes(keyword))
 }
 
+function isValidDate(value: unknown): value is Date {
+  return value instanceof Date && !Number.isNaN(value.getTime())
+}
+
+/**
+ * XMP/Photoshop/IPTC 등 병합된 메타에서 촬영일 후보를 찾습니다.
+ * mergeOutput: true일 때 네임스페이스별 객체가 루트에 붙습니다.
+ */
+function pickDateFromEmbeddedSidecar(metadata: Record<string, unknown>): Date | undefined {
+  const photoshop = metadata.photoshop as { DateCreated?: unknown } | undefined
+
+  if (photoshop && isValidDate(photoshop.DateCreated)) {
+    return photoshop.DateCreated
+  }
+
+  const xmp = metadata.xmp as { CreateDate?: unknown; ModifyDate?: unknown } | undefined
+
+  if (xmp) {
+    if (isValidDate(xmp.CreateDate)) {
+      return xmp.CreateDate
+    }
+
+    if (isValidDate(xmp.ModifyDate)) {
+      return xmp.ModifyDate
+    }
+  }
+
+  const iptc = metadata.iptc as { DateCreated?: unknown } | undefined
+
+  if (iptc && isValidDate(iptc.DateCreated)) {
+    return iptc.DateCreated
+  }
+
+  return undefined
+}
+
 export class ExifrPhotoMetadataReader implements PhotoMetadataReaderPort {
   constructor(
     private readonly parseMetadata: typeof exifr.parse = exifr.parse,
@@ -58,35 +95,43 @@ export class ExifrPhotoMetadataReader implements PhotoMetadataReaderPort {
   ) {}
 
   async read(sourcePath: string): Promise<PhotoMetadata> {
-    const metadata = await this.parseMetadata(sourcePath, {
+    const metadata = (await this.parseMetadata(sourcePath, {
       gps: true,
       tiff: true,
-      exif: true
-    })
+      exif: true,
+      xmp: true,
+      iptc: true
+    })) as Record<string, unknown> | null | undefined
     const metadataIssues: string[] = []
 
     if (!metadata) {
       metadataIssues.push('metadata-empty')
     }
 
-    const dateTimeOriginal =
-      metadata?.DateTimeOriginal instanceof Date
-        ? metadata.DateTimeOriginal
-        : undefined
-    const createDate =
-      metadata?.CreateDate instanceof Date ? metadata.CreateDate : undefined
+    const dateTimeOriginal = isValidDate(metadata?.DateTimeOriginal)
+      ? metadata.DateTimeOriginal
+      : undefined
+    const exifDigitizedOrCreate = isValidDate(metadata?.CreateDate)
+      ? metadata.CreateDate
+      : undefined
+    const xmpOrIptcDate = metadata ? pickDateFromEmbeddedSidecar(metadata) : undefined
+    const modifyDate = isValidDate(metadata?.ModifyDate) ? metadata.ModifyDate : undefined
 
-    let capturedAt = dateTimeOriginal
-      ? toPhotoTimestamp(dateTimeOriginal)
-      : createDate
-        ? toPhotoTimestamp(createDate)
-        : undefined
-    let capturedAtSource: PhotoMetadata['capturedAtSource']
+    let capturedAt: PhotoTimestamp | undefined
+    let capturedAtSource: PhotoCapturedAtSource | undefined
 
     if (dateTimeOriginal) {
+      capturedAt = toPhotoTimestamp(dateTimeOriginal)
       capturedAtSource = 'exif-date-time-original'
-    } else if (createDate) {
-      capturedAtSource = 'exif-create-date'
+    } else if (exifDigitizedOrCreate) {
+      capturedAt = toPhotoTimestamp(exifDigitizedOrCreate)
+      capturedAtSource = 'exif-date-time-digitized'
+    } else if (xmpOrIptcDate) {
+      capturedAt = toPhotoTimestamp(xmpOrIptcDate)
+      capturedAtSource = 'xmp-capture-date'
+    } else if (modifyDate) {
+      capturedAt = toPhotoTimestamp(modifyDate)
+      capturedAtSource = 'exif-modify-date'
     } else {
       const fileModifiedAt = await this.readFileModifiedTimestamp(sourcePath)
 
@@ -100,27 +145,29 @@ export class ExifrPhotoMetadataReader implements PhotoMetadataReaderPort {
     }
 
     const gps =
-      isFiniteNumber(metadata?.latitude) &&
-      isFiniteNumber(metadata?.longitude) &&
+      metadata &&
+      isFiniteNumber(metadata.latitude) &&
+      isFiniteNumber(metadata.longitude) &&
       isValidLatitude(metadata.latitude) &&
       isValidLongitude(metadata.longitude)
         ? {
-            latitude: metadata.latitude,
-            longitude: metadata.longitude
+            latitude: metadata.latitude as number,
+            longitude: metadata.longitude as number
           }
         : undefined
     const missingGpsCategory = !gps
       ? isLikelyCapturePath(sourcePath)
         ? 'capture'
-        : capturedAtSource === 'file-modified-at'
+        : capturedAtSource === 'file-modified-at' ||
+            capturedAtSource === 'exif-modify-date'
           ? 'missing-imported-gps'
           : 'missing-original-gps'
       : undefined
 
     if (!gps) {
       if (
-        isFiniteNumber(metadata?.latitude) ||
-        isFiniteNumber(metadata?.longitude)
+        metadata &&
+        (isFiniteNumber(metadata.latitude) || isFiniteNumber(metadata.longitude))
       ) {
         metadataIssues.push('gps-invalid')
       } else {

@@ -182,6 +182,7 @@ function registerIpcHandlers(): void {
 
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
+    title: 'Dani Photo Map',
     width: 1280,
     height: 800,
     minWidth: 1024,

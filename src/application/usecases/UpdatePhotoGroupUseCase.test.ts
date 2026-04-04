@@ -225,4 +225,97 @@ describe('UpdatePhotoGroupUseCase', () => {
     })
     expect(savedIndexes).toHaveLength(1)
   })
+
+  it('merges another group into the gps-backed group when titles match after save', async () => {
+    const savedIndexes: LibraryIndex[] = []
+    const fileSystem = createFileSystem()
+    const index: LibraryIndex = {
+      ...createLibraryIndex(),
+      photos: [
+        {
+          id: 'photo-1',
+          sourcePath: 'C:/photos/source/IMG_0001.JPG',
+          sourceFileName: 'IMG_0001.JPG',
+          capturedAt: {
+            iso: '2026-04-03T08:00:00.000Z',
+            year: '2026',
+            month: '04',
+            day: '03',
+            time: '080000'
+          },
+          gps: { latitude: 37.5665, longitude: 126.978 },
+          outputRelativePath: '2026/04/seoul/IMG_0001.JPG',
+          thumbnailRelativePath: '.photo-organizer/thumbnails/photo-1.webp',
+          isDuplicate: false,
+          metadataIssues: []
+        },
+        {
+          id: 'photo-2',
+          sourcePath: 'C:/photos/source/IMG_0002.JPG',
+          sourceFileName: 'IMG_0002.JPG',
+          capturedAt: {
+            iso: '2026-04-03T09:00:00.000Z',
+            year: '2026',
+            month: '04',
+            day: '03',
+            time: '090000'
+          },
+          outputRelativePath: '2026/04/location-unknown/IMG_0002.JPG',
+          thumbnailRelativePath: '.photo-organizer/thumbnails/photo-2.webp',
+          isDuplicate: false,
+          metadataIssues: ['gps-missing'],
+          missingGpsCategory: 'missing-original-gps',
+          locationSource: 'none'
+        }
+      ],
+      groups: [
+        {
+          id: 'group-seoul',
+          groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+          title: '공통제목',
+          displayTitle: '2026-04-03 seoul',
+          photoIds: ['photo-1'],
+          representativePhotoId: 'photo-1',
+          representativeGps: {
+            latitude: 37.5665,
+            longitude: 126.978
+          },
+          representativeThumbnailRelativePath: '.photo-organizer/thumbnails/photo-1.webp',
+          companions: [],
+          notes: undefined
+        },
+        {
+          id: 'group-unknown',
+          groupKey:
+            'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+          title: '임시제목',
+          displayTitle: '2026-04-03 location-unknown',
+          photoIds: ['photo-2'],
+          companions: [],
+          notes: undefined
+        }
+      ]
+    }
+    const store = {
+      load: vi.fn().mockResolvedValue(index),
+      save: vi.fn(async (saved: LibraryIndex) => {
+        savedIndexes.push(saved)
+      })
+    }
+    const useCase = new UpdatePhotoGroupUseCase(store, fileSystem)
+
+    const result = await useCase.execute({
+      outputRoot: 'C:/photos/output',
+      groupId: 'group-unknown',
+      title: '공통제목',
+      companions: []
+    })
+
+    expect(result.groups).toHaveLength(1)
+    expect(result.groups[0]?.photoIds).toEqual(['photo-1', 'photo-2'])
+    expect(result.groups[0]?.title).toBe('공통제목')
+    expect(fileSystem.moveFile).toHaveBeenCalled()
+    expect(savedIndexes).toHaveLength(1)
+    expect(savedIndexes[0]?.groups).toHaveLength(1)
+  })
 })

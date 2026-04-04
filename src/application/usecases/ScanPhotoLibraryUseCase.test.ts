@@ -543,4 +543,236 @@ describe('ScanPhotoLibraryUseCase', () => {
       getSavedIndex()?.photos.find((photo) => photo.id === 'photo-3')?.manualGroupTitle
     ).toBeUndefined()
   })
+
+  it('applies default group title manual ids so same title shares one manual bucket for non-split photos', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_4001.JPG',
+      'C:\\source\\IMG_4002.JPG',
+      'C:\\source\\IMG_4003.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: ['gps-missing'],
+      missingGpsCategory: 'missing-original-gps',
+      capturedAt: {
+        iso: '2026-04-03T11:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '03',
+        time: '110000'
+      }
+    })
+    dependencies.hasher.createSha256
+      .mockResolvedValueOnce('hash-4001')
+      .mockResolvedValueOnce('hash-4002')
+      .mockResolvedValueOnce('hash-4003')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      defaultTitleManualPhotoIds: [
+        { photoId: 'photo-1', title: '부산  당일' },
+        { photoId: 'photo-2', title: '부산 당일' }
+      ]
+    })
+
+    const p1 = getSavedIndex()?.photos.find((photo) => photo.id === 'photo-1')
+    const p2 = getSavedIndex()?.photos.find((photo) => photo.id === 'photo-2')
+    const p3 = getSavedIndex()?.photos.find((photo) => photo.id === 'photo-3')
+
+    expect(p1?.manualGroupTitle).toBe('부산  당일')
+    expect(p2?.manualGroupTitle).toBe('부산  당일')
+    expect(p1?.manualGroupId).toBe(p2?.manualGroupId)
+    expect(p1?.manualGroupId).toMatch(/^manual-default-title\|/)
+    expect(p3?.manualGroupId).toBeUndefined()
+
+    const titles = (getSavedIndex()?.groups ?? []).map((g) => g.title).sort()
+    expect(titles).toContain('부산  당일')
+  })
+
+  it('merges groups that share the same title into one when a representative GPS group exists', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_GPS.JPG',
+      'C:\\source\\IMG_NOGPS.JPG'
+    ])
+    dependencies.metadataReader.read
+      .mockResolvedValueOnce({
+        metadataIssues: [],
+        gps: {
+          latitude: 37.5665,
+          longitude: 126.978
+        },
+        capturedAt: {
+          iso: '2026-04-03T10:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '100000'
+        }
+      })
+      .mockResolvedValueOnce({
+        metadataIssues: ['gps-missing'],
+        missingGpsCategory: 'missing-original-gps',
+        capturedAt: {
+          iso: '2026-04-03T11:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '110000'
+        }
+      })
+    dependencies.hasher.createSha256
+      .mockResolvedValueOnce('hash-gps')
+      .mockResolvedValueOnce('hash-nogps')
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      groupMetadataOverrides: [
+        {
+          groupKey: 'group|region=seoul|year=2026|month=04|day=03|slot=1',
+          title: '동일제목',
+          companions: [],
+          notes: undefined
+        },
+        {
+          groupKey:
+            'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+          title: '동일제목',
+          companions: [],
+          notes: undefined
+        }
+      ]
+    })
+
+    expect(getSavedIndex()?.groups).toHaveLength(1)
+    expect(getSavedIndex()?.groups[0]?.title).toBe('동일제목')
+    expect(getSavedIndex()?.groups[0]?.photoIds).toHaveLength(2)
+    expect(dependencies.fileSystem.moveFile).toHaveBeenCalled()
+  })
+
+  it('merges groups that share the same title when no group has representative GPS', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_A.JPG',
+      'C:\\source\\IMG_B.JPG'
+    ])
+    const noGpsMeta = {
+      metadataIssues: ['gps-missing'] as string[],
+      missingGpsCategory: 'missing-original-gps' as const,
+      capturedAt: {
+        iso: '2026-04-03T10:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '03',
+        time: '100000'
+      }
+    }
+    dependencies.metadataReader.read
+      .mockResolvedValueOnce({ ...noGpsMeta })
+      .mockResolvedValueOnce({
+        ...noGpsMeta,
+        capturedAt: {
+          iso: '2026-04-04T10:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '04',
+          time: '100000'
+        }
+      })
+    dependencies.hasher.createSha256
+      .mockResolvedValueOnce('hash-a')
+      .mockResolvedValueOnce('hash-b')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      groupMetadataOverrides: [
+        {
+          groupKey:
+            'group|region=location-unknown|year=2026|month=04|day=03|slot=1',
+          title: '무GPS동일제목',
+          companions: [],
+          notes: undefined
+        },
+        {
+          groupKey:
+            'group|region=location-unknown|year=2026|month=04|day=04|slot=2',
+          title: '무GPS동일제목',
+          companions: [],
+          notes: undefined
+        }
+      ]
+    })
+
+    expect(getSavedIndex()?.groups).toHaveLength(1)
+    expect(getSavedIndex()?.groups[0]?.title).toBe('무GPS동일제목')
+    expect(getSavedIndex()?.groups[0]?.photoIds).toHaveLength(2)
+    expect(dependencies.fileSystem.moveFile).toHaveBeenCalled()
+  })
+
+  it('copies only photos whose groupKey is listed in copyGroupKeysInThisRun', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_GPS.JPG',
+      'C:\\source\\IMG_NOGPS.JPG'
+    ])
+    dependencies.metadataReader.read
+      .mockResolvedValueOnce({
+        metadataIssues: [],
+        gps: {
+          latitude: 37.5665,
+          longitude: 126.978
+        },
+        capturedAt: {
+          iso: '2026-04-03T10:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '100000'
+        }
+      })
+      .mockResolvedValueOnce({
+        metadataIssues: ['gps-missing'],
+        missingGpsCategory: 'missing-original-gps',
+        capturedAt: {
+          iso: '2026-04-03T11:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '110000'
+        }
+      })
+    dependencies.hasher.createSha256
+      .mockResolvedValueOnce('hash-gps')
+      .mockResolvedValueOnce('hash-nogps')
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      copyGroupKeysInThisRun: [
+        'group|region=seoul|year=2026|month=04|day=03|slot=1'
+      ]
+    })
+
+    expect(result.copiedCount).toBe(1)
+    expect(dependencies.fileSystem.copyFile).toHaveBeenCalledTimes(1)
+    expect(getSavedIndex()?.photos).toHaveLength(1)
+    expect(getSavedIndex()?.photos[0]?.regionName).toBe('seoul')
+  })
 })

@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react'
 
 import type {
+  PendingOrganizationAssignmentCandidate,
+  PendingOrganizationPreviewPhoto,
   PreviewPendingOrganizationResult,
   ScanPhotoLibrarySummary
 } from '@shared/types/preload'
 import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
+import { normalizePathSeparators } from '@shared/utils/path'
 
 const SOURCE_DIALOG_OPTIONS = {
   title: '원본 사진 폴더 선택',
@@ -61,11 +64,110 @@ function getAssignedPhotoIdSet(
   return new Set((splits ?? []).flatMap((split) => split.photoIds))
 }
 
+function PendingPreviewImageBlock({
+  photo,
+  imageFailed,
+  onImageError,
+  imageHeightClass,
+  placeholderClassName,
+  imageAlt = ''
+}: {
+  photo: PendingOrganizationPreviewPhoto
+  imageFailed: boolean
+  onImageError: () => void
+  imageHeightClass: string
+  placeholderClassName: string
+  imageAlt?: string
+}) {
+  if (photo.previewDataUrl && !imageFailed) {
+    return (
+      <img
+        src={photo.previewDataUrl}
+        alt={imageAlt}
+        className={`w-full object-cover ${imageHeightClass}`}
+        onError={onImageError}
+      />
+    )
+  }
+
+  return (
+    <div className={placeholderClassName}>
+      미리보기를 불러오지 못했습니다.
+    </div>
+  )
+}
+
+function GpsLessSplitPhotoGrid({
+  photos,
+  groupKey,
+  assignedPhotoIdSet,
+  selectedPhotoIds,
+  previewImageLoadFailedByPhotoId,
+  onTogglePhoto,
+  onImageError
+}: {
+  photos: PendingOrganizationPreviewPhoto[]
+  groupKey: string
+  assignedPhotoIdSet: Set<string>
+  selectedPhotoIds: string[]
+  previewImageLoadFailedByPhotoId: Record<string, boolean>
+  onTogglePhoto: (groupKey: string, photoId: string) => void
+  onImageError: (photoId: string) => void
+}) {
+  return (
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1.5 sm:gap-2">
+      {photos.map((photo) => {
+        const assigned = assignedPhotoIdSet.has(photo.id)
+        const selected = selectedPhotoIds.includes(photo.id)
+
+        return (
+          <button
+            key={photo.id}
+            type="button"
+            disabled={assigned}
+            aria-pressed={selected}
+            aria-label={`${photo.sourceFileName}, ${selected ? '선택됨' : '선택 안 됨'}${assigned ? ', 이미 분리됨' : ''}`}
+            onClick={() => {
+              if (!assigned) {
+                onTogglePhoto(groupKey, photo.id)
+              }
+            }}
+            className={`min-w-0 rounded-md border text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1 ${
+              assigned
+                ? 'cursor-not-allowed border-slate-200 bg-slate-100 opacity-55'
+                : 'cursor-pointer border-slate-200 bg-white hover:border-slate-300'
+            } ${selected && !assigned ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
+          >
+            <div className="overflow-hidden rounded-t-[5px] bg-slate-50">
+              <PendingPreviewImageBlock
+                photo={photo}
+                imageFailed={Boolean(previewImageLoadFailedByPhotoId[photo.id])}
+                onImageError={() => onImageError(photo.id)}
+                imageHeightClass="h-14"
+                placeholderClassName="flex h-14 items-center justify-center bg-slate-200 px-1 text-center text-[10px] leading-tight text-slate-500"
+              />
+            </div>
+            <p
+              className="truncate px-1 py-1 text-[10px] font-medium text-slate-800"
+              title={photo.sourceFileName}
+            >
+              {photo.sourceFileName}
+            </p>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   const sourceRoot = useLibraryWorkspaceStore((state) => state.sourceRoot)
   const outputRoot = useLibraryWorkspaceStore((state) => state.outputRoot)
   const setSourceRoot = useLibraryWorkspaceStore((state) => state.setSourceRoot)
   const setOutputRoot = useLibraryWorkspaceStore((state) => state.setOutputRoot)
+  const lastLoadedIndex = useLibraryWorkspaceStore(
+    (state) => state.lastLoadedIndex
+  )
   const setLastLoadedIndex = useLibraryWorkspaceStore(
     (state) => state.setLastLoadedIndex
   )
@@ -98,11 +200,34 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   >({})
   const [previewImageLoadFailedByPhotoId, setPreviewImageLoadFailedByPhotoId] =
     useState<Record<string, boolean>>({})
+  const [wizardStepIndex, setWizardStepIndex] = useState(0)
+
+  const orderedPreviewGroups = useMemo(() => {
+    if (!previewResult?.groups.length) {
+      return []
+    }
+
+    const withGps = previewResult.groups.filter((g) => Boolean(g.representativeGps))
+    const withoutGps = previewResult.groups.filter((g) => !g.representativeGps)
+
+    return [...withGps, ...withoutGps]
+  }, [previewResult])
+
+  const wizardIncludedGroupKeySet = useMemo(
+    () =>
+      new Set(
+        orderedPreviewGroups
+          .slice(0, wizardStepIndex + 1)
+          .map((g) => g.groupKey)
+      ),
+    [orderedPreviewGroups, wizardStepIndex]
+  )
 
   const hasPendingPreviewGroups = (previewResult?.groups.length ?? 0) > 0
   const previewMetadataOverrideEntries = useMemo(
     () =>
       (previewResult?.groups ?? [])
+        .filter((group) => wizardIncludedGroupKeySet.has(group.groupKey))
         .map((group) => ({
           groupKey: group.groupKey,
           title: groupTitleInputs[group.groupKey]?.trim() ?? '',
@@ -123,34 +248,123 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
         }),
     [
       groupCompanionsInputs,
-      previewResult?.groups,
       groupNotesInputs,
-      groupTitleInputs
+      groupTitleInputs,
+      previewResult?.groups,
+      wizardIncludedGroupKeySet
     ]
   )
   const pendingGroupAssignmentEntries = useMemo(
     () =>
       (previewResult?.groups ?? [])
+        .filter((group) => wizardIncludedGroupKeySet.has(group.groupKey))
         .filter((group) => group.assignmentMode === 'manual-existing-group')
         .map((group) => ({
           groupKey: group.groupKey,
           targetGroupId: groupAssignmentInputs[group.groupKey] ?? ''
         }))
         .filter((entry) => entry.targetGroupId.length > 0),
-    [groupAssignmentInputs, previewResult?.groups]
+    [groupAssignmentInputs, previewResult?.groups, wizardIncludedGroupKeySet]
   )
   const pendingCustomGroupSplitEntries = useMemo(
     () =>
-      Object.entries(groupCustomSplits).flatMap(([groupKey, splits]) =>
-        splits.map((split) => ({
-          groupKey,
-          splitId: split.id,
-          title: split.title,
-          photoIds: split.photoIds
-        }))
-      ),
-    [groupCustomSplits]
+      Object.entries(groupCustomSplits)
+        .filter(([groupKey]) => wizardIncludedGroupKeySet.has(groupKey))
+        .flatMap(([groupKey, splits]) =>
+          splits.map((split) => ({
+            groupKey,
+            splitId: split.id,
+            title: split.title,
+            photoIds: split.photoIds
+          }))
+        ),
+    [groupCustomSplits, wizardIncludedGroupKeySet]
   )
+  const defaultTitleManualPhotoEntries = useMemo(() => {
+    if (!previewResult) {
+      return [] as Array<{ photoId: string; title: string }>
+    }
+
+    const entries: Array<{ photoId: string; title: string }> = []
+
+    for (const group of previewResult.groups) {
+      if (!wizardIncludedGroupKeySet.has(group.groupKey)) {
+        continue
+      }
+
+      if ((groupAssignmentInputs[group.groupKey] ?? '').trim().length > 0) {
+        continue
+      }
+
+      const title = (groupTitleInputs[group.groupKey] ?? '').trim()
+
+      if (!title) {
+        continue
+      }
+
+      const assigned = new Set(
+        (groupCustomSplits[group.groupKey] ?? []).flatMap((split) => split.photoIds)
+      )
+
+      for (const photo of group.representativePhotos) {
+        if (!assigned.has(photo.id)) {
+          entries.push({ photoId: photo.id, title })
+        }
+      }
+    }
+
+    return entries
+  }, [
+    groupAssignmentInputs,
+    groupCustomSplits,
+    groupTitleInputs,
+    previewResult,
+    wizardIncludedGroupKeySet
+  ])
+
+  const wizardGroup =
+    orderedPreviewGroups.length > 0
+      ? orderedPreviewGroups[
+          Math.min(wizardStepIndex, orderedPreviewGroups.length - 1)
+        ]
+      : undefined
+
+  const mergeAssignmentCandidatesFromLoadedIndex =
+    useMemo((): PendingOrganizationAssignmentCandidate[] | null => {
+      const groups = lastLoadedIndex?.index?.groups
+      if (!groups?.length) {
+        return null
+      }
+
+      const normalizedOutput = normalizePathSeparators(outputRoot ?? '')
+      const indexOutput = normalizePathSeparators(
+        lastLoadedIndex?.index?.outputRoot ?? ''
+      )
+
+      if (!normalizedOutput || normalizedOutput !== indexOutput) {
+        return null
+      }
+
+      const mapped: PendingOrganizationAssignmentCandidate[] = groups.map(
+        (g) => ({
+          id: g.id,
+          title: g.title,
+          displayTitle: g.displayTitle,
+          photoCount: g.photoCount,
+          ...(g.representativeGps
+            ? { representativeGps: g.representativeGps }
+            : {})
+        })
+      )
+
+      const withGps = mapped.filter((c) => Boolean(c.representativeGps))
+      const withoutGps = mapped.filter((c) => !c.representativeGps)
+
+      withGps.sort((a, b) => a.title.localeCompare(b.title))
+      withoutGps.sort((a, b) => a.title.localeCompare(b.title))
+
+      return [...withGps, ...withoutGps]
+    }, [lastLoadedIndex, outputRoot])
 
   async function selectSourceRoot(): Promise<void> {
     const selectedPath = await window.photoApp.selectDirectory(
@@ -159,6 +373,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
     if (selectedPath) {
       setSourceRoot(selectedPath)
+      setWizardStepIndex(0)
       setPreviewResult(null)
       setGroupTitleInputs({})
       setGroupCompanionsInputs({})
@@ -180,6 +395,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
     if (selectedPath) {
       setOutputRoot(selectedPath)
+      setWizardStepIndex(0)
       setLastLoadedIndex(null)
       setPreviewResult(null)
       setGroupTitleInputs({})
@@ -211,6 +427,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       })
 
       setPreviewResult(nextPreview)
+      setWizardStepIndex(0)
       setPreviewImageLoadFailedByPhotoId({})
       setGroupTitleInputs(
         Object.fromEntries(
@@ -238,6 +455,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupCustomSplits(
         Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, []]))
       )
+
+      const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
+      setLastLoadedIndex(loadedIndex)
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -249,10 +469,24 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     }
   }
 
-  async function handleScan(): Promise<void> {
+  async function handleSaveStep(): Promise<void> {
     if (!sourceRoot || !outputRoot) {
       setErrorMessage('원본 사진 폴더와 출력 폴더를 먼저 선택하세요.')
       return
+    }
+
+    const currentGroup = orderedPreviewGroups[wizardStepIndex]
+
+    if (!currentGroup) {
+      setErrorMessage('저장할 그룹을 찾을 수 없습니다.')
+      return
+    }
+
+    if (currentGroup.assignmentMode !== 'manual-existing-group') {
+      if (!(groupTitleInputs[currentGroup.groupKey]?.trim())) {
+        setErrorMessage('기본 그룹명을 입력하세요.')
+        return
+      }
     }
 
     setIsScanning(true)
@@ -264,21 +498,31 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
         outputRoot,
         groupMetadataOverrides: previewMetadataOverrideEntries,
         pendingGroupAssignments: pendingGroupAssignmentEntries,
-        pendingCustomGroupSplits: pendingCustomGroupSplitEntries
+        pendingCustomGroupSplits: pendingCustomGroupSplitEntries,
+        defaultTitleManualPhotoIds: defaultTitleManualPhotoEntries,
+        copyGroupKeysInThisRun: [currentGroup.groupKey]
       })
       const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
 
-      setSummary(nextSummary)
-      setLastLoadedIndex(loadedIndex)
-      setPreviewResult(null)
-      setGroupTitleInputs({})
-      setGroupCompanionsInputs({})
-      setGroupNotesInputs({})
-      setGroupAssignmentInputs({})
-      setGroupSelectedPhotoIds({})
-      setGroupSplitTitleInputs({})
-      setGroupCustomSplits({})
-      setPreviewImageLoadFailedByPhotoId({})
+      const isLastStep = wizardStepIndex >= orderedPreviewGroups.length - 1
+
+      if (isLastStep) {
+        setSummary(nextSummary)
+        setLastLoadedIndex(loadedIndex)
+        setPreviewResult(null)
+        setGroupTitleInputs({})
+        setGroupCompanionsInputs({})
+        setGroupNotesInputs({})
+        setGroupAssignmentInputs({})
+        setGroupSelectedPhotoIds({})
+        setGroupSplitTitleInputs({})
+        setGroupCustomSplits({})
+        setPreviewImageLoadFailedByPhotoId({})
+        setWizardStepIndex(0)
+      } else {
+        setLastLoadedIndex(loadedIndex)
+        setWizardStepIndex((step) => step + 1)
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
@@ -301,6 +545,35 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     })
   }
 
+  function selectAllSplitPhotosForGroup(groupKey: string): void {
+    const group = previewResult?.groups.find(
+      (candidate) => candidate.groupKey === groupKey
+    )
+
+    if (!group) {
+      return
+    }
+
+    const assigned = new Set(
+      (groupCustomSplits[groupKey] ?? []).flatMap((split) => split.photoIds)
+    )
+    const selectableIds = group.representativePhotos
+      .filter((photo) => !assigned.has(photo.id))
+      .map((photo) => photo.id)
+
+    setGroupSelectedPhotoIds((current) => ({
+      ...current,
+      [groupKey]: selectableIds
+    }))
+  }
+
+  function clearSplitPhotoSelectionForGroup(groupKey: string): void {
+    setGroupSelectedPhotoIds((current) => ({
+      ...current,
+      [groupKey]: []
+    }))
+  }
+
   function addCustomSplit(groupKey: string): void {
     const title = groupSplitTitleInputs[groupKey]?.trim() ?? ''
     const photoIds = groupSelectedPhotoIds[groupKey] ?? []
@@ -309,12 +582,14 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       return
     }
 
+    const newSplitId = `${groupKey}::split-${crypto.randomUUID()}`
+
     setGroupCustomSplits((current) => ({
       ...current,
       [groupKey]: [
         ...(current[groupKey] ?? []),
         {
-          id: `${groupKey}::split-${crypto.randomUUID()}`,
+          id: newSplitId,
           title,
           photoIds
         }
@@ -344,9 +619,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           사진 정리 실행
         </h1>
         <p className="text-base leading-7 text-slate-600">
-          원본 사진 폴더와 출력 폴더를 선택한 뒤 정리를 실행하세요. 정리
-          페이지는 스캔, EXIF 읽기, 중복 검사, 복사, 인덱스 생성 결과를
-          확인하는 데 집중합니다.
+          원본·출력 폴더를 선택한 뒤 후보를 불러오면, 그룹이 하나씩 표시됩니다.
+          각 단계에서 메타를 입력하고 저장하면 해당 그룹 사진만 복사·인덱스에
+          반영됩니다.
         </p>
       </div>
 
@@ -403,9 +678,24 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                 type="button"
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                 disabled={isScanning}
-                onClick={() => void handleScan()}
+                onClick={() => void handleSaveStep()}
               >
-                {isScanning ? '정리 중...' : '저장하기'}
+                {isScanning
+                  ? '정리 중...'
+                  : orderedPreviewGroups.length > 0 &&
+                      wizardStepIndex >= orderedPreviewGroups.length - 1
+                    ? '마지막 그룹 저장'
+                    : '이 그룹 저장 및 복사'}
+              </button>
+            ) : null}
+            {hasPendingPreviewGroups && orderedPreviewGroups.length > 1 ? (
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
+                disabled={isScanning || wizardStepIndex === 0}
+                onClick={() => setWizardStepIndex((step) => Math.max(0, step - 1))}
+              >
+                이전 그룹
               </button>
             ) : null}
             <button
@@ -427,8 +717,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           조회 페이지 열기
         </button>
         <p className="text-sm text-slate-500">
-          정리 시작하기를 누르면 신규 후보를 먼저 검토하고, 메타 정보를 입력한
-          뒤 저장할 수 있습니다.
+          그룹마다 메타 정보를 입력한 뒤 &quot;이 그룹 저장 및 복사&quot;로 해당
+          사진만 출력 폴더에 반영합니다. GPS 없는 그룹은 순서상 마지막에
+          나옵니다.
         </p>
       </div>
 
@@ -450,19 +741,31 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                   신규 정리 대상 {previewResult.pendingPhotoCount}장, 기존 중복
                   스킵 예정 {previewResult.skippedExistingCount}장
                 </p>
+                {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
+                  <p className="text-sm font-medium text-sky-900">
+                    그룹 {wizardStepIndex + 1} / {orderedPreviewGroups.length} — GPS
+                    있는 그룹을 먼저, GPS 없는 그룹은 마지막에 저장합니다.
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-sky-700">
                 스캔 후보 {previewResult.scannedCount}장
               </div>
             </div>
 
-            {hasPendingPreviewGroups ? (
+            {hasPendingPreviewGroups && wizardGroup ? (
               <div className="space-y-4">
-                {previewResult.groups.map((group) => {
+                {(() => {
+                  const group = wizardGroup
                   const customSplits = groupCustomSplits[group.groupKey] ?? []
                   const assignedPhotoIdSet = getAssignedPhotoIdSet(customSplits)
                   const hasExistingGroupAssignment =
                     (groupAssignmentInputs[group.groupKey] ?? '').length > 0
+                  const mergeTargetCandidates =
+                    mergeAssignmentCandidatesFromLoadedIndex &&
+                    mergeAssignmentCandidatesFromLoadedIndex.length > 0
+                      ? mergeAssignmentCandidatesFromLoadedIndex
+                      : group.existingGroupCandidates
 
                   return (
                   <article
@@ -502,41 +805,88 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                         </div>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        {group.representativePhotos.map((photo) => (
-                          <div
-                            key={photo.id}
-                            className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
-                          >
-                            {photo.previewDataUrl &&
-                            !previewImageLoadFailedByPhotoId[photo.id] ? (
-                              <img
-                                src={photo.previewDataUrl}
-                                alt={photo.sourceFileName}
-                                className="h-36 w-full object-cover"
-                                onError={() =>
-                                  setPreviewImageLoadFailedByPhotoId((current) => ({
-                                    ...current,
-                                    [photo.id]: true
-                                  }))
-                                }
-                              />
-                            ) : (
-                              <div className="flex h-36 items-center justify-center bg-slate-200 px-3 text-center text-sm text-slate-500">
-                                미리보기를 불러오지 못했습니다.
+                      {group.assignmentMode === 'manual-existing-group' &&
+                      !hasExistingGroupAssignment ? (
+                        <div className="space-y-2">
+                          <p className="text-xs text-slate-600">
+                            분리할 사진을 선택하세요.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                              onClick={() => selectAllSplitPhotosForGroup(group.groupKey)}
+                            >
+                              전체 선택
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                              onClick={() =>
+                                clearSplitPhotoSelectionForGroup(group.groupKey)
+                              }
+                            >
+                              전체 해제
+                            </button>
+                          </div>
+                          <GpsLessSplitPhotoGrid
+                            photos={group.representativePhotos}
+                            groupKey={group.groupKey}
+                            assignedPhotoIdSet={assignedPhotoIdSet}
+                            selectedPhotoIds={
+                              groupSelectedPhotoIds[group.groupKey] ?? []
+                            }
+                            previewImageLoadFailedByPhotoId={
+                              previewImageLoadFailedByPhotoId
+                            }
+                            onTogglePhoto={toggleGroupPhotoSelection}
+                            onImageError={(photoId) =>
+                              setPreviewImageLoadFailedByPhotoId((current) => ({
+                                ...current,
+                                [photoId]: true
+                              }))
+                            }
+                          />
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1.5 sm:gap-2">
+                          {group.representativePhotos.map((photo) => (
+                            <div key={photo.id} className="min-w-0">
+                              <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                                <PendingPreviewImageBlock
+                                  photo={photo}
+                                  imageFailed={Boolean(
+                                    previewImageLoadFailedByPhotoId[photo.id]
+                                  )}
+                                  onImageError={() =>
+                                    setPreviewImageLoadFailedByPhotoId(
+                                      (current) => ({
+                                        ...current,
+                                        [photo.id]: true
+                                      })
+                                    )
+                                  }
+                                  imageHeightClass="h-14"
+                                  placeholderClassName="flex h-14 items-center justify-center bg-slate-200 px-1 text-center text-[10px] leading-tight text-slate-500"
+                                  imageAlt={photo.sourceFileName}
+                                />
                               </div>
-                            )}
-                            <div className="space-y-1 px-3 py-2">
-                              <p className="truncate text-sm font-medium text-slate-900">
+                              <p
+                                className="mt-0.5 truncate text-[10px] font-medium text-slate-800"
+                                title={photo.sourceFileName}
+                              >
                                 {photo.sourceFileName}
                               </p>
-                              <p className="text-xs text-slate-500">
+                              <p
+                                className="truncate text-[10px] text-slate-500"
+                                title={photo.capturedAtIso ?? '촬영 시각 없음'}
+                              >
                                 {photo.capturedAtIso ?? '촬영 시각 없음'}
                               </p>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="space-y-3">
                         <div className="space-y-2">
@@ -586,9 +936,10 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                               disabled={customSplits.length > 0}
                             >
                               <option value="">새 GPS 없는 그룹으로 유지</option>
-                              {group.existingGroupCandidates.map((candidate) => (
+                              {mergeTargetCandidates.map((candidate) => (
                                 <option key={candidate.id} value={candidate.id}>
                                   {candidate.title} · 사진 {candidate.photoCount}장
+                                  {candidate.representativeGps ? '' : ' · 출력 GPS 없음'}
                                 </option>
                               ))}
                             </select>
@@ -624,8 +975,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                                 선택 사진을 다른 그룹명으로 분리
                               </p>
                               <p className="text-xs text-slate-500">
-                                일부 사진을 선택해서 새 그룹명을 만들고, 남은 사진은
-                                위 기본 그룹명으로 남길 수 있습니다.
+                                위에서 분리할 사진을 선택한 뒤 새 그룹명을 입력하고
+                                분리합니다. 남은 사진은 위 기본 그룹명으로
+                                유지됩니다.
                               </p>
                             </div>
 
@@ -645,31 +997,6 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                                 placeholder="예: 카페 / 실내 / 받은 사진"
                               />
                             </label>
-
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {group.representativePhotos.map((photo) => (
-                                <label
-                                  key={photo.id}
-                                  className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm ${
-                                    assignedPhotoIdSet.has(photo.id)
-                                      ? 'border-slate-200 bg-slate-100 text-slate-400'
-                                      : 'border-slate-200 bg-white text-slate-700'
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={(groupSelectedPhotoIds[group.groupKey] ?? []).includes(
-                                      photo.id
-                                    )}
-                                    disabled={assignedPhotoIdSet.has(photo.id)}
-                                    onChange={() =>
-                                      toggleGroupPhotoSelection(group.groupKey, photo.id)
-                                    }
-                                  />
-                                  <span className="flex-1 truncate">{photo.sourceFileName}</span>
-                                </label>
-                              ))}
-                            </div>
 
                             <div className="flex justify-end">
                               <button
@@ -759,7 +1086,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                     </div>
                   </article>
                   )
-                })}
+                })()}
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-sky-300 bg-white p-6 text-center">

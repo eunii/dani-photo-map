@@ -10,6 +10,7 @@ import {
   applyRenamePlan,
   createGroupAwareRenamePlan
 } from '@application/services/groupAwarePhotoRelocation'
+import { mergeGroupsByMatchingTitle } from '@application/services/mergeGroupsByMatchingTitle'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import type { PhotoGroup } from '@domain/entities/PhotoGroup'
 import { defaultOrganizationRules, type OrganizationRules } from '@domain/policies/OrganizationRules'
@@ -109,9 +110,16 @@ export class UpdatePhotoGroupUseCase {
       groups: updatedGroups
     }
 
-    await this.libraryIndexStore.save(updatedIndex)
+    const mergedIndex = await mergeGroupsByMatchingTitle({
+      index: updatedIndex,
+      outputRoot,
+      fileSystem: this.fileSystem,
+      rules: this.rules
+    })
 
-    return updatedIndex
+    await this.libraryIndexStore.save(mergedIndex)
+
+    return mergedIndex
   }
 
   private async loadEditableIndex(outputRoot: string): Promise<LibraryIndex> {

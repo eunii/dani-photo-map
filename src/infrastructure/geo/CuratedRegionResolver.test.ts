@@ -16,7 +16,7 @@ describe('CuratedRegionResolver', () => {
         latitude: 37.5665,
         longitude: 126.978
       })
-    ).resolves.toBe('seoul')
+    ).resolves.toBe('seoul-jongno-gu')
   })
 
   it('falls back to a broader country-level region when no detailed box matches', async () => {
@@ -52,7 +52,7 @@ describe('CuratedRegionResolver', () => {
 describe('CachedRegionResolver', () => {
   it('reuses cached values for nearby identical rounded coordinates', async () => {
     const innerResolver: RegionResolverPort = {
-      resolveName: vi.fn().mockResolvedValue('seoul')
+      resolveName: vi.fn().mockResolvedValue('seoul-jongno-gu')
     }
     const resolver = new CachedRegionResolver(innerResolver, 2)
 
@@ -61,14 +61,44 @@ describe('CachedRegionResolver', () => {
         latitude: 37.56654,
         longitude: 126.97801
       })
-    ).resolves.toBe('seoul')
+    ).resolves.toBe('seoul-jongno-gu')
     await expect(
       resolver.resolveName({
         latitude: 37.56651,
         longitude: 126.97804
       })
-    ).resolves.toBe('seoul')
+    ).resolves.toBe('seoul-jongno-gu')
 
     expect(innerResolver.resolveName).toHaveBeenCalledOnce()
+  })
+})
+
+describe('CuratedRegionResolver finer regions', () => {
+  it('resolves Gyeonggi city before province', async () => {
+    const fallbackResolver: RegionResolverPort = {
+      resolveName: vi.fn().mockResolvedValue('location-unknown')
+    }
+    const resolver = new CuratedRegionResolver(fallbackResolver)
+
+    await expect(
+      resolver.resolveName({
+        latitude: 37.27,
+        longitude: 127.0
+      })
+    ).resolves.toBe('suwon-si')
+  })
+
+  it('resolves US city before state', async () => {
+    const fallbackResolver: RegionResolverPort = {
+      resolveName: vi.fn().mockResolvedValue('location-unknown')
+    }
+    const resolver = new CuratedRegionResolver(fallbackResolver)
+
+    await expect(
+      resolver.resolveName({
+        latitude: 40.71,
+        longitude: -74.0
+      })
+    ).resolves.toBe('new-york-city')
   })
 })

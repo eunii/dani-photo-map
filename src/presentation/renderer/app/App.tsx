@@ -58,8 +58,9 @@ export function App() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-2">
               <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
-                Photo Organizer MVP
+                Dani Photo Map
               </p>
+              <p className="text-xs text-slate-500">다니 포토 맵</p>
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
                 {routeTitle} 워크플로우
               </h1>
