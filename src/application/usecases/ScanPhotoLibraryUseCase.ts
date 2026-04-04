@@ -31,7 +31,7 @@ import {
 } from '@domain/policies/OrganizationRules'
 import { selectCanonicalDuplicatePhoto } from '@domain/services/DuplicatePhotoPolicy'
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
-import { buildPhotoOutputRelativePath } from '@domain/services/PhotoNamingService'
+import { assignGroupDisplayTitledOutputRelativePaths } from '@application/services/assignGroupDisplayTitledOutputPaths'
 import { buildExistingOutputHashSet } from '@application/services/buildExistingOutputHashSet'
 import { mergeGroupsByMatchingTitle } from '@application/services/mergeGroupsByMatchingTitle'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
@@ -153,7 +153,7 @@ export class ScanPhotoLibraryUseCase {
       })
     }
 
-    const photoIdToGroupKey = this.computePhotoIdToGroupKeyMap(
+    const { photoIdToGroupKey, photoIdToDisplayTitle } = this.computeGroupingMaps(
       preparedPhotoRecords,
       validatedCommand.pendingCustomGroupSplits ?? [],
       validatedCommand.defaultTitleManualPhotoIds ?? []
@@ -181,6 +181,7 @@ export class ScanPhotoLibraryUseCase {
             hashToOutputRelativePath,
             issues,
             copyFilter,
+            photoIdToDisplayTitle,
             onScanProgress
           )
     const index = await this.buildMergedLibraryIndex(
@@ -260,16 +261,6 @@ export class ScanPhotoLibraryUseCase {
       metadataIssues,
       issues
     )
-    const outputRelativePath = buildPhotoOutputRelativePath(
-      {
-        capturedAt: metadata.capturedAt,
-        gps: metadata.gps,
-        regionName,
-        missingGpsCategory: metadata.missingGpsCategory,
-        sourceFileName: context.sourceFileName
-      },
-      this.rules
-    )
     const photo: Photo = {
       id: context.photoId,
       sourcePath: context.sourcePath,
@@ -283,7 +274,6 @@ export class ScanPhotoLibraryUseCase {
       locationSource: metadata.gps ? 'exif' : 'none',
       missingGpsCategory: metadata.missingGpsCategory,
       regionName,
-      outputRelativePath,
       isDuplicate: false,
       metadataIssues
     }
@@ -294,7 +284,7 @@ export class ScanPhotoLibraryUseCase {
     }
   }
 
-  private computePhotoIdToGroupKeyMap(
+  private computeGroupingMaps(
     preparedPhotoRecords: PreparedPhotoRecord[],
     pendingCustomGroupSplits: Array<{
       groupKey: string
@@ -306,7 +296,10 @@ export class ScanPhotoLibraryUseCase {
       photoId: string
       title: string
     }>
-  ): Map<string, string> {
+  ): {
+    photoIdToGroupKey: Map<string, string>
+    photoIdToDisplayTitle: Map<string, string>
+  } {
     const photos = preparedPhotoRecords.map((record) => ({ ...record.photo }))
     const afterSplits = this.applyPendingCustomGroupSplits(
       photos,
@@ -316,15 +309,17 @@ export class ScanPhotoLibraryUseCase {
       afterSplits,
       defaultTitleManualPhotoIds
     )
-    const map = new Map<string, string>()
+    const photoIdToGroupKey = new Map<string, string>()
+    const photoIdToDisplayTitle = new Map<string, string>()
 
     for (const group of createPhotoGroups(afterManual)) {
       for (const photoId of group.photoIds) {
-        map.set(photoId, group.groupKey)
+        photoIdToGroupKey.set(photoId, group.groupKey)
+        photoIdToDisplayTitle.set(photoId, group.displayTitle)
       }
     }
 
-    return map
+    return { photoIdToGroupKey, photoIdToDisplayTitle }
   }
 
   private async finalizePreparedPhotos(
@@ -339,6 +334,7 @@ export class ScanPhotoLibraryUseCase {
           photoIdToGroupKey: Map<string, string>
         }
       | undefined,
+    photoIdToDisplayTitle: Map<string, string>,
     onScanProgress?: ScanPhotoLibraryExecuteOptions['onScanProgress']
   ): Promise<FinalizedScanResult> {
     const photosForCanonical = copyFilter?.keys.size
@@ -367,6 +363,42 @@ export class ScanPhotoLibraryUseCase {
           )
         })
       : preparedPhotoRecords
+
+    const photosToAssignOutputPaths: Photo[] = []
+
+    for (const record of recordsToFinalize) {
+      const photo = record.photo
+      const canonicalPhotoId = photo.sha256
+        ? canonicalPhotoIdByHash.get(photo.sha256)
+        : undefined
+      const isDuplicate = Boolean(
+        canonicalPhotoId && canonicalPhotoId !== photo.id
+      )
+
+      if (isDuplicate) {
+        continue
+      }
+
+      if (photo.sha256 && existingOutputHashes.has(photo.sha256)) {
+        continue
+      }
+
+      photosToAssignOutputPaths.push(photo)
+    }
+
+    const photoIdToOutputPath = await assignGroupDisplayTitledOutputRelativePaths({
+      photos: photosToAssignOutputPaths,
+      photoIdToDisplayTitle,
+      outputRoot,
+      rules: this.rules,
+      fileSystem: this.dependencies.fileSystem
+    })
+
+    for (const record of recordsToFinalize) {
+      const assigned = photoIdToOutputPath.get(record.photo.id)
+
+      record.photo.outputRelativePath = assigned
+    }
 
     const finalizeTotal = recordsToFinalize.length
     let finalizeCompleted = 0

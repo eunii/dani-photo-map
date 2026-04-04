@@ -20,6 +20,14 @@ function sanitizeFileNameSegment(value: string): string {
   return value.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
 }
 
+/** 그룹 표시 제목을 파일명 세그먼트로 (공백→`_`, 금지 문자 치환). */
+export function sanitizeGroupDisplayTitleForFileName(value: string): string {
+  return value
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    .replace(/\s+/g, '_')
+}
+
 function splitFileName(originalFileName: string): {
   baseName: string
   extension: string
@@ -80,6 +88,65 @@ export function buildPhotoOutputRelativePath(
   const fileName = createOrganizedPhotoFileName(
     photo.sourceFileName,
     photo.capturedAt
+  )
+
+  return [safeTimestamp.year, safeTimestamp.month, regionName, fileName].join('/')
+}
+
+/** `year/month/region` (파일명 제외). 스캔 시 출력 상대 경로의 디렉터리 부분. */
+export function buildPhotoOutputDirectoryRelativePath(
+  photo: Pick<
+    Photo,
+    'capturedAt' | 'gps' | 'regionName' | 'missingGpsCategory'
+  >,
+  rules: OrganizationRules
+): string {
+  const safeTimestamp = getSafeTimestamp(photo.capturedAt)
+  const regionName = sanitizeFileNameSegment(resolvePhotoRegionSegment(photo, rules))
+
+  return [safeTimestamp.year, safeTimestamp.month, regionName].join('/')
+}
+
+/**
+ * 그룹 표시명 + 촬영 시각 + 원본 확장자 기준 파일명.
+ * `nameCollisionSuffix`: 동일 디렉터리 내 충돌 시 `''`, `'_001'`, `'_002'` …
+ */
+export function buildGroupDisplayTitledPhotoFileName(
+  groupDisplayTitle: string,
+  capturedAt: PhotoTimestamp | undefined,
+  sourceFileName: string,
+  nameCollisionSuffix: string
+): string {
+  const safeTimestamp = getSafeTimestamp(capturedAt)
+  const { extension } = splitFileName(sourceFileName)
+  const titlePart = sanitizeGroupDisplayTitleForFileName(groupDisplayTitle) || 'group'
+  const datePrefix =
+    `${safeTimestamp.year}-${safeTimestamp.month}-${safeTimestamp.day}` +
+    `_${safeTimestamp.time}`
+
+  return `${datePrefix}_${titlePart}${nameCollisionSuffix}${extension}`
+}
+
+export function buildGroupDisplayTitledPhotoOutputRelativePath(
+  photo: Pick<
+    Photo,
+    | 'capturedAt'
+    | 'gps'
+    | 'regionName'
+    | 'sourceFileName'
+    | 'missingGpsCategory'
+  >,
+  groupDisplayTitle: string,
+  rules: OrganizationRules,
+  nameCollisionSuffix: string
+): string {
+  const safeTimestamp = getSafeTimestamp(photo.capturedAt)
+  const regionName = sanitizeFileNameSegment(resolvePhotoRegionSegment(photo, rules))
+  const fileName = buildGroupDisplayTitledPhotoFileName(
+    groupDisplayTitle,
+    photo.capturedAt,
+    photo.sourceFileName,
+    nameCollisionSuffix
   )
 
   return [safeTimestamp.year, safeTimestamp.month, regionName, fileName].join('/')

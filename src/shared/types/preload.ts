@@ -165,6 +165,8 @@ export interface PendingOrganizationPreviewPhoto {
   hasGps: boolean
   missingGpsCategory?: MissingGpsCategory
   previewDataUrl?: string
+  /** 예상 출력 상대 경로 (그룹 표시명 기반 명명). */
+  outputRelativePath?: string
 }
 
 export interface PendingOrganizationAssignmentCandidate {

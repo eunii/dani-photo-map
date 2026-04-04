@@ -12,7 +12,7 @@ function createUseCaseDependencies() {
     dependencies: {
       fileSystem: {
         listPhotoFiles: vi.fn<() => Promise<string[]>>(),
-        listDirectoryFileNames: vi.fn<() => Promise<string[]>>(),
+        listDirectoryFileNames: vi.fn<() => Promise<string[]>>().mockResolvedValue([]),
         ensureDirectory: vi.fn<() => Promise<void>>(),
         copyFile: vi.fn<() => Promise<void>>(),
         moveFile: vi.fn<() => Promise<void>>()
@@ -98,7 +98,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     dependencies.fileSystem.copyFile
       .mockRejectedValueOnce(
         new PhotoFileConflictError(
-          'C:/output/0000/00/base/0000-00-00_000000_IMG_0001.JPG'
+          'C:/output/0000/00/base/0000-00-00_000000_0000-00_base.JPG'
         )
       )
       .mockResolvedValueOnce(undefined)
@@ -206,7 +206,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     ])
     expect(dependencies.fileSystem.copyFile).toHaveBeenCalledWith(
       'C:/source/IMG_0001.JPG',
-      'C:/output/2026/04/base/2026-04-03_080000_IMG_0001.JPG'
+      'C:/output/2026/04/base/2026-04-03_080000_2026-04_base.JPG'
     )
   })
 

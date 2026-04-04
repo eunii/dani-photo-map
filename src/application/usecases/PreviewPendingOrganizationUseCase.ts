@@ -12,6 +12,7 @@ import type {
 } from '@application/ports/PhotoMetadataReaderPort'
 import type { PhotoPreviewPort } from '@application/ports/PhotoPreviewPort'
 import type { RegionResolverPort } from '@application/ports/RegionResolverPort'
+import { assignGroupDisplayTitledOutputRelativePaths } from '@application/services/assignGroupDisplayTitledOutputPaths'
 import { buildExistingOutputHashSet } from '@application/services/buildExistingOutputHashSet'
 import { buildFallbackNearbyGroupTitleSuggestions } from '@application/services/buildFallbackNearbyGroupTitleSuggestions'
 import { buildNearbyGroupTitleSuggestions } from '@application/services/buildNearbyGroupTitleSuggestions'
@@ -41,6 +42,7 @@ export interface PendingOrganizationPreviewGroupPhoto {
   hasGps: boolean
   missingGpsCategory?: Photo['missingGpsCategory']
   previewDataUrl?: string
+  outputRelativePath?: string
 }
 
 export interface PendingOrganizationPreviewGroup {
@@ -160,6 +162,21 @@ export class PreviewPendingOrganizationUseCase {
 
     const previewGroups = createPhotoGroups(canonicalCandidates)
     const photosById = new Map(canonicalCandidates.map((photo) => [photo.id, photo]))
+    const photoIdToDisplayTitle = new Map<string, string>()
+
+    for (const group of previewGroups) {
+      for (const photoId of group.photoIds) {
+        photoIdToDisplayTitle.set(photoId, group.displayTitle)
+      }
+    }
+
+    const previewOutputPaths = await assignGroupDisplayTitledOutputRelativePaths({
+      photos: canonicalCandidates,
+      photoIdToDisplayTitle,
+      outputRoot,
+      rules: this.rules,
+      fileSystem: this.dependencies.fileSystem
+    })
 
     const groups = await Promise.all(
       previewGroups.map(async (group) => {
@@ -219,7 +236,8 @@ export class PreviewPendingOrganizationUseCase {
                 capturedAtIso: photo.capturedAt?.iso,
                 hasGps: Boolean(photo.gps),
                 missingGpsCategory: photo.missingGpsCategory,
-                previewDataUrl: await this.createPreviewDataUrlSafely(photo.sourcePath)
+                previewDataUrl: await this.createPreviewDataUrlSafely(photo.sourcePath),
+                outputRelativePath: previewOutputPaths.get(photo.id)
               }))
           )
         }

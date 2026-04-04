@@ -8,7 +8,7 @@ function createDependencies() {
   return {
     fileSystem: {
       listPhotoFiles: vi.fn<() => Promise<string[]>>(),
-      listDirectoryFileNames: vi.fn<() => Promise<string[]>>(),
+      listDirectoryFileNames: vi.fn<() => Promise<string[]>>().mockResolvedValue([]),
       ensureDirectory: vi.fn<() => Promise<void>>(),
       copyFile: vi.fn<() => Promise<void>>(),
       moveFile: vi.fn<() => Promise<void>>()
