@@ -2,6 +2,7 @@
 
 import type { FlatPhotoRow } from '@presentation/renderer/view-models/flattenLibraryPhotos'
 import {
+  buildOutputFolderTree,
   filterRowsAtPath,
   formatPathSegmentLabel,
   listSubfoldersAtPath,
@@ -84,5 +85,24 @@ describe('formatPathSegmentLabel', () => {
       '출력 폴더 바로 아래'
     )
     expect(formatPathSegmentLabel('2026')).toBe('2026')
+  })
+})
+
+describe('buildOutputFolderTree', () => {
+  it('nests paths and counts photos', () => {
+    const rows = [
+      row('1', '2026/04/seoul/a.jpg'),
+      row('2', '2026/04/seoul/b.jpg'),
+      row('3', '2026/04/busan/c.jpg')
+    ]
+    const root = buildOutputFolderTree(rows)
+    expect(root.pathSegments).toEqual([])
+    expect(root.totalPhotoCount).toBe(3)
+    const y2026 = root.children.find((c) => c.segmentKey === '2026')
+    expect(y2026?.totalPhotoCount).toBe(3)
+    const m04 = y2026?.children.find((c) => c.segmentKey === '04')
+    const seoul = m04?.children.find((c) => c.segmentKey === 'seoul')
+    expect(seoul?.pathSegments).toEqual(['2026', '04', 'seoul'])
+    expect(seoul?.directRows).toHaveLength(2)
   })
 })

@@ -125,3 +125,105 @@ export function formatPathSegmentLabel(segment: string): string {
   if (segment === ROOT_LEVEL_FILES_SEGMENT) return '출력 폴더 바로 아래'
   return segment
 }
+
+/** Stable key for `pathSegments` (folder identity in the tree). */
+export function outputPathKey(segments: string[]): string {
+  return segments.join('\x1e')
+}
+
+export interface OutputFolderTreeNode {
+  pathSegments: string[]
+  displayLabel: string
+  segmentKey: string
+  directRows: FlatPhotoRow[]
+  children: OutputFolderTreeNode[]
+  /** Photos in this folder or any descendant. */
+  totalPhotoCount: number
+}
+
+class MutableTreeNode {
+  pathSegments: string[] = []
+  displayLabel = ''
+  segmentKey = ''
+  directRows: FlatPhotoRow[] = []
+  readonly children = new Map<string, MutableTreeNode>()
+}
+
+function ensureTreeChild(
+  parent: MutableTreeNode,
+  segmentKey: string,
+  displayLabel: string,
+  pathSegments: string[]
+): MutableTreeNode {
+  let node = parent.children.get(segmentKey)
+  if (!node) {
+    node = new MutableTreeNode()
+    node.pathSegments = pathSegments
+    node.segmentKey = segmentKey
+    node.displayLabel = displayLabel
+    parent.children.set(segmentKey, node)
+  }
+  return node
+}
+
+function insertRowIntoTree(root: MutableTreeNode, row: FlatPhotoRow): void {
+  const parsed = parseOutputDir(row.photo.outputRelativePath)
+  if (parsed.kind === 'orphan') {
+    const n = ensureTreeChild(
+      root,
+      NO_OUTPUT_PATH_SEGMENT,
+      '출력 경로 없음',
+      [NO_OUTPUT_PATH_SEGMENT]
+    )
+    n.directRows.push(row)
+    return
+  }
+  if (parsed.kind === 'rootFile') {
+    const n = ensureTreeChild(
+      root,
+      ROOT_LEVEL_FILES_SEGMENT,
+      '출력 폴더 바로 아래',
+      [ROOT_LEVEL_FILES_SEGMENT]
+    )
+    n.directRows.push(row)
+    return
+  }
+  let node = root
+  for (let i = 0; i < parsed.segments.length; i++) {
+    const seg = parsed.segments[i]!
+    const pathSoFar = parsed.segments.slice(0, i + 1)
+    node = ensureTreeChild(node, seg, seg, pathSoFar)
+  }
+  node.directRows.push(row)
+}
+
+function convertMutableNode(node: MutableTreeNode): OutputFolderTreeNode {
+  const children = [...node.children.values()]
+    .sort((a, b) =>
+      a.displayLabel.localeCompare(b.displayLabel, undefined, {
+        sensitivity: 'base'
+      })
+    )
+    .map(convertMutableNode)
+  const childTotal = children.reduce((sum, c) => sum + c.totalPhotoCount, 0)
+  return {
+    pathSegments: node.pathSegments,
+    displayLabel: node.displayLabel,
+    segmentKey: node.segmentKey,
+    directRows: node.directRows,
+    children,
+    totalPhotoCount: node.directRows.length + childTotal
+  }
+}
+
+/** Full folder tree for expand/collapse UI; root has `pathSegments: []`. */
+export function buildOutputFolderTree(rows: FlatPhotoRow[]): OutputFolderTreeNode {
+  const root = new MutableTreeNode()
+  root.pathSegments = []
+  root.segmentKey = ''
+  root.displayLabel = '출력'
+  for (const row of rows) {
+    insertRowIntoTree(root, row)
+  }
+  return convertMutableNode(root)
+}

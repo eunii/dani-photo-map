@@ -6,6 +6,7 @@ import {
   useState
 } from 'react'
 
+import { OutputFolderTreePanel } from '@presentation/renderer/components/OutputFolderTreePanel'
 import {
   getLoadSourceBadge,
   useOutputLibraryIndexPanel
@@ -17,9 +18,9 @@ import {
   type PhotoListSortOption
 } from '@presentation/renderer/view-models/flattenLibraryPhotos'
 import {
+  buildOutputFolderTree,
   filterRowsAtPath,
-  formatPathSegmentLabel,
-  listSubfoldersAtPath
+  formatPathSegmentLabel
 } from '@presentation/renderer/view-models/outputPathNavigation'
 
 const LIST_CHUNK = 150
@@ -63,9 +64,9 @@ export function FileListPage() {
     [flatRows, sortOption]
   )
 
-  const subfolders = useMemo(
-    () => listSubfoldersAtPath(sortedRows, pathSegments),
-    [sortedRows, pathSegments]
+  const folderTree = useMemo(
+    () => buildOutputFolderTree(sortedRows),
+    [sortedRows]
   )
 
   const rowsInFolder = useMemo(
@@ -249,8 +250,16 @@ export function FileListPage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
-            <div className="space-y-3">
+          <div className="grid gap-4 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_minmax(260px,360px)] lg:items-start">
+            <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
+              <OutputFolderTreePanel
+                folderTreeRoot={folderTree}
+                selectedPathSegments={pathSegments}
+                onSelectPath={setPathSegments}
+              />
+            </div>
+
+            <div className="space-y-3 min-w-0">
               <nav
                 className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
                 aria-label="출력 경로"
@@ -280,32 +289,6 @@ export function FileListPage() {
               </nav>
               <p className="text-xs text-slate-500">{breadcrumbPathLabel}</p>
 
-              {subfolders.length > 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-white p-3">
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    하위 폴더
-                  </h3>
-                  <ul className="grid gap-2 sm:grid-cols-2">
-                    {subfolders.map((entry) => (
-                      <li key={entry.segment}>
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-medium text-slate-900 transition-colors hover:border-sky-200 hover:bg-sky-50"
-                          onClick={() =>
-                            setPathSegments([...pathSegments, entry.segment])
-                          }
-                        >
-                          <span className="truncate">{entry.displayLabel}</span>
-                          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs text-slate-600">
-                            {entry.photoCount}장
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="border-b border-slate-100 px-3 py-2">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -315,8 +298,8 @@ export function FileListPage() {
                 <div className="max-h-[min(55vh,720px)] overflow-y-auto">
                   {folderCount === 0 ? (
                     <p className="px-4 py-8 text-center text-sm text-slate-500">
-                      이 경로에 직접 있는 사진이 없습니다. 위에서 하위 폴더를
-                      선택하세요.
+                      이 경로에 직접 있는 사진이 없습니다. 왼쪽 트리에서 다른
+                      폴더를 선택하세요.
                     </p>
                   ) : (
                     <>
