@@ -2,11 +2,26 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { ExifrPhotoMetadataReader } from '@infrastructure/exif/ExifrPhotoMetadataReader'
 
+function localCapturedAtParts(isoInstant: string) {
+  const value = new Date(isoInstant)
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  const pad4 = (n: number) => String(n).padStart(4, '0')
+
+  return {
+    iso: value.toISOString(),
+    year: pad4(value.getFullYear()),
+    month: pad2(value.getMonth() + 1),
+    day: pad2(value.getDate()),
+    time: `${pad2(value.getHours())}${pad2(value.getMinutes())}${pad2(value.getSeconds())}`
+  }
+}
+
 describe('ExifrPhotoMetadataReader', () => {
   it('prefers DateTimeOriginal over CreateDate for capturedAt', async () => {
+    const dateOriginal = new Date('2024-05-01T01:02:03.000Z')
     const reader = new ExifrPhotoMetadataReader(
       vi.fn().mockResolvedValue({
-        DateTimeOriginal: new Date('2024-05-01T01:02:03.000Z'),
+        DateTimeOriginal: dateOriginal,
         CreateDate: new Date('2024-05-02T04:05:06.000Z'),
         latitude: 37.5665,
         longitude: 126.978
@@ -16,11 +31,7 @@ describe('ExifrPhotoMetadataReader', () => {
 
     await expect(reader.read('C:/photos/IMG_0001.JPG')).resolves.toMatchObject({
       capturedAt: {
-        iso: '2024-05-01T01:02:03.000Z',
-        year: '2024',
-        month: '05',
-        day: '01',
-        time: '010203'
+        ...localCapturedAtParts('2024-05-01T01:02:03.000Z')
       },
       capturedAtSource: 'exif-date-time-original',
       gps: {
@@ -44,11 +55,7 @@ describe('ExifrPhotoMetadataReader', () => {
 
     await expect(reader.read('C:/photos/IMG_0002.JPG')).resolves.toMatchObject({
       capturedAt: {
-        iso: '2024-06-03T07:08:09.000Z',
-        year: '2024',
-        month: '06',
-        day: '03',
-        time: '070809'
+        ...localCapturedAtParts('2024-06-03T07:08:09.000Z')
       },
       capturedAtSource: 'file-modified-at',
       metadataIssues: ['captured-at-fallback-file-modified-at']
@@ -99,10 +106,7 @@ describe('ExifrPhotoMetadataReader', () => {
 
     await expect(reader.read('C:/photos/IMG_0005.JPG')).resolves.toMatchObject({
       capturedAt: {
-        iso: '2023-08-15T12:30:00.000Z',
-        year: '2023',
-        month: '08',
-        day: '15'
+        ...localCapturedAtParts('2023-08-15T12:30:00.000Z')
       },
       capturedAtSource: 'xmp-capture-date',
       metadataIssues: []

@@ -1,3 +1,4 @@
+import { stripLeadingDateFromAutoGroupDisplayTitle } from '@domain/services/PhotoNamingService'
 import type { GroupDetail, GroupPhotoSummary } from '@shared/types/preload'
 
 export type PhotoListSortOption = 'captured-desc' | 'filename-asc'
@@ -19,10 +20,15 @@ export function flattenLibraryGroupsToPhotos(groups: GroupDetail[]): FlatPhotoRo
         continue
       }
       seen.add(photo.id)
+      const groupDisplayTitle =
+        group.title.trim().length > 0
+          ? group.title
+          : stripLeadingDateFromAutoGroupDisplayTitle(group.displayTitle)
+
       rows.push({
         photo,
         groupId: group.id,
-        groupDisplayTitle: group.displayTitle
+        groupDisplayTitle
       })
     }
   }

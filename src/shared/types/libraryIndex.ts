@@ -53,8 +53,8 @@ export const photoSchema = z.object({
 export const photoGroupSchema = z.object({
   id: z.string().min(1),
   groupKey: z.string().min(1),
-  title: z.string().min(1),
-  displayTitle: z.string().min(1),
+  title: z.string(),
+  displayTitle: z.string(),
   photoIds: z.array(z.string().min(1)),
   representativePhotoId: z.string().min(1).optional(),
   representativeGps: geoPointSchema.optional(),

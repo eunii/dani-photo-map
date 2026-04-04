@@ -1,5 +1,8 @@
 import type { Photo } from '@domain/entities/Photo'
-import type { OrganizationRules } from '@domain/policies/OrganizationRules'
+import {
+  defaultOrganizationRules,
+  type OrganizationRules
+} from '@domain/policies/OrganizationRules'
 import type { PhotoTimestamp } from '@domain/value-objects/PhotoTimestamp'
 
 function getSafeTimestamp(timestamp?: PhotoTimestamp): PhotoTimestamp {
@@ -38,15 +41,24 @@ export function stripLeadingDateFromAutoGroupDisplayTitle(displayTitle: string):
 
 /**
  * 출력 파일명의 그룹 문자열: 사용자 제목 우선, 없으면 자동 제목에서 날짜 제거, 비면 지역명.
+ * `overrideTitle`이 `''`처럼 **명시적으로 비어 있으면** `year/month`만 두기 위해 `unknownRegionLabel`과 동일하게 취급합니다.
  */
-export function resolveGroupLabelForOutputFileName(params: {
-  displayTitle: string
-  overrideTitle?: string
-  regionName?: string
-}): string {
-  const trimmedOverride = params.overrideTitle?.trim()
+export function resolveGroupLabelForOutputFileName(
+  params: {
+    displayTitle: string
+    /** `undefined`면 미입력; 문자열이면 해당 그룹에 대해 사용자가 제목을 보냄(빈 문자열 포함). */
+    overrideTitle?: string
+    regionName?: string
+  },
+  rules: OrganizationRules = defaultOrganizationRules
+): string {
+  if (params.overrideTitle !== undefined) {
+    const trimmedOverride = params.overrideTitle.trim()
 
-  if (trimmedOverride) {
+    if (trimmedOverride.length === 0) {
+      return rules.unknownRegionLabel
+    }
+
     const s = sanitizeGroupDisplayTitleForFileName(trimmedOverride)
 
     return s.length > 0 ? s : 'group'
@@ -136,7 +148,7 @@ export function buildPhotoOutputRelativePath(
   return [safeTimestamp.year, safeTimestamp.month, regionName, fileName].join('/')
 }
 
-/** `year/month/region` (파일명 제외). 스캔 시 출력 상대 경로의 디렉터리 부분. */
+/** `year/month/region` (파일명 제외). 지리적 region 기준 (레거시·비스캔 경로). */
 export function buildPhotoOutputDirectoryRelativePath(
   photo: Pick<
     Photo,
@@ -148,6 +160,45 @@ export function buildPhotoOutputDirectoryRelativePath(
   const regionName = sanitizeFileNameSegment(resolvePhotoRegionSegment(photo, rules))
 
   return [safeTimestamp.year, safeTimestamp.month, regionName].join('/')
+}
+
+/**
+ * 스캔 출력: 디렉터리는 `resolveGroupLabelForOutputFileName`과 동일한 그룹 라벨.
+ * 라벨이 `unknownRegionLabel`(base)이면 `year/month`만 (중간 폴더 생략).
+ */
+export function buildScanOutputDirectoryRelativePath(
+  photo: Pick<Photo, 'capturedAt'>,
+  groupFileLabel: string,
+  rules: OrganizationRules
+): string {
+  const safeTimestamp = getSafeTimestamp(photo.capturedAt)
+  const segment = sanitizeGroupDisplayTitleForFileName(groupFileLabel)
+
+  if (segment === rules.unknownRegionLabel) {
+    return [safeTimestamp.year, safeTimestamp.month].join('/')
+  }
+
+  return [safeTimestamp.year, safeTimestamp.month, segment].join('/')
+}
+
+/**
+ * 스캔 복사 최종 상대 경로: 그룹 라벨 폴더 + base 시 `year/month/파일명`.
+ */
+export function buildScanPhotoOutputRelativePath(
+  photo: Pick<Photo, 'capturedAt' | 'sourceFileName'>,
+  groupFileLabel: string,
+  rules: OrganizationRules,
+  nameCollisionSuffix: string
+): string {
+  const directory = buildScanOutputDirectoryRelativePath(photo, groupFileLabel, rules)
+  const fileName = buildGroupDisplayTitledPhotoFileName(
+    groupFileLabel,
+    photo.capturedAt,
+    photo.sourceFileName,
+    nameCollisionSuffix
+  )
+
+  return [directory, fileName].join('/')
 }
 
 /**
@@ -170,27 +221,3 @@ export function buildGroupDisplayTitledPhotoFileName(
   return `${datePrefix}_${titlePart}${nameCollisionSuffix}${extension}`
 }
 
-export function buildGroupDisplayTitledPhotoOutputRelativePath(
-  photo: Pick<
-    Photo,
-    | 'capturedAt'
-    | 'gps'
-    | 'regionName'
-    | 'sourceFileName'
-    | 'missingGpsCategory'
-  >,
-  groupDisplayTitle: string,
-  rules: OrganizationRules,
-  nameCollisionSuffix: string
-): string {
-  const safeTimestamp = getSafeTimestamp(photo.capturedAt)
-  const regionName = sanitizeFileNameSegment(resolvePhotoRegionSegment(photo, rules))
-  const fileName = buildGroupDisplayTitledPhotoFileName(
-    groupDisplayTitle,
-    photo.capturedAt,
-    photo.sourceFileName,
-    nameCollisionSuffix
-  )
-
-  return [safeTimestamp.year, safeTimestamp.month, regionName, fileName].join('/')
-}

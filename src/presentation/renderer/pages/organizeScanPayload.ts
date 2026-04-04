@@ -52,9 +52,7 @@ export function buildOrganizeScanPayload(
         (candidate) => candidate.groupKey === entry.groupKey
       )
 
-      return (
-        entry.title.length > 0 && group?.assignmentMode !== 'manual-existing-group'
-      )
+      return group?.assignmentMode !== 'manual-existing-group'
     })
 
   const pendingGroupAssignments = previewResult.groups

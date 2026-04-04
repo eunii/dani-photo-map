@@ -12,7 +12,10 @@ interface PhotoGroupBucket {
 }
 
 interface GroupSeed {
+  /** 버킷·groupKey용 (GPS 없으면 `unknownRegionLabel` 등 안정적 라벨) */
   regionName: string
+  /** 자동 그룹 표시용: GPS 기반 지역명만, GPS 없으면 빈 문자열 */
+  displayRegionLabel: string
   year: string
   month: string
   day: string
@@ -23,6 +26,14 @@ interface GroupSeed {
 
 function getPhotoRegionName(photo: Photo): string {
   return photo.regionName ?? defaultOrganizationRules.unknownRegionLabel
+}
+
+function getAutoGroupDisplayRegionLabel(photo: Photo): string {
+  if (!photo.gps) {
+    return ''
+  }
+
+  return (photo.regionName ?? '').trim()
 }
 
 function getPhotoYear(photo: Photo): string {
@@ -46,12 +57,7 @@ function buildGroupDisplayTitle(seed: GroupSeed): string {
     return seed.manualGroupTitle
   }
 
-  const dateLabel =
-    seed.day === '00'
-      ? `${seed.year}-${seed.month}`
-      : `${seed.year}-${seed.month}-${seed.day}`
-
-  return `${dateLabel} ${seed.regionName}`
+  return seed.displayRegionLabel
 }
 
 function buildGroupKey(seed: GroupSeed): string {
@@ -85,16 +91,24 @@ function finalizeGroupSeed(photos: Photo[], seed: GroupSeed): GroupSeed {
   }
 
   const earliest = pickEarliestUsableCapturedAtFromPhotos(photos)
+  const photoForRegionDisplay = photos.find((photo) => photo.gps)
+  const displayRegionLabel = photoForRegionDisplay
+    ? getAutoGroupDisplayRegionLabel(photoForRegionDisplay)
+    : ''
 
   if (!earliest) {
-    return seed
+    return {
+      ...seed,
+      displayRegionLabel
+    }
   }
 
   return {
     ...seed,
     year: earliest.year,
     month: earliest.month,
-    day: '00'
+    day: '00',
+    displayRegionLabel
   }
 }
 
@@ -169,6 +183,7 @@ export function groupPhotosByPolicy(photos: Photo[]): PhotoGroupBucket[] {
         slotIndex += 1
         currentSeed = {
           regionName,
+          displayRegionLabel: getAutoGroupDisplayRegionLabel(photo),
           year: getPhotoYear(photo),
           month: getPhotoMonth(photo),
           day: getPhotoDay(photo),

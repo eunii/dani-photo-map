@@ -23,9 +23,14 @@ function resolvePhotoRegionName(photo: Photo): string | undefined {
     return photo.regionName
   }
 
-  const outputRelativePath = photo.outputRelativePath?.replace(/\\/g, '/')
+  const segments =
+    photo.outputRelativePath?.replace(/\\/g, '/').split('/').filter(Boolean) ?? []
 
-  return outputRelativePath?.split('/').at(-2)
+  if (segments.length >= 4) {
+    return segments.at(-2)
+  }
+
+  return undefined
 }
 
 function pickEarliestDonorPhotoFromDestinationGroup(

@@ -282,7 +282,7 @@ describe('PreviewPendingOrganizationUseCase', () => {
     expect(result.pendingPhotoCount).toBe(1)
     expect(result.skippedExistingCount).toBe(0)
     expect(result.groups[0]).toMatchObject({
-      displayTitle: '2026-04 seoul',
+      displayTitle: 'seoul',
       suggestedTitles: ['서울 산책'],
       photoCount: 1
     })

@@ -30,8 +30,9 @@ export function toRenameablePhoto(photo: Photo): RenameablePhoto | null {
   }
 
   const normalizedOutputRelativePath = normalizePathSeparators(photo.outputRelativePath)
-  const pathSegments = normalizedOutputRelativePath.split('/')
-  const regionNameFromPath = pathSegments.at(-2)
+  const pathSegments = normalizedOutputRelativePath.split('/').filter(Boolean)
+  const regionNameFromPath =
+    pathSegments.length >= 4 ? pathSegments.at(-2) : undefined
   const regionName = photo.regionName ?? regionNameFromPath
 
   if (!regionName) {

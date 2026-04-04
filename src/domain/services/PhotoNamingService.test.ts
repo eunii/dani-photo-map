@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildGroupDisplayTitledPhotoFileName,
-  buildGroupDisplayTitledPhotoOutputRelativePath,
+  buildScanPhotoOutputRelativePath,
   createOrganizedPhotoFileName,
   resolveGroupLabelForOutputFileName,
   stripLeadingDateFromAutoGroupDisplayTitle
@@ -46,6 +46,19 @@ describe('PhotoNamingService', () => {
     ).toBe('seoul')
   })
 
+  it('resolveGroupLabelForOutputFileName maps empty override to unknown region label', () => {
+    expect(
+      resolveGroupLabelForOutputFileName(
+        {
+          displayTitle: 'seoul',
+          overrideTitle: '',
+          regionName: 'seoul'
+        },
+        defaultOrganizationRules
+      )
+    ).toBe(defaultOrganizationRules.unknownRegionLabel)
+  })
+
   it('builds group-display-titled file name with original extension', () => {
     const fileName = buildGroupDisplayTitledPhotoFileName(
       'seoul',
@@ -80,11 +93,10 @@ describe('PhotoNamingService', () => {
     expect(fileName).toBe('2025-04-03_101112_base_001.png')
   })
 
-  it('builds group-display-titled output path with year, month, region', () => {
-    const relativePath = buildGroupDisplayTitledPhotoOutputRelativePath(
+  it('builds scan output path with year, month, group label folder', () => {
+    const relativePath = buildScanPhotoOutputRelativePath(
       {
         sourceFileName: 'IMG_1001.JPG',
-        regionName: 'seoul',
         capturedAt: {
           iso: '2025-04-03T10:11:12.000Z',
           year: '2025',
@@ -103,11 +115,30 @@ describe('PhotoNamingService', () => {
     )
   })
 
-  it('routes captures to the capture folder when gps is missing', () => {
-    const relativePath = buildGroupDisplayTitledPhotoOutputRelativePath(
+  it('scan path puts files under year/month when group label is base', () => {
+    const relativePath = buildScanPhotoOutputRelativePath(
+      {
+        sourceFileName: 'a.JPG',
+        capturedAt: {
+          iso: '2025-04-03T10:11:12.000Z',
+          year: '2025',
+          month: '04',
+          day: '03',
+          time: '101112'
+        }
+      },
+      'base',
+      defaultOrganizationRules,
+      ''
+    )
+
+    expect(relativePath).toBe('2025/04/2025-04-03_101112_base.JPG')
+  })
+
+  it('routes capture label to capture subfolder', () => {
+    const relativePath = buildScanPhotoOutputRelativePath(
       {
         sourceFileName: 'shot.png',
-        missingGpsCategory: 'capture',
         capturedAt: {
           iso: '2025-04-03T10:11:12.000Z',
           year: '2025',

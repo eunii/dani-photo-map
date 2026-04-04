@@ -221,11 +221,14 @@ function effectiveGroupTitle(
   group: PreviewPendingOrganizationResult['groups'][number],
   groupTitleInputs: Record<string, string>
 ): string {
-  return (
-    groupTitleInputs[group.groupKey]?.trim() ||
-    group.suggestedTitles[0] ||
-    group.displayTitle
-  )
+  const raw = groupTitleInputs[group.groupKey]
+  if (raw !== undefined) {
+    const trimmed = raw.trim()
+
+    return trimmed.length > 0 ? trimmed : '제목 없음'
+  }
+
+  return group.suggestedTitles[0] ?? group.displayTitle
 }
 
 function buildEffectiveOrganizeInputs(
@@ -239,7 +242,7 @@ function buildEffectiveOrganizeInputs(
   const groupTitleInputs = { ...inputs.groupTitleInputs }
 
   for (const group of groups) {
-    if (!groupTitleInputs[group.groupKey]?.trim()) {
+    if (groupTitleInputs[group.groupKey] === undefined) {
       groupTitleInputs[group.groupKey] =
         group.suggestedTitles[0] ?? group.displayTitle
     }
@@ -797,7 +800,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     const queuedPhases: Record<string, GroupSavePhase> = {}
     for (let i = 0; i < orderedPreviewGroups.length; i += 1) {
       const g = orderedPreviewGroups[i]
-      if (i >= startIndex) {
+      if (g && i >= startIndex) {
         queuedPhases[g.groupKey] = 'queued'
       }
     }
@@ -878,11 +881,6 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
     if (!currentGroup) {
       setErrorMessage('저장할 그룹을 찾을 수 없습니다.')
-      return
-    }
-
-    if (!(groupTitleInputs[currentGroup.groupKey]?.trim())) {
-      setErrorMessage('기본 그룹명을 입력하세요.')
       return
     }
 

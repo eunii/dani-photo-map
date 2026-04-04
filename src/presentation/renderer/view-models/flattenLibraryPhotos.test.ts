@@ -50,6 +50,28 @@ describe('flattenLibraryGroupsToPhotos', () => {
     const rows = flattenLibraryGroupsToPhotos([g, { ...g, id: 'g2' }])
     expect(rows).toHaveLength(1)
   })
+
+  it('uses title when set, otherwise strips leading date from displayTitle', () => {
+    const rows = flattenLibraryGroupsToPhotos([
+      {
+        id: 'g1',
+        groupKey: 'g1',
+        title: '',
+        displayTitle: '2026-04 seoul',
+        photoCount: 1,
+        photoIds: ['a'],
+        companions: [],
+        photos: [
+          {
+            id: 'a',
+            sourceFileName: 'a.jpg',
+            hasGps: true
+          }
+        ]
+      }
+    ])
+    expect(rows[0]?.groupDisplayTitle).toBe('seoul')
+  })
 })
 
 describe('sortFlatPhotoRows', () => {

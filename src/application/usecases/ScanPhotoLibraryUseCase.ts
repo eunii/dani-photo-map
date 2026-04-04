@@ -341,9 +341,9 @@ export class ScanPhotoLibraryUseCase {
     }>
   ): Map<string, string> {
     const overrideByGroupKey = new Map(
-      groupMetadataOverrides
-        .map((override) => [override.groupKey, override.title.trim()] as const)
-        .filter(([, title]) => title.length > 0)
+      groupMetadataOverrides.map(
+        (override) => [override.groupKey, override.title] as const
+      )
     )
     const photoById = new Map(
       preparedPhotoRecords.map((record) => [record.photo.id, record.photo])
@@ -354,13 +354,19 @@ export class ScanPhotoLibraryUseCase {
       const displayTitle = photoIdToDisplayTitle.get(photoId) ?? ''
       const photo = photoById.get(photoId)
 
+      const rawOverride = overrideByGroupKey.get(groupKey)
+
       result.set(
         photoId,
-        resolveGroupLabelForOutputFileName({
-          displayTitle,
-          overrideTitle: overrideByGroupKey.get(groupKey),
-          regionName: photo?.regionName
-        })
+        resolveGroupLabelForOutputFileName(
+          {
+            displayTitle,
+            overrideTitle:
+              rawOverride !== undefined ? rawOverride : undefined,
+            regionName: photo?.regionName
+          },
+          this.rules
+        )
       )
     }
 

@@ -98,7 +98,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     dependencies.fileSystem.copyFile
       .mockRejectedValueOnce(
         new PhotoFileConflictError(
-          'C:/output/0000/00/base/0000-00-00_000000_base.JPG'
+          'C:/output/0000/00/0000-00-00_000000_base.JPG'
         )
       )
       .mockResolvedValueOnce(undefined)
@@ -206,7 +206,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     ])
     expect(dependencies.fileSystem.copyFile).toHaveBeenCalledWith(
       'C:/source/IMG_0001.JPG',
-      'C:/output/2026/04/base/2026-04-03_080000_base.JPG'
+      'C:/output/2026/04/2026-04-03_080000_base.JPG'
     )
   })
 
@@ -287,13 +287,13 @@ describe('ScanPhotoLibraryUseCase', () => {
 
     expect(getSavedIndex()?.groups[0]).toMatchObject({
       title: '서울 산책',
-      displayTitle: '2026-04 seoul',
+      displayTitle: 'seoul',
       companions: ['Alice', 'Bob'],
       notes: '봄 산책 메모'
     })
     expect(dependencies.fileSystem.copyFile).toHaveBeenCalledWith(
       'C:/source/IMG_1001.JPG',
-      'C:/output/2026/04/seoul/2026-04-03_080000_서울_산책.JPG'
+      'C:/output/2026/04/서울_산책/2026-04-03_080000_서울_산책.JPG'
     )
   })
 
@@ -442,7 +442,7 @@ describe('ScanPhotoLibraryUseCase', () => {
           id: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
           groupKey: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
           title: '서울 산책',
-          displayTitle: '2026-04 seoul',
+          displayTitle: 'seoul',
           photoIds: ['stored-photo-1'],
           representativePhotoId: 'stored-photo-1',
           representativeGps: {
@@ -534,17 +534,15 @@ describe('ScanPhotoLibraryUseCase', () => {
       ]
     })
 
-    expect(getSavedIndex()?.groups.map((group) => group.title).sort()).toEqual([
-      '2026-04 base',
-      '실내',
-      '카페'
-    ].sort())
+    expect(getSavedIndex()?.groups.map((group) => group.title).sort()).toEqual(
+      ['', '실내', '카페'].sort()
+    )
     expect(
       Object.fromEntries(
         (getSavedIndex()?.groups ?? []).map((group) => [group.title, group.photoIds])
       )
     ).toEqual({
-      '2026-04 base': ['photo-3'],
+      '': ['photo-3'],
       카페: ['photo-1'],
       실내: ['photo-2']
     })

@@ -8,15 +8,20 @@ import type {
 import type { PhotoCapturedAtSource } from '@domain/entities/Photo'
 import type { PhotoTimestamp } from '@domain/value-objects/PhotoTimestamp'
 
+/**
+ * `iso`는 순간(UTC) 정렬용, `year`~`time`은 동일 Date의 **로컬 월력** (폴더·파일명 접두용).
+ */
 function toPhotoTimestamp(value: Date): PhotoTimestamp {
   const iso = value.toISOString()
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  const pad4 = (n: number) => String(n).padStart(4, '0')
 
   return {
     iso,
-    year: iso.slice(0, 4),
-    month: iso.slice(5, 7),
-    day: iso.slice(8, 10),
-    time: `${iso.slice(11, 13)}${iso.slice(14, 16)}${iso.slice(17, 19)}`
+    year: pad4(value.getFullYear()),
+    month: pad2(value.getMonth() + 1),
+    day: pad2(value.getDate()),
+    time: `${pad2(value.getHours())}${pad2(value.getMinutes())}${pad2(value.getSeconds())}`
   }
 }
 

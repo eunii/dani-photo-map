@@ -2,8 +2,8 @@ import type { PhotoLibraryFileSystemPort } from '@application/ports/PhotoLibrary
 import type { Photo } from '@domain/entities/Photo'
 import type { OrganizationRules } from '@domain/policies/OrganizationRules'
 import {
-  buildGroupDisplayTitledPhotoOutputRelativePath,
-  buildPhotoOutputDirectoryRelativePath
+  buildScanOutputDirectoryRelativePath,
+  buildScanPhotoOutputRelativePath
 } from '@domain/services/PhotoNamingService'
 import { joinPathSegments } from '@shared/utils/path'
 
@@ -45,7 +45,11 @@ export async function assignGroupDisplayTitledOutputRelativePaths(
       continue
     }
 
-    const dirRel = buildPhotoOutputDirectoryRelativePath(photo, rules)
+    const dirRel = buildScanOutputDirectoryRelativePath(
+      photo,
+      groupFileLabel,
+      rules
+    )
     const dirAbs = joinPathSegments(outputRoot, dirRel)
 
     let occupied = occupiedByDirectory.get(dirRel)
@@ -61,7 +65,7 @@ export async function assignGroupDisplayTitledOutputRelativePaths(
 
     while (true) {
       const suffix = seq === 0 ? '' : `_${String(seq).padStart(3, '0')}`
-      const relPath = buildGroupDisplayTitledPhotoOutputRelativePath(
+      const relPath = buildScanPhotoOutputRelativePath(
         photo,
         groupFileLabel,
         rules,

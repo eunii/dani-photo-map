@@ -52,7 +52,7 @@ describe('PhotoGroupingService', () => {
     const groups = createPhotoGroups(photos)
 
     expect(groups).toHaveLength(1)
-    expect(groups[0]?.displayTitle).toBe('2026-04 seoul')
+    expect(groups[0]?.displayTitle).toBe('')
     expect(groups[0]?.photoIds).toEqual(['photo-1', 'photo-2'])
   })
 
@@ -74,13 +74,13 @@ describe('PhotoGroupingService', () => {
 
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({
-      title: '2026-04 base',
-      displayTitle: '2026-04 base',
+      title: '',
+      displayTitle: '',
       groupKey: 'group|region=base|year=2026|month=04|day=00|slot=1'
     })
   })
 
-  it('merges dated and undated photos in the same region into one bucket with earliest valid date in title', () => {
+  it('merges dated and undated photos in the same region into one bucket (display region only when GPS present)', () => {
     const photos: Photo[] = [
       createPhoto({
         id: 'photo-a',
@@ -104,8 +104,8 @@ describe('PhotoGroupingService', () => {
     const groups = createPhotoGroups(photos)
 
     expect(groups).toHaveLength(1)
-    expect(groups[0]?.displayTitle).toBe('2026-03 hwaseong-si')
-    expect(groups[0]?.title).toBe('2026-03 hwaseong-si')
+    expect(groups[0]?.displayTitle).toBe('')
+    expect(groups[0]?.title).toBe('')
   })
 
   it('selects a representative photo using gps and thumbnail quality', () => {
@@ -144,6 +144,8 @@ describe('PhotoGroupingService', () => {
     ])
 
     expect(groups[0]).toMatchObject({
+      displayTitle: 'busan',
+      title: 'busan',
       representativePhotoId: 'photo-2',
       representativeGps: {
         latitude: 35.1796,

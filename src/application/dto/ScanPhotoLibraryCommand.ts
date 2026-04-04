@@ -7,7 +7,7 @@ export const scanPhotoLibraryCommandSchema = z.object({
     .array(
       z.object({
         groupKey: z.string().min(1),
-        title: z.string().min(1),
+        title: z.string(),
         companions: z.array(z.string().min(1)),
         notes: z.string().min(1).optional()
       })
