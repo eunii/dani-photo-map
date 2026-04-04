@@ -98,7 +98,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     dependencies.fileSystem.copyFile
       .mockRejectedValueOnce(
         new PhotoFileConflictError(
-          'C:/output/0000/00/base/0000-00-00_000000_0000-00_base.JPG'
+          'C:/output/0000/00/base/0000-00-00_000000_base.JPG'
         )
       )
       .mockResolvedValueOnce(undefined)
@@ -206,7 +206,7 @@ describe('ScanPhotoLibraryUseCase', () => {
     ])
     expect(dependencies.fileSystem.copyFile).toHaveBeenCalledWith(
       'C:/source/IMG_0001.JPG',
-      'C:/output/2026/04/base/2026-04-03_080000_2026-04_base.JPG'
+      'C:/output/2026/04/base/2026-04-03_080000_base.JPG'
     )
   })
 
@@ -291,6 +291,10 @@ describe('ScanPhotoLibraryUseCase', () => {
       companions: ['Alice', 'Bob'],
       notes: '봄 산책 메모'
     })
+    expect(dependencies.fileSystem.copyFile).toHaveBeenCalledWith(
+      'C:/source/IMG_1001.JPG',
+      'C:/output/2026/04/seoul/2026-04-03_080000_서울_산책.JPG'
+    )
   })
 
   it('skips copying when the same SHA-256 already exists anywhere in the output', async () => {

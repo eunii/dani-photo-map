@@ -32,6 +32,7 @@ import {
 import { selectCanonicalDuplicatePhoto } from '@domain/services/DuplicatePhotoPolicy'
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import { assignGroupDisplayTitledOutputRelativePaths } from '@application/services/assignGroupDisplayTitledOutputPaths'
+import { resolveGroupLabelForOutputFileName } from '@domain/services/PhotoNamingService'
 import { buildExistingOutputHashSet } from '@application/services/buildExistingOutputHashSet'
 import { mergeGroupsByMatchingTitle } from '@application/services/mergeGroupsByMatchingTitle'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
@@ -158,6 +159,12 @@ export class ScanPhotoLibraryUseCase {
       validatedCommand.pendingCustomGroupSplits ?? [],
       validatedCommand.defaultTitleManualPhotoIds ?? []
     )
+    const photoIdToGroupFileLabel = this.buildPhotoIdToGroupFileLabelMap(
+      preparedPhotoRecords,
+      photoIdToGroupKey,
+      photoIdToDisplayTitle,
+      validatedCommand.groupMetadataOverrides ?? []
+    )
     const copyKeys = validatedCommand.copyGroupKeysInThisRun
     const copyFilter =
       copyKeys !== undefined
@@ -181,7 +188,7 @@ export class ScanPhotoLibraryUseCase {
             hashToOutputRelativePath,
             issues,
             copyFilter,
-            photoIdToDisplayTitle,
+            photoIdToGroupFileLabel,
             onScanProgress
           )
     const index = await this.buildMergedLibraryIndex(
@@ -322,6 +329,44 @@ export class ScanPhotoLibraryUseCase {
     return { photoIdToGroupKey, photoIdToDisplayTitle }
   }
 
+  private buildPhotoIdToGroupFileLabelMap(
+    preparedPhotoRecords: PreparedPhotoRecord[],
+    photoIdToGroupKey: Map<string, string>,
+    photoIdToDisplayTitle: Map<string, string>,
+    groupMetadataOverrides: Array<{
+      groupKey: string
+      title: string
+      companions: string[]
+      notes?: string
+    }>
+  ): Map<string, string> {
+    const overrideByGroupKey = new Map(
+      groupMetadataOverrides
+        .map((override) => [override.groupKey, override.title.trim()] as const)
+        .filter(([, title]) => title.length > 0)
+    )
+    const photoById = new Map(
+      preparedPhotoRecords.map((record) => [record.photo.id, record.photo])
+    )
+    const result = new Map<string, string>()
+
+    for (const [photoId, groupKey] of photoIdToGroupKey) {
+      const displayTitle = photoIdToDisplayTitle.get(photoId) ?? ''
+      const photo = photoById.get(photoId)
+
+      result.set(
+        photoId,
+        resolveGroupLabelForOutputFileName({
+          displayTitle,
+          overrideTitle: overrideByGroupKey.get(groupKey),
+          regionName: photo?.regionName
+        })
+      )
+    }
+
+    return result
+  }
+
   private async finalizePreparedPhotos(
     preparedPhotoRecords: PreparedPhotoRecord[],
     outputRoot: string,
@@ -334,7 +379,7 @@ export class ScanPhotoLibraryUseCase {
           photoIdToGroupKey: Map<string, string>
         }
       | undefined,
-    photoIdToDisplayTitle: Map<string, string>,
+    photoIdToGroupFileLabel: Map<string, string>,
     onScanProgress?: ScanPhotoLibraryExecuteOptions['onScanProgress']
   ): Promise<FinalizedScanResult> {
     const photosForCanonical = copyFilter?.keys.size
@@ -388,7 +433,7 @@ export class ScanPhotoLibraryUseCase {
 
     const photoIdToOutputPath = await assignGroupDisplayTitledOutputRelativePaths({
       photos: photosToAssignOutputPaths,
-      photoIdToDisplayTitle,
+      photoIdToGroupFileLabel,
       outputRoot,
       rules: this.rules,
       fileSystem: this.dependencies.fileSystem

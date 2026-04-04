@@ -28,6 +28,49 @@ export function sanitizeGroupDisplayTitleForFileName(value: string): string {
     .replace(/\s+/g, '_')
 }
 
+/**
+ * 자동 그룹 `displayTitle` 앞의 `YYYY-MM` 또는 `YYYY-MM-DD` + 공백을 제거합니다.
+ * (파일명 접두 날짜와 중복되지 않도록 그룹 절에는 날짜를 넣지 않기 위함)
+ */
+export function stripLeadingDateFromAutoGroupDisplayTitle(displayTitle: string): string {
+  return displayTitle.replace(/^\d{4}-\d{2}(-\d{2})?\s+/, '').trim()
+}
+
+/**
+ * 출력 파일명의 그룹 문자열: 사용자 제목 우선, 없으면 자동 제목에서 날짜 제거, 비면 지역명.
+ */
+export function resolveGroupLabelForOutputFileName(params: {
+  displayTitle: string
+  overrideTitle?: string
+  regionName?: string
+}): string {
+  const trimmedOverride = params.overrideTitle?.trim()
+
+  if (trimmedOverride) {
+    const s = sanitizeGroupDisplayTitleForFileName(trimmedOverride)
+
+    return s.length > 0 ? s : 'group'
+  }
+
+  const stripped = stripLeadingDateFromAutoGroupDisplayTitle(params.displayTitle)
+
+  if (stripped.length > 0) {
+    const s = sanitizeGroupDisplayTitleForFileName(stripped)
+
+    return s.length > 0 ? s : 'group'
+  }
+
+  const region = params.regionName?.trim()
+
+  if (region) {
+    const s = sanitizeGroupDisplayTitleForFileName(region)
+
+    return s.length > 0 ? s : 'group'
+  }
+
+  return 'group'
+}
+
 function splitFileName(originalFileName: string): {
   baseName: string
   extension: string

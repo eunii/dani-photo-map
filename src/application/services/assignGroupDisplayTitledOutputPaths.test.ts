@@ -44,9 +44,9 @@ describe('assignGroupDisplayTitledOutputRelativePaths', () => {
 
     const map = await assignGroupDisplayTitledOutputRelativePaths({
       photos: [p1, p2],
-      photoIdToDisplayTitle: new Map([
-        ['a', '2026-04 seoul'],
-        ['b', '2026-04 seoul']
+      photoIdToGroupFileLabel: new Map([
+        ['a', 'seoul'],
+        ['b', 'seoul']
       ]),
       outputRoot: 'C:/out',
       rules: defaultOrganizationRules,
@@ -54,10 +54,10 @@ describe('assignGroupDisplayTitledOutputRelativePaths', () => {
     })
 
     expect(map.get('a')).toBe(
-      '2026/04/seoul/2026-04-03_100000_2026-04_seoul.jpg'
+      '2026/04/seoul/2026-04-03_100000_seoul.jpg'
     )
     expect(map.get('b')).toBe(
-      '2026/04/seoul/2026-04-03_100000_2026-04_seoul_001.jpg'
+      '2026/04/seoul/2026-04-03_100000_seoul_001.jpg'
     )
   })
 })

@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildGroupDisplayTitledPhotoFileName,
   buildGroupDisplayTitledPhotoOutputRelativePath,
-  createOrganizedPhotoFileName
+  createOrganizedPhotoFileName,
+  resolveGroupLabelForOutputFileName,
+  stripLeadingDateFromAutoGroupDisplayTitle
 } from '@domain/services/PhotoNamingService'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 
@@ -20,9 +22,33 @@ describe('PhotoNamingService', () => {
     expect(fileName).toBe('2025-04-03_101112_IMG_1001.JPG')
   })
 
+  it('strips leading YYYY-MM or YYYY-MM-DD from auto display title', () => {
+    expect(stripLeadingDateFromAutoGroupDisplayTitle('2026-04 seoul')).toBe('seoul')
+    expect(stripLeadingDateFromAutoGroupDisplayTitle('2026-04-03 seoul')).toBe('seoul')
+  })
+
+  it('resolveGroupLabelForOutputFileName prefers override title', () => {
+    expect(
+      resolveGroupLabelForOutputFileName({
+        displayTitle: '2026-04 seoul',
+        overrideTitle: '서울 산책',
+        regionName: 'seoul'
+      })
+    ).toBe('서울_산책')
+  })
+
+  it('resolveGroupLabelForOutputFileName strips date when no override', () => {
+    expect(
+      resolveGroupLabelForOutputFileName({
+        displayTitle: '2026-04 seoul',
+        regionName: 'seoul'
+      })
+    ).toBe('seoul')
+  })
+
   it('builds group-display-titled file name with original extension', () => {
     const fileName = buildGroupDisplayTitledPhotoFileName(
-      '2026-04 seoul',
+      'seoul',
       {
         iso: '2025-04-03T10:11:12.000Z',
         year: '2025',
@@ -34,12 +60,12 @@ describe('PhotoNamingService', () => {
       ''
     )
 
-    expect(fileName).toBe('2025-04-03_101112_2026-04_seoul.JPG')
+    expect(fileName).toBe('2025-04-03_101112_seoul.JPG')
   })
 
   it('applies collision suffix before extension', () => {
     const fileName = buildGroupDisplayTitledPhotoFileName(
-      '2026-04 base',
+      'base',
       {
         iso: '2025-04-03T10:11:12.000Z',
         year: '2025',
@@ -51,7 +77,7 @@ describe('PhotoNamingService', () => {
       '_001'
     )
 
-    expect(fileName).toBe('2025-04-03_101112_2026-04_base_001.png')
+    expect(fileName).toBe('2025-04-03_101112_base_001.png')
   })
 
   it('builds group-display-titled output path with year, month, region', () => {
@@ -67,13 +93,13 @@ describe('PhotoNamingService', () => {
           time: '101112'
         }
       },
-      '2026-04 seoul',
+      'seoul',
       defaultOrganizationRules,
       ''
     )
 
     expect(relativePath).toBe(
-      '2025/04/seoul/2025-04-03_101112_2026-04_seoul.JPG'
+      '2025/04/seoul/2025-04-03_101112_seoul.JPG'
     )
   })
 
@@ -90,13 +116,13 @@ describe('PhotoNamingService', () => {
           time: '101112'
         }
       },
-      '2026-04 capture',
+      'capture',
       defaultOrganizationRules,
       ''
     )
 
     expect(relativePath).toBe(
-      '2025/04/capture/2025-04-03_101112_2026-04_capture.png'
+      '2025/04/capture/2025-04-03_101112_capture.png'
     )
   })
 })

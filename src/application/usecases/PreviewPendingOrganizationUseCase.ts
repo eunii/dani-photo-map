@@ -27,6 +27,7 @@ import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import type { Photo } from '@domain/entities/Photo'
 import { groupKeyIdentitySignature } from '@domain/services/groupKeyIdentity'
+import { resolveGroupLabelForOutputFileName } from '@domain/services/PhotoNamingService'
 import {
   getPathBaseName,
   normalizePathSeparators
@@ -170,9 +171,23 @@ export class PreviewPendingOrganizationUseCase {
       }
     }
 
+    const photoIdToGroupFileLabel = new Map<string, string>()
+
+    for (const [photoId, displayTitle] of photoIdToDisplayTitle) {
+      const photo = photosById.get(photoId)
+
+      photoIdToGroupFileLabel.set(
+        photoId,
+        resolveGroupLabelForOutputFileName({
+          displayTitle,
+          regionName: photo?.regionName
+        })
+      )
+    }
+
     const previewOutputPaths = await assignGroupDisplayTitledOutputRelativePaths({
       photos: canonicalCandidates,
-      photoIdToDisplayTitle,
+      photoIdToGroupFileLabel,
       outputRoot,
       rules: this.rules,
       fileSystem: this.dependencies.fileSystem

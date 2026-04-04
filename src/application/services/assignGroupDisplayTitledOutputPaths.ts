@@ -9,20 +9,21 @@ import { joinPathSegments } from '@shared/utils/path'
 
 export interface AssignGroupDisplayTitledOutputPathsParams {
   photos: Photo[]
-  photoIdToDisplayTitle: Map<string, string>
+  /** `resolveGroupLabelForOutputFileName` 등으로 만든 파일명용 그룹 라벨 */
+  photoIdToGroupFileLabel: Map<string, string>
   outputRoot: string
   rules: OrganizationRules
   fileSystem: Pick<PhotoLibraryFileSystemPort, 'listDirectoryFileNames'>
 }
 
 /**
- * 그룹 표시명 기반 출력 상대 경로를 부여합니다. 디렉터리별로 디스크에 이미 있는 파일명과
+ * 그룹 라벨 기반 출력 상대 경로를 부여합니다. 디렉터리별로 디스크에 이미 있는 파일명과
  * 이번 실행에서 이미 배정한 이름을 합쳐 충돌 시 `_001` … 접미를 붙입니다.
  */
 export async function assignGroupDisplayTitledOutputRelativePaths(
   params: AssignGroupDisplayTitledOutputPathsParams
 ): Promise<Map<string, string>> {
-  const { photos, photoIdToDisplayTitle, outputRoot, rules, fileSystem } = params
+  const { photos, photoIdToGroupFileLabel, outputRoot, rules, fileSystem } = params
   const result = new Map<string, string>()
   const occupiedByDirectory = new Map<string, Set<string>>()
 
@@ -38,9 +39,9 @@ export async function assignGroupDisplayTitledOutputRelativePaths(
   })
 
   for (const photo of sorted) {
-    const displayTitle = photoIdToDisplayTitle.get(photo.id)
+    const groupFileLabel = photoIdToGroupFileLabel.get(photo.id)
 
-    if (!displayTitle) {
+    if (!groupFileLabel) {
       continue
     }
 
@@ -62,7 +63,7 @@ export async function assignGroupDisplayTitledOutputRelativePaths(
       const suffix = seq === 0 ? '' : `_${String(seq).padStart(3, '0')}`
       const relPath = buildGroupDisplayTitledPhotoOutputRelativePath(
         photo,
-        displayTitle,
+        groupFileLabel,
         rules,
         suffix
       )
