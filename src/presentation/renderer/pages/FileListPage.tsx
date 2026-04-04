@@ -30,6 +30,26 @@ import {
 
 const LIST_CHUNK = 150
 
+/** 목적지: 년·월만 (가운데 폴더 없음) */
+const DEST_YEAR_MONTH_ONLY = '__flat__'
+/** 드롭다운: 직접 입력과 목록이 일치하지 않음 */
+const DEST_CUSTOM = '__custom__'
+
+function normalizeFolderLabelForMatch(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+}
+
+function folderLabelMatches(input: string, folderLabel: string): boolean {
+  return (
+    normalizeFolderLabelForMatch(input) ===
+    normalizeFolderLabelForMatch(folderLabel)
+  )
+}
+
 function formatCapturedLabel(iso?: string): string {
   if (!iso) {
     return '—'
@@ -59,11 +79,13 @@ export function FileListPage() {
   const [visibleCount, setVisibleCount] = useState(LIST_CHUNK)
   const [selectedForMove, setSelectedForMove] = useState<Set<string>>(() => new Set())
   const [moveDialogOpen, setMoveDialogOpen] = useState(false)
-  const [moveTargetMode, setMoveTargetMode] = useState<'existing' | 'new'>('existing')
-  const [existingDestinationGroupId, setExistingDestinationGroupId] = useState('')
-  const [newGroupTitle, setNewGroupTitle] = useState('')
-  /** 기존 폴더 선택 시 이동 후 적용할 폴더(그룹) 이름 */
-  const [renameFolderName, setRenameFolderName] = useState('')
+  /** 목적지 드롭다운 값: 빈값 | DEST_YEAR_MONTH_ONLY | groupId | DEST_CUSTOM */
+  const [destinationSelect, setDestinationSelect] = useState('')
+  const [manualDestinationFolder, setManualDestinationFolder] = useState('')
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
+  const [renameTargetGroupId, setRenameTargetGroupId] = useState('')
+  const [renameNewTitle, setRenameNewTitle] = useState('')
+  const [isRenaming, setIsRenaming] = useState(false)
   const [isMovingPhotos, setIsMovingPhotos] = useState(false)
 
   const sourceBadge = getLoadSourceBadge(loadSource)
@@ -177,17 +199,27 @@ export function FileListPage() {
     return pathSegments.map(formatPathSegmentLabel).join(' / ')
   }, [pathSegments])
 
-  /** 현재 탐색 경로 바로 아래 실제 폴더명 → 목적지 그룹 id (년·월까지 열었을 때만 의미 있음) */
-  const childFolderDestinations = useMemo(() => {
-    if (pathSegments.length < 2) {
-      return [] as {
-        groupId: string
-        segment: string
-        label: string
-        photoCount: number
-      }[]
+  const siblingParentPathLabel = useMemo(() => {
+    if (pathSegments.length === 0) {
+      return '출력'
     }
-    const entries = listSubfoldersAtPath(sortedRows, pathSegments)
+    if (pathSegments.length === 1) {
+      return '출력 (동위는 루트와 같은 단계)'
+    }
+    return pathSegments
+      .slice(0, -1)
+      .map(formatPathSegmentLabel)
+      .join(' / ')
+  }, [pathSegments])
+
+  /**
+   * 현재 폴더와 동위(같은 부모 경로 아래)의 폴더 목록 → 목적지 그룹 id
+   * 부모 = pathSegments.slice(0, -1)
+   */
+  const siblingFolderDestinations = useMemo(() => {
+    const parentPath =
+      pathSegments.length > 0 ? pathSegments.slice(0, -1) : ([] as string[])
+    const entries = listSubfoldersAtPath(sortedRows, parentPath)
     const out: {
       groupId: string
       segment: string
@@ -203,7 +235,7 @@ export function FileListPage() {
       }
       const groupId = findFirstGroupIdUnderSubfolder(
         sortedRows,
-        pathSegments,
+        parentPath,
         entry.segment
       )
       if (groupId) {
@@ -218,20 +250,16 @@ export function FileListPage() {
     return out
   }, [sortedRows, pathSegments])
 
-  useEffect(() => {
-    if (!moveDialogOpen || moveTargetMode !== 'existing' || !libraryIndex) {
-      return
+  /** 현재 목록에 나타난 그룹(폴더) — 이름 변경 대상 선택용 */
+  const groupsInCurrentFolder = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const row of rowsInFolder) {
+      if (!map.has(row.groupId)) {
+        map.set(row.groupId, row.groupDisplayTitle)
+      }
     }
-    const group = libraryIndex.groups.find(
-      (g) => g.id === existingDestinationGroupId
-    )
-    setRenameFolderName((group?.title ?? group?.displayTitle ?? '').trim())
-  }, [
-    moveDialogOpen,
-    moveTargetMode,
-    existingDestinationGroupId,
-    libraryIndex
-  ])
+    return [...map.entries()].map(([id, title]) => ({ id, title }))
+  }, [rowsInFolder])
 
   const toggleMoveSelection = useCallback((photoId: string) => {
     setSelectedForMove((previous) => {
@@ -255,18 +283,74 @@ export function FileListPage() {
     setSelectedForMove(new Set())
   }, [])
 
+  function applyDestinationFromSelect(value: string): void {
+    if (value === '') {
+      setDestinationSelect('')
+      setManualDestinationFolder('')
+      return
+    }
+    if (value === DEST_YEAR_MONTH_ONLY) {
+      setDestinationSelect(DEST_YEAR_MONTH_ONLY)
+      setManualDestinationFolder('')
+      return
+    }
+    const item = siblingFolderDestinations.find((i) => i.groupId === value)
+    setDestinationSelect(value)
+    setManualDestinationFolder(item?.label ?? '')
+  }
+
+  function handleManualDestinationInput(value: string): void {
+    setManualDestinationFolder(value)
+    const trimmed = value.trim()
+    if (!trimmed) {
+      setDestinationSelect('')
+      return
+    }
+    const match = siblingFolderDestinations.find((item) =>
+      folderLabelMatches(trimmed, item.label)
+    )
+    if (match) {
+      setDestinationSelect(match.groupId)
+      return
+    }
+    setDestinationSelect(DEST_CUSTOM)
+  }
+
   async function handleConfirmMoveToGroup(): Promise<void> {
     if (!outputRoot || selectedForMove.size === 0) {
       return
     }
 
-    if (moveTargetMode === 'existing') {
-      if (pathSegments.length < 2) {
-        setErrorMessage('목적지 목록을 쓰려면 트리에서 년·월 폴더까지 들어간 뒤 시도하세요.')
-        return
+    const photoIds = [...selectedForMove]
+    const manual = manualDestinationFolder.trim()
+
+    let destinationGroupId: string | undefined
+    let newGroupPayload: { title: string } | undefined
+
+    if (manual.length > 0) {
+      const matchedSibling = siblingFolderDestinations.find((item) =>
+        folderLabelMatches(manual, item.label)
+      )
+      if (matchedSibling) {
+        destinationGroupId = matchedSibling.groupId
+      } else {
+        newGroupPayload = { title: manual }
       }
-      if (!existingDestinationGroupId || childFolderDestinations.length === 0) {
-        setErrorMessage('이동할 하위 폴더를 선택하세요.')
+    } else {
+      if (destinationSelect === DEST_YEAR_MONTH_ONLY) {
+        newGroupPayload = { title: '' }
+      } else if (
+        destinationSelect &&
+        destinationSelect !== DEST_CUSTOM
+      ) {
+        destinationGroupId = destinationSelect
+      } else if (destinationSelect === DEST_CUSTOM) {
+        setErrorMessage(
+          '목록에 있는 폴더와 같은 이름을 입력하거나, 드롭다운에서 고르세요.'
+        )
+        return
+      } else {
+        setErrorMessage('목적지를 드롭다운에서 고르거나, 폴더 이름을 입력하세요.')
         return
       }
     }
@@ -275,45 +359,24 @@ export function FileListPage() {
     setErrorMessage(null)
 
     try {
-      const photoIds = [...selectedForMove]
-
-      const indexAfterMove = await window.photoApp.movePhotosToGroup(
-        moveTargetMode === 'existing'
-          ? {
-              outputRoot,
-              photoIds,
-              destinationGroupId: existingDestinationGroupId
-            }
-          : {
-              outputRoot,
-              photoIds,
-              newGroup: { title: newGroupTitle.trim() }
-            }
-      )
-
-      if (moveTargetMode === 'existing' && renameFolderName.trim().length > 0) {
-        const merged = indexAfterMove.groups.find(
-          (g) => g.id === existingDestinationGroupId
-        )
-        if (
-          merged &&
-          renameFolderName.trim() !== merged.title.trim()
-        ) {
-          await window.photoApp.updatePhotoGroup({
-            outputRoot,
-            groupId: existingDestinationGroupId,
-            title: renameFolderName.trim(),
-            companions: merged.companions,
-            notes: merged.notes
-          })
-        }
+      if (destinationGroupId) {
+        await window.photoApp.movePhotosToGroup({
+          outputRoot,
+          photoIds,
+          destinationGroupId
+        })
+      } else {
+        await window.photoApp.movePhotosToGroup({
+          outputRoot,
+          photoIds,
+          newGroup: newGroupPayload!
+        })
       }
 
       setSelectedForMove(new Set())
       setMoveDialogOpen(false)
-      setNewGroupTitle('')
-      setExistingDestinationGroupId('')
-      setRenameFolderName('')
+      setManualDestinationFolder('')
+      setDestinationSelect('')
       await reloadLibraryIndex()
     } catch (error) {
       setErrorMessage(
@@ -321,6 +384,41 @@ export function FileListPage() {
       )
     } finally {
       setIsMovingPhotos(false)
+    }
+  }
+
+  async function handleConfirmRename(): Promise<void> {
+    if (!outputRoot || !libraryIndex || !renameTargetGroupId) {
+      return
+    }
+    const trimmed = renameNewTitle.trim()
+    if (!trimmed) {
+      setErrorMessage('변경할 이름을 입력하세요.')
+      return
+    }
+    const group = libraryIndex.groups.find((g) => g.id === renameTargetGroupId)
+    if (!group) {
+      setErrorMessage('그룹을 찾을 수 없습니다.')
+      return
+    }
+    setIsRenaming(true)
+    setErrorMessage(null)
+    try {
+      await window.photoApp.updatePhotoGroup({
+        outputRoot,
+        groupId: renameTargetGroupId,
+        title: trimmed,
+        companions: group.companions,
+        notes: group.notes
+      })
+      setRenameDialogOpen(false)
+      await reloadLibraryIndex()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '이름 변경에 실패했습니다.'
+      )
+    } finally {
+      setIsRenaming(false)
     }
   }
 
@@ -478,14 +576,41 @@ export function FileListPage() {
                     className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                     disabled={selectedForMove.size === 0 || isMovingPhotos}
                     onClick={() => {
-                      const first = childFolderDestinations[0]?.groupId ?? ''
-                      setExistingDestinationGroupId(first)
-                      setNewGroupTitle('')
-                      setMoveTargetMode('existing')
+                      const first = siblingFolderDestinations[0]
+                      if (first) {
+                        setDestinationSelect(first.groupId)
+                        setManualDestinationFolder(first.label)
+                      } else {
+                        setDestinationSelect(DEST_YEAR_MONTH_ONLY)
+                        setManualDestinationFolder('')
+                      }
                       setMoveDialogOpen(true)
                     }}
                   >
                     선택한 {selectedForMove.size}장 폴더로 이동…
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={
+                      folderCount === 0 ||
+                      groupsInCurrentFolder.length === 0 ||
+                      isRenaming
+                    }
+                    onClick={() => {
+                      const first = groupsInCurrentFolder[0]
+                      if (!first || !libraryIndex) {
+                        return
+                      }
+                      setRenameTargetGroupId(first.id)
+                      const g = libraryIndex.groups.find((x) => x.id === first.id)
+                      setRenameNewTitle(
+                        (g?.title ?? g?.displayTitle ?? '').trim()
+                      )
+                      setRenameDialogOpen(true)
+                    }}
+                  >
+                    이름 변경…
                   </button>
                   <button
                     type="button"
@@ -674,7 +799,7 @@ export function FileListPage() {
           }}
         >
           <div
-            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            className="w-full max-w-lg max-h-[min(90vh,720px)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <h2
@@ -684,124 +809,78 @@ export function FileListPage() {
               폴더로 이동
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              출력 구조는 <span className="font-medium">년/월/폴더명</span>입니다.
-              선택한 {selectedForMove.size}장을 옮길 폴더를 고르거나 새로 만드세요.
+              선택한 {selectedForMove.size}장의 목적지입니다.{' '}
+              <span className="font-medium">동위 폴더</span>는 지금 폴더와 같은
+              상위 아래에 나란히 있는 폴더입니다.
             </p>
             <p className="mt-2 text-xs leading-relaxed text-slate-500">
-              목록의 이름은 각각 년·월 아래에 있는 폴더(인덱스의 그룹)와 같습니다.
-              새 이름으로 만들면 그 폴더가 추가되고,{' '}
-              <span className="font-medium">이미 같은 제목의 폴더가 있으면 그쪽으로 합쳐집니다.</span>
+              드롭다운에서 고르면 아래 입력란에 같은 이름이 채워집니다. 직접 고칠 수도
+              있으며, 동일한 이름의 폴더가 있으면 합쳐집니다.
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              현재 경로:{' '}
+              지금 보는 경로:{' '}
               <span className="font-medium text-slate-700">{breadcrumbPathLabel}</span>
             </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              동위 목록 기준 상위:{' '}
+              <span className="font-medium text-slate-700">
+                {siblingParentPathLabel}
+              </span>
+            </p>
 
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
-                  moveTargetMode === 'existing'
-                    ? 'border-violet-500 bg-violet-50 text-violet-900'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-                disabled={isMovingPhotos}
-                onClick={() => {
-                  setMoveTargetMode('existing')
-                  const first = childFolderDestinations[0]?.groupId ?? ''
-                  if (first) {
-                    setExistingDestinationGroupId(first)
+            <div className="mt-4 space-y-2">
+              <label className="block text-sm font-medium text-slate-800">
+                목적지 — 동위 폴더
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  disabled={isMovingPhotos}
+                  value={
+                    destinationSelect === DEST_CUSTOM ? '' : destinationSelect
                   }
-                }}
-              >
-                기존 폴더
-              </button>
-              <button
-                type="button"
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
-                  moveTargetMode === 'new'
-                    ? 'border-violet-500 bg-violet-50 text-violet-900'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-                disabled={isMovingPhotos}
-                onClick={() => setMoveTargetMode('new')}
-              >
-                새 폴더
-              </button>
+                  onChange={(event) =>
+                    applyDestinationFromSelect(event.target.value)
+                  }
+                >
+                  <option value="">목적지 선택…</option>
+                  <option value={DEST_YEAR_MONTH_ONLY}>
+                    년·월만 (가운데 폴더 없음)
+                  </option>
+                  {siblingFolderDestinations.map((item) => (
+                    <option key={item.groupId} value={item.groupId}>
+                      {item.label} ({item.photoCount}장)
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {siblingFolderDestinations.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  같은 상위에 등록된 다른 폴더가 없을 수 있습니다. 위에서 「년·월만」을
+                  고르거나 아래에 새 이름을 입력하세요.
+                </p>
+              ) : null}
             </div>
 
-            {moveTargetMode === 'existing' ? (
-              <div className="mt-4 space-y-3 text-sm text-slate-700">
-                {pathSegments.length < 2 ? (
-                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    왼쪽 트리에서 <span className="font-medium">년 → 월</span>까지
-                    들어가면, 그 아래에 있는 폴더 이름만 목적지로 고를 수 있습니다.
-                  </p>
-                ) : null}
-                <label className="block">
-                  <span className="mb-1 block font-medium">목적지 폴더 (현재 경로의 하위만)</span>
-                  <select
-                    value={existingDestinationGroupId}
-                    onChange={(event) =>
-                      setExistingDestinationGroupId(event.target.value)
-                    }
-                    disabled={
-                      isMovingPhotos ||
-                      pathSegments.length < 2 ||
-                      childFolderDestinations.length === 0
-                    }
-                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                  >
-                    {childFolderDestinations.length === 0 ? (
-                      <option value="">하위 폴더 없음</option>
-                    ) : (
-                      childFolderDestinations.map((item) => (
-                        <option key={item.groupId} value={item.groupId}>
-                          {item.label} ({item.photoCount}장)
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1 block font-medium">
-                    폴더 이름 (이동 후 그룹 제목·경로에 반영)
-                  </span>
-                  <input
-                    type="text"
-                    value={renameFolderName}
-                    onChange={(event) => setRenameFolderName(event.target.value)}
-                    disabled={
-                      isMovingPhotos ||
-                      pathSegments.length < 2 ||
-                      childFolderDestinations.length === 0
-                    }
-                    placeholder="이름을 바꾸면 이동 뒤에 적용됩니다"
-                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                  />
-                  <span className="mt-1 block text-xs text-slate-500">
-                    그대로 두려면 목적지와 같은 이름을 유지하세요. 비우면 이동만 하고
-                    이름은 바꾸지 않습니다.
-                  </span>
-                </label>
-              </div>
-            ) : (
-              <label className="mt-4 block text-sm text-slate-700">
-                <span className="mb-1 block font-medium">새 폴더 이름</span>
-                <input
-                  type="text"
-                  value={newGroupTitle}
-                  onChange={(event) => setNewGroupTitle(event.target.value)}
-                  disabled={isMovingPhotos}
-                  placeholder="비우면 년·월 바로 아래(폴더 세그먼트 없음)"
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                />
-                <span className="mt-1 block text-xs text-slate-500">
-                  이름을 적으면 년·월·폴더명(세 단계) 구조로 만들어집니다. 비우면 해당
-                  촬영 월의 년·월만 쓰고 가운데 폴더는 만들지 않습니다.
+            <label className="mt-4 block text-sm text-slate-700">
+              <span className="mb-1 block font-medium">
+                폴더 이름 (드롭다운 선택 시 자동 입력 · 수정 가능)
+              </span>
+              <input
+                type="text"
+                value={manualDestinationFolder}
+                onChange={(event) =>
+                  handleManualDestinationInput(event.target.value)
+                }
+                disabled={isMovingPhotos}
+                placeholder="예: 주말산책"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              />
+              {destinationSelect === DEST_CUSTOM &&
+              manualDestinationFolder.trim().length > 0 ? (
+                <span className="mt-1 block text-xs text-amber-800">
+                  목록에 없는 이름이면 새 폴더로 만듭니다.
                 </span>
-              </label>
-            )}
+              ) : null}
+            </label>
 
             <div className="mt-6 flex justify-end gap-2">
               <button
@@ -817,14 +896,92 @@ export function FileListPage() {
                 className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
                 disabled={
                   isMovingPhotos ||
-                  (moveTargetMode === 'existing' &&
-                    (pathSegments.length < 2 ||
-                      !existingDestinationGroupId ||
-                      childFolderDestinations.length === 0))
+                  (manualDestinationFolder.trim().length === 0 &&
+                    !destinationSelect)
                 }
                 onClick={() => void handleConfirmMoveToGroup()}
               >
                 {isMovingPhotos ? '이동 중…' : '이동'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {renameDialogOpen && libraryIndex && outputRoot ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          role="dialog"
+          aria-modal
+          aria-labelledby="rename-folder-dialog-title"
+          onClick={() => {
+            if (!isRenaming) {
+              setRenameDialogOpen(false)
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2
+              id="rename-folder-dialog-title"
+              className="text-lg font-semibold text-slate-900"
+            >
+              이름 변경
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              이 경로 목록에 나온 폴더(그룹)의 표시 이름을 바꿉니다. 파일이 디스크에서
+              해당 이름 폴더로 다시 정리될 수 있습니다.
+            </p>
+            <label className="mt-4 block text-sm text-slate-700">
+              <span className="mb-1 block font-medium">대상 폴더</span>
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                disabled={isRenaming}
+                value={renameTargetGroupId}
+                onChange={(event) => {
+                  const id = event.target.value
+                  setRenameTargetGroupId(id)
+                  const g = libraryIndex.groups.find((x) => x.id === id)
+                  setRenameNewTitle(
+                    (g?.title ?? g?.displayTitle ?? '').trim()
+                  )
+                }}
+              >
+                {groupsInCurrentFolder.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mt-3 block text-sm text-slate-700">
+              <span className="mb-1 block font-medium">새 이름</span>
+              <input
+                type="text"
+                value={renameNewTitle}
+                onChange={(event) => setRenameNewTitle(event.target.value)}
+                disabled={isRenaming}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              />
+            </label>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+                disabled={isRenaming}
+                onClick={() => setRenameDialogOpen(false)}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+                disabled={isRenaming || !renameTargetGroupId}
+                onClick={() => void handleConfirmRename()}
+              >
+                {isRenaming ? '저장 중…' : '이름 저장'}
               </button>
             </div>
           </div>
