@@ -1,4 +1,7 @@
+import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
 import type { MissingGpsCategory } from '@domain/entities/Photo'
+
+export type { ScanPhotoLibraryProgressPayload }
 
 export interface AppInfo {
   name: string
@@ -211,6 +214,9 @@ export interface PreloadBridge {
   scanPhotoLibrary: (
     request: ScanPhotoLibraryRequest
   ) => Promise<ScanPhotoLibrarySummary>
+  onScanPhotoLibraryProgress: (
+    handler: (payload: ScanPhotoLibraryProgressPayload) => void
+  ) => () => void
   updatePhotoGroup: (
     request: UpdatePhotoGroupRequest
   ) => Promise<LibraryIndexView>

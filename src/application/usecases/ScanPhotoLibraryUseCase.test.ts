@@ -791,4 +791,74 @@ describe('ScanPhotoLibraryUseCase', () => {
     expect(getSavedIndex()?.photos).toHaveLength(1)
     expect(getSavedIndex()?.photos[0]?.regionName).toBe('seoul')
   })
+
+  it('emits prepare then fileFlowComplete progress (copy filter: one of two photos)', async () => {
+    const { dependencies } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_GPS.JPG',
+      'C:\\source\\IMG_NOGPS.JPG'
+    ])
+    dependencies.metadataReader.read
+      .mockResolvedValueOnce({
+        metadataIssues: [],
+        gps: {
+          latitude: 37.5665,
+          longitude: 126.978
+        },
+        capturedAt: {
+          iso: '2026-04-03T10:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '100000'
+        }
+      })
+      .mockResolvedValueOnce({
+        metadataIssues: ['gps-missing'],
+        missingGpsCategory: 'missing-original-gps',
+        capturedAt: {
+          iso: '2026-04-03T11:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '110000'
+        }
+      })
+    dependencies.hasher.createSha256
+      .mockResolvedValueOnce('hash-gps')
+      .mockResolvedValueOnce('hash-nogps')
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const progress: Array<{ kind: string; completed: number; total: number }> =
+      []
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    await useCase.execute(
+      {
+        sourceRoot: 'C:\\source',
+        outputRoot: 'C:\\output',
+        copyGroupKeysInThisRun: [
+          'group|region=seoul|year=2026|month=04|day=00|slot=1'
+        ]
+      },
+      {
+        onScanProgress: (payload) => {
+          progress.push({
+            kind: payload.kind,
+            completed: payload.completed,
+            total: payload.total
+          })
+        }
+      }
+    )
+
+    expect(progress.filter((p) => p.kind === 'prepare')).toEqual([
+      { kind: 'prepare', completed: 1, total: 2 },
+      { kind: 'prepare', completed: 2, total: 2 }
+    ])
+    expect(progress.filter((p) => p.kind === 'fileFlowComplete')).toEqual([
+      { kind: 'fileFlowComplete', completed: 1, total: 1 }
+    ])
+  })
 })

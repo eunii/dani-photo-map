@@ -32,6 +32,7 @@ const IPC_CHANNELS = {
   loadLibraryIndex: 'photo-app/load-library-index',
   previewPendingOrganization: 'photo-app/preview-pending-organization',
   scanPhotoLibrary: 'photo-app/scan-photo-library',
+  scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress',
   updatePhotoGroup: 'photo-app/update-photo-group',
   movePhotosToGroup: 'photo-app/move-photos-to-group'
 } as const
@@ -150,10 +151,14 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(IPC_CHANNELS.scanPhotoLibrary)
   ipcMain.handle(
     IPC_CHANNELS.scanPhotoLibrary,
-    async (_event, command: ScanPhotoLibraryRequest) => {
+    async (event, command: ScanPhotoLibraryRequest) => {
       const useCase = createScanPhotoLibraryUseCase(command)
 
-      return useCase.execute(command)
+      return useCase.execute(command, {
+        onScanProgress: (payload) => {
+          event.sender.send(IPC_CHANNELS.scanPhotoLibraryProgress, payload)
+        }
+      })
     }
   )
 

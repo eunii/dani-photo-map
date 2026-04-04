@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type {
-  PendingOrganizationAssignmentCandidate,
   PendingOrganizationPreviewPhoto,
   PreviewPendingOrganizationResult,
   ScanPhotoLibrarySummary
 } from '@shared/types/preload'
 import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
-import { normalizePathSeparators } from '@shared/utils/path'
 
 import {
   buildOrganizeScanPayload,
@@ -23,6 +21,9 @@ const OUTPUT_DIALOG_OPTIONS = {
   title: '출력 폴더 선택',
   buttonLabel: '출력 폴더 선택'
 } as const
+
+const EMPTY_GROUP_ASSIGNMENTS: Record<string, string> = {}
+const EMPTY_CUSTOM_SPLITS: Record<string, OrganizeCustomSplitInput[]> = {}
 
 function getMissingGpsCategoryLabel(
   category?: PreviewPendingOrganizationResult['groups'][number]['missingGpsCategory']
@@ -45,8 +46,6 @@ function getAssignmentModeDescription(
   switch (group.assignmentMode) {
     case 'auto-capture':
       return '자동으로 캡처 폴더로 분리됩니다.'
-    case 'manual-existing-group':
-      return '기존 GPS 그룹을 선택하면 해당 그룹 소속으로 넣고 앱 내부 위치를 그 그룹 기준으로 사용합니다.'
     case 'new-group':
     default:
       return null
@@ -80,17 +79,11 @@ function buildEffectiveOrganizeInputs(
     groupTitleInputs: Record<string, string>
     groupCompanionsInputs: Record<string, string>
     groupNotesInputs: Record<string, string>
-    groupAssignmentInputs: Record<string, string>
-    groupCustomSplits: Record<string, OrganizeCustomSplitInput[]>
   }
 ): Parameters<typeof buildOrganizeScanPayload>[2] {
   const groupTitleInputs = { ...inputs.groupTitleInputs }
 
   for (const group of groups) {
-    if (group.assignmentMode === 'manual-existing-group') {
-      continue
-    }
-
     if (!groupTitleInputs[group.groupKey]?.trim()) {
       groupTitleInputs[group.groupKey] =
         group.suggestedTitles[0] ?? group.displayTitle
@@ -101,15 +94,9 @@ function buildEffectiveOrganizeInputs(
     groupTitleInputs,
     groupCompanionsInputs: inputs.groupCompanionsInputs,
     groupNotesInputs: inputs.groupNotesInputs,
-    groupAssignmentInputs: inputs.groupAssignmentInputs,
-    groupCustomSplits: inputs.groupCustomSplits
+    groupAssignmentInputs: EMPTY_GROUP_ASSIGNMENTS,
+    groupCustomSplits: EMPTY_CUSTOM_SPLITS
   }
-}
-
-function getAssignedPhotoIdSet(
-  splits: OrganizeCustomSplitInput[] | undefined
-): Set<string> {
-  return new Set((splits ?? []).flatMap((split) => split.photoIds))
 }
 
 function PendingPreviewImageBlock({
@@ -145,69 +132,6 @@ function PendingPreviewImageBlock({
   )
 }
 
-function GpsLessSplitPhotoGrid({
-  photos,
-  groupKey,
-  assignedPhotoIdSet,
-  selectedPhotoIds,
-  previewImageLoadFailedByPhotoId,
-  onTogglePhoto,
-  onImageError
-}: {
-  photos: PendingOrganizationPreviewPhoto[]
-  groupKey: string
-  assignedPhotoIdSet: Set<string>
-  selectedPhotoIds: string[]
-  previewImageLoadFailedByPhotoId: Record<string, boolean>
-  onTogglePhoto: (groupKey: string, photoId: string) => void
-  onImageError: (photoId: string) => void
-}) {
-  return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1.5 sm:gap-2">
-      {photos.map((photo) => {
-        const assigned = assignedPhotoIdSet.has(photo.id)
-        const selected = selectedPhotoIds.includes(photo.id)
-
-        return (
-          <button
-            key={photo.id}
-            type="button"
-            disabled={assigned}
-            aria-pressed={selected}
-            aria-label={`${photo.sourceFileName}, ${selected ? '선택됨' : '선택 안 됨'}${assigned ? ', 이미 분리됨' : ''}`}
-            onClick={() => {
-              if (!assigned) {
-                onTogglePhoto(groupKey, photo.id)
-              }
-            }}
-            className={`min-w-0 rounded-md border text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1 ${
-              assigned
-                ? 'cursor-not-allowed border-slate-200 bg-slate-100 opacity-55'
-                : 'cursor-pointer border-slate-200 bg-white hover:border-slate-300'
-            } ${selected && !assigned ? 'ring-2 ring-sky-500 ring-offset-1' : ''}`}
-          >
-            <div className="overflow-hidden rounded-t-[5px] bg-slate-50">
-              <PendingPreviewImageBlock
-                photo={photo}
-                imageFailed={Boolean(previewImageLoadFailedByPhotoId[photo.id])}
-                onImageError={() => onImageError(photo.id)}
-                imageHeightClass="h-14"
-                placeholderClassName="flex h-14 items-center justify-center bg-slate-200 px-1 text-center text-[10px] leading-tight text-slate-500"
-              />
-            </div>
-            <p
-              className="truncate px-1 py-1 text-[10px] font-medium text-slate-800"
-              title={photo.sourceFileName}
-            >
-              {photo.sourceFileName}
-            </p>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   const sourceRoot = useLibraryWorkspaceStore((state) => state.sourceRoot)
   const outputRoot = useLibraryWorkspaceStore((state) => state.outputRoot)
@@ -233,40 +157,33 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   const [groupNotesInputs, setGroupNotesInputs] = useState<
     Record<string, string>
   >({})
-  const [groupAssignmentInputs, setGroupAssignmentInputs] = useState<
-    Record<string, string>
-  >({})
-  const [groupSelectedPhotoIds, setGroupSelectedPhotoIds] = useState<
-    Record<string, string[]>
-  >({})
-  const [groupSplitTitleInputs, setGroupSplitTitleInputs] = useState<
-    Record<string, string>
-  >({})
-  const [groupCustomSplits, setGroupCustomSplits] = useState<
-    Record<string, OrganizeCustomSplitInput[]>
-  >({})
   const [saveJobQueue, setSaveJobQueue] = useState<
     Array<{
-      copyGroupKey: string
+      copyGroupKeysInThisRun: string[]
       isLastStep: boolean
       snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
     }>
   >([])
-  const [runningSaveGroupKey, setRunningSaveGroupKey] = useState<string | null>(
-    null
-  )
-  const runningSaveGroupKeyRef = useRef<string | null>(null)
-  const [saveAllSession, setSaveAllSession] = useState<{
+  const [runningSaveTarget, setRunningSaveTarget] = useState<
+    'all' | string | null
+  >(null)
+  const runningSaveTargetRef = useRef<'all' | string | null>(null)
+  const [bulkSaveActive, setBulkSaveActive] = useState(false)
+  const [prepareProgress, setPrepareProgress] = useState<{
+    completed: number
     total: number
-    done: number
   } | null>(null)
+  const [photoFlowTotal, setPhotoFlowTotal] = useState(0)
   const [groupSavePhaseByKey, setGroupSavePhaseByKey] = useState<
     Record<string, GroupSavePhase>
   >({})
+  const [hidePreviewPanelWhileSaving, setHidePreviewPanelWhileSaving] =
+    useState(false)
+  const [photosSavedCount, setPhotosSavedCount] = useState(0)
 
   useEffect(() => {
-    runningSaveGroupKeyRef.current = runningSaveGroupKey
-  }, [runningSaveGroupKey])
+    runningSaveTargetRef.current = runningSaveTarget
+  }, [runningSaveTarget])
   const [previewImageLoadFailedByPhotoId, setPreviewImageLoadFailedByPhotoId] =
     useState<Record<string, boolean>>({})
   const [wizardStepIndex, setWizardStepIndex] = useState(0)
@@ -282,10 +199,16 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     return [...withGps, ...withoutGps]
   }, [previewResult])
 
+  const totalPhotosInPreview = useMemo(
+    () =>
+      orderedPreviewGroups.reduce((sum, group) => sum + group.photoCount, 0),
+    [orderedPreviewGroups]
+  )
+
   const hasPendingPreviewGroups = (previewResult?.groups.length ?? 0) > 0
 
   const savePipelineBusy =
-    runningSaveGroupKey !== null || saveJobQueue.length > 0
+    runningSaveTarget !== null || saveJobQueue.length > 0
 
   const wizardGroup =
     orderedPreviewGroups.length > 0
@@ -294,45 +217,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
         ]
       : undefined
 
-  const mergeAssignmentCandidatesFromLoadedIndex =
-    useMemo((): PendingOrganizationAssignmentCandidate[] | null => {
-      const groups = lastLoadedIndex?.index?.groups
-      if (!groups?.length) {
-        return null
-      }
-
-      const normalizedOutput = normalizePathSeparators(outputRoot ?? '')
-      const indexOutput = normalizePathSeparators(
-        lastLoadedIndex?.index?.outputRoot ?? ''
-      )
-
-      if (!normalizedOutput || normalizedOutput !== indexOutput) {
-        return null
-      }
-
-      const mapped: PendingOrganizationAssignmentCandidate[] = groups.map(
-        (g) => ({
-          id: g.id,
-          title: g.title,
-          displayTitle: g.displayTitle,
-          photoCount: g.photoCount,
-          ...(g.representativeGps
-            ? { representativeGps: g.representativeGps }
-            : {})
-        })
-      )
-
-      const withGps = mapped.filter((c) => Boolean(c.representativeGps))
-      const withoutGps = mapped.filter((c) => !c.representativeGps)
-
-      withGps.sort((a, b) => a.title.localeCompare(b.title))
-      withoutGps.sort((a, b) => a.title.localeCompare(b.title))
-
-      return [...withGps, ...withoutGps]
-    }, [lastLoadedIndex, outputRoot])
-
   useEffect(() => {
-    if (runningSaveGroupKey !== null) {
+    if (runningSaveTarget !== null) {
       return
     }
 
@@ -347,54 +233,100 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     const nextJob = saveJobQueue[0]
 
     setSaveJobQueue((previous) => previous.slice(1))
-    setRunningSaveGroupKey(nextJob.copyGroupKey)
-    setGroupSavePhaseByKey((previous) => ({
-      ...previous,
-      [nextJob.copyGroupKey]: 'saving'
-    }))
+
+    const isBulkRun = nextJob.copyGroupKeysInThisRun.length > 1
+    setRunningSaveTarget(isBulkRun ? 'all' : nextJob.copyGroupKeysInThisRun[0]!)
+
+    if (isBulkRun) {
+      setGroupSavePhaseByKey(
+        Object.fromEntries(
+          orderedPreviewGroups.map((g) => [g.groupKey, 'saving' as const])
+        )
+      )
+    } else {
+      const onlyKey = nextJob.copyGroupKeysInThisRun[0]
+      if (onlyKey) {
+        setGroupSavePhaseByKey((previous) => ({
+          ...previous,
+          [onlyKey]: 'saving'
+        }))
+      }
+    }
+
+    setPhotosSavedCount(0)
+    setPhotoFlowTotal(totalPhotosInPreview)
+    setPrepareProgress(null)
 
     void (async () => {
+      const unsubscribe = window.photoApp.onScanPhotoLibraryProgress(
+        (payload) => {
+          if (payload.kind === 'prepare') {
+            setPrepareProgress({
+              completed: payload.completed,
+              total: payload.total
+            })
+          } else {
+            setPhotosSavedCount(payload.completed)
+            setPhotoFlowTotal(payload.total)
+            setPrepareProgress(null)
+          }
+        }
+      )
+
       try {
         const nextSummary = await window.photoApp.scanPhotoLibrary({
           sourceRoot,
           outputRoot,
           ...nextJob.snapshotPayload,
-          copyGroupKeysInThisRun: [nextJob.copyGroupKey]
+          copyGroupKeysInThisRun: nextJob.copyGroupKeysInThisRun
         })
         const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
 
         setLastLoadedIndex(loadedIndex)
 
-        setSaveAllSession((previous) =>
-          previous ? { ...previous, done: previous.done + 1 } : previous
-        )
-
-        setGroupSavePhaseByKey((previous) => ({
-          ...previous,
-          [nextJob.copyGroupKey]: 'done'
-        }))
+        if (isBulkRun) {
+          setGroupSavePhaseByKey(
+            Object.fromEntries(
+              orderedPreviewGroups.map((g) => [g.groupKey, 'done' as const])
+            )
+          )
+        } else {
+          const onlyKey = nextJob.copyGroupKeysInThisRun[0]
+          if (onlyKey) {
+            setGroupSavePhaseByKey((previous) => ({
+              ...previous,
+              [onlyKey]: 'done'
+            }))
+          }
+        }
 
         if (nextJob.isLastStep) {
-          setSaveAllSession(null)
+          setBulkSaveActive(false)
           setGroupSavePhaseByKey({})
+          setHidePreviewPanelWhileSaving(false)
+          setPhotosSavedCount(0)
+          setPhotoFlowTotal(0)
+          setPrepareProgress(null)
           setSummary(nextSummary)
           setPreviewResult(null)
           setGroupTitleInputs({})
           setGroupCompanionsInputs({})
           setGroupNotesInputs({})
-          setGroupAssignmentInputs({})
-          setGroupSelectedPhotoIds({})
-          setGroupSplitTitleInputs({})
-          setGroupCustomSplits({})
           setPreviewImageLoadFailedByPhotoId({})
           setWizardStepIndex(0)
         }
       } catch (error) {
-        setSaveAllSession(null)
+        setBulkSaveActive(false)
         setSaveJobQueue([])
+        setHidePreviewPanelWhileSaving(false)
+        setPhotosSavedCount(0)
+        setPhotoFlowTotal(0)
+        setPrepareProgress(null)
         setGroupSavePhaseByKey((previous) => {
           const next: Record<string, GroupSavePhase> = { ...previous }
-          next[nextJob.copyGroupKey] = 'error'
+          for (const key of nextJob.copyGroupKeysInThisRun) {
+            next[key] = 'error'
+          }
           for (const key of Object.keys(next)) {
             if (next[key] === 'queued') {
               next[key] = 'idle'
@@ -406,10 +338,19 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
         )
       } finally {
-        setRunningSaveGroupKey(null)
+        unsubscribe()
+        setRunningSaveTarget(null)
       }
     })()
-  }, [runningSaveGroupKey, saveJobQueue, sourceRoot, outputRoot, setLastLoadedIndex])
+  }, [
+    runningSaveTarget,
+    saveJobQueue,
+    sourceRoot,
+    outputRoot,
+    setLastLoadedIndex,
+    orderedPreviewGroups,
+    totalPhotosInPreview
+  ])
 
   async function selectSourceRoot(): Promise<void> {
     const selectedPath = await window.photoApp.selectDirectory(
@@ -423,17 +364,17 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupTitleInputs({})
       setGroupCompanionsInputs({})
       setGroupNotesInputs({})
-      setGroupAssignmentInputs({})
-      setGroupSelectedPhotoIds({})
-      setGroupSplitTitleInputs({})
-      setGroupCustomSplits({})
       setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
       setErrorMessage(null)
       setSaveJobQueue([])
-      setRunningSaveGroupKey(null)
-      setSaveAllSession(null)
+      setRunningSaveTarget(null)
+      setBulkSaveActive(false)
       setGroupSavePhaseByKey({})
+      setHidePreviewPanelWhileSaving(false)
+      setPhotosSavedCount(0)
+      setPhotoFlowTotal(0)
+      setPrepareProgress(null)
     }
   }
 
@@ -450,17 +391,17 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupTitleInputs({})
       setGroupCompanionsInputs({})
       setGroupNotesInputs({})
-      setGroupAssignmentInputs({})
-      setGroupSelectedPhotoIds({})
-      setGroupSplitTitleInputs({})
-      setGroupCustomSplits({})
       setPreviewImageLoadFailedByPhotoId({})
       setSummary(null)
       setErrorMessage(null)
       setSaveJobQueue([])
-      setRunningSaveGroupKey(null)
-      setSaveAllSession(null)
+      setRunningSaveTarget(null)
+      setBulkSaveActive(false)
       setGroupSavePhaseByKey({})
+      setHidePreviewPanelWhileSaving(false)
+      setPhotosSavedCount(0)
+      setPhotoFlowTotal(0)
+      setPrepareProgress(null)
     }
   }
 
@@ -496,25 +437,17 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setGroupNotesInputs(
         Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
       )
-      setGroupAssignmentInputs(
-        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
-      )
-      setGroupSelectedPhotoIds(
-        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, []]))
-      )
-      setGroupSplitTitleInputs(
-        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
-      )
-      setGroupCustomSplits(
-        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, []]))
-      )
 
       const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
       setLastLoadedIndex(loadedIndex)
       setSaveJobQueue([])
-      setRunningSaveGroupKey(null)
-      setSaveAllSession(null)
+      setRunningSaveTarget(null)
+      setBulkSaveActive(false)
       setGroupSavePhaseByKey({})
+      setHidePreviewPanelWhileSaving(false)
+      setPhotosSavedCount(0)
+      setPhotoFlowTotal(0)
+      setPrepareProgress(null)
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -546,61 +479,40 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       return
     }
 
-    for (const group of orderedPreviewGroups) {
-      if (group.assignmentMode === 'manual-existing-group') {
-        if (!(groupAssignmentInputs[group.groupKey]?.trim())) {
-          setErrorMessage(
-            '「기존 그룹에 넣기」가 필요한 그룹이 있습니다. 해당 그룹에서 합칠 그룹을 선택한 뒤 전체 저장을 사용하세요.'
-          )
-          return
-        }
-      }
-    }
-
     const effectiveInputs = buildEffectiveOrganizeInputs(previewResult.groups, {
       groupTitleInputs,
       groupCompanionsInputs,
-      groupNotesInputs,
-      groupAssignmentInputs,
-      groupCustomSplits
+      groupNotesInputs
     })
 
-    const jobs: Array<{
-      copyGroupKey: string
-      isLastStep: boolean
-      snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
-    }> = []
-
-    for (let index = 0; index < orderedPreviewGroups.length; index += 1) {
-      const includedGroupKeySet = new Set(
-        orderedPreviewGroups.slice(0, index + 1).map((g) => g.groupKey)
-      )
-      const snapshotPayload = buildOrganizeScanPayload(
-        previewResult,
-        includedGroupKeySet,
-        effectiveInputs
-      )
-      const group = orderedPreviewGroups[index]
-
-      if (!group) {
-        continue
-      }
-
-      jobs.push({
-        copyGroupKey: group.groupKey,
-        isLastStep: index >= orderedPreviewGroups.length - 1,
-        snapshotPayload
-      })
-    }
+    const includedGroupKeySet = new Set(
+      orderedPreviewGroups.map((g) => g.groupKey)
+    )
+    const snapshotPayload = buildOrganizeScanPayload(
+      previewResult,
+      includedGroupKeySet,
+      effectiveInputs
+    )
+    const copyGroupKeysInThisRun = orderedPreviewGroups.map((g) => g.groupKey)
 
     setErrorMessage(null)
-    setSaveAllSession({ total: jobs.length, done: 0 })
+    setBulkSaveActive(true)
     const queuedPhases: Record<string, GroupSavePhase> = {}
-    for (const job of jobs) {
-      queuedPhases[job.copyGroupKey] = 'queued'
+    for (const key of copyGroupKeysInThisRun) {
+      queuedPhases[key] = 'queued'
     }
     setGroupSavePhaseByKey((previous) => ({ ...previous, ...queuedPhases }))
-    setSaveJobQueue((previous) => [...previous, ...jobs])
+    setHidePreviewPanelWhileSaving(true)
+    setPhotosSavedCount(0)
+    setPhotoFlowTotal(totalPhotosInPreview)
+    setSaveJobQueue((previous) => [
+      ...previous,
+      {
+        copyGroupKeysInThisRun,
+        isLastStep: true,
+        snapshotPayload
+      }
+    ])
   }
 
   function enqueueSaveCurrentGroup(): void {
@@ -622,11 +534,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       return
     }
 
-    if (currentGroup.assignmentMode !== 'manual-existing-group') {
-      if (!(groupTitleInputs[currentGroup.groupKey]?.trim())) {
-        setErrorMessage('기본 그룹명을 입력하세요.')
-        return
-      }
+    if (!(groupTitleInputs[currentGroup.groupKey]?.trim())) {
+      setErrorMessage('기본 그룹명을 입력하세요.')
+      return
     }
 
     const includedGroupKeySet = new Set(
@@ -635,21 +545,28 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
         .map((group) => group.groupKey)
     )
 
-    const snapshotPayload = buildOrganizeScanPayload(previewResult, includedGroupKeySet, {
-      groupTitleInputs,
-      groupCompanionsInputs,
-      groupNotesInputs,
-      groupAssignmentInputs,
-      groupCustomSplits
-    })
+    const snapshotPayload = buildOrganizeScanPayload(
+      previewResult,
+      includedGroupKeySet,
+      buildEffectiveOrganizeInputs(previewResult.groups, {
+        groupTitleInputs,
+        groupCompanionsInputs,
+        groupNotesInputs
+      })
+    )
 
     const isLastStep = snapshotStepIndex >= orderedPreviewGroups.length - 1
 
     setErrorMessage(null)
 
     const alreadyQueuedOrRunning =
-      runningSaveGroupKeyRef.current === currentGroup.groupKey ||
-      saveJobQueue.some((job) => job.copyGroupKey === currentGroup.groupKey)
+      runningSaveTargetRef.current === currentGroup.groupKey ||
+      runningSaveTargetRef.current === 'all' ||
+      saveJobQueue.some(
+        (job) =>
+          job.copyGroupKeysInThisRun.length === 1 &&
+          job.copyGroupKeysInThisRun[0] === currentGroup.groupKey
+      )
 
     if (alreadyQueuedOrRunning) {
       return
@@ -663,95 +580,19 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     setSaveJobQueue((previous) => [
       ...previous,
       {
-        copyGroupKey: currentGroup.groupKey,
+        copyGroupKeysInThisRun: [currentGroup.groupKey],
         isLastStep,
         snapshotPayload
       }
     ])
 
+    if (isLastStep) {
+      setHidePreviewPanelWhileSaving(true)
+    }
+
     if (!isLastStep) {
       setWizardStepIndex((step) => step + 1)
     }
-  }
-
-  function toggleGroupPhotoSelection(groupKey: string, photoId: string): void {
-    setGroupSelectedPhotoIds((current) => {
-      const selectedPhotoIds = current[groupKey] ?? []
-
-      return {
-        ...current,
-        [groupKey]: selectedPhotoIds.includes(photoId)
-          ? selectedPhotoIds.filter((currentPhotoId) => currentPhotoId !== photoId)
-          : [...selectedPhotoIds, photoId]
-      }
-    })
-  }
-
-  function selectAllSplitPhotosForGroup(groupKey: string): void {
-    const group = previewResult?.groups.find(
-      (candidate) => candidate.groupKey === groupKey
-    )
-
-    if (!group) {
-      return
-    }
-
-    const assigned = new Set(
-      (groupCustomSplits[groupKey] ?? []).flatMap((split) => split.photoIds)
-    )
-    const selectableIds = group.representativePhotos
-      .filter((photo) => !assigned.has(photo.id))
-      .map((photo) => photo.id)
-
-    setGroupSelectedPhotoIds((current) => ({
-      ...current,
-      [groupKey]: selectableIds
-    }))
-  }
-
-  function clearSplitPhotoSelectionForGroup(groupKey: string): void {
-    setGroupSelectedPhotoIds((current) => ({
-      ...current,
-      [groupKey]: []
-    }))
-  }
-
-  function addCustomSplit(groupKey: string): void {
-    const title = groupSplitTitleInputs[groupKey]?.trim() ?? ''
-    const photoIds = groupSelectedPhotoIds[groupKey] ?? []
-
-    if (title.length === 0 || photoIds.length === 0) {
-      return
-    }
-
-    const newSplitId = `${groupKey}::split-${crypto.randomUUID()}`
-
-    setGroupCustomSplits((current) => ({
-      ...current,
-      [groupKey]: [
-        ...(current[groupKey] ?? []),
-        {
-          id: newSplitId,
-          title,
-          photoIds
-        }
-      ]
-    }))
-    setGroupSelectedPhotoIds((current) => ({
-      ...current,
-      [groupKey]: []
-    }))
-    setGroupSplitTitleInputs((current) => ({
-      ...current,
-      [groupKey]: ''
-    }))
-  }
-
-  function removeCustomSplit(groupKey: string, splitId: string): void {
-    setGroupCustomSplits((current) => ({
-      ...current,
-      [groupKey]: (current[groupKey] ?? []).filter((split) => split.id !== splitId)
-    }))
   }
 
   return (
@@ -871,41 +712,132 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
         </div>
       ) : null}
 
-      {saveAllSession && savePipelineBusy ? (
+      {bulkSaveActive && savePipelineBusy ? (
         <section
           className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"
           aria-live="polite"
-          aria-busy={runningSaveGroupKey !== null}
+          aria-busy={runningSaveTarget !== null}
         >
           <h2 className="text-sm font-semibold text-indigo-900">
             전체 정리 저장 진행 중
           </h2>
           <p className="mt-1 text-sm text-indigo-800">
-            완료 {saveAllSession.done} / {saveAllSession.total} 그룹
-            {runningSaveGroupKey
-              ? ` · 현재: ${
-                  orderedPreviewGroups.find(
-                    (g) => g.groupKey === runningSaveGroupKey
-                  )?.displayTitle ?? runningSaveGroupKey
-                }`
+            모든 그룹을 한 번에 복사·인덱스 반영합니다.
+            {runningSaveTarget === 'all'
+              ? ' · 파일마다 저장이 끝날 때마다 진행이 올라갑니다.'
               : ''}
           </p>
-          <progress
-            className="mt-3 h-2 w-full overflow-hidden rounded-full accent-indigo-600 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-indigo-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-indigo-600"
-            max={saveAllSession.total}
-            value={Math.min(
-              saveAllSession.done + (runningSaveGroupKey ? 1 : 0),
-              saveAllSession.total
-            )}
-          />
+          {prepareProgress ? (
+            <p className="mt-2 text-xs text-indigo-700">
+              원본 읽기·해시{' '}
+              {prepareProgress.completed} / {prepareProgress.total}장
+            </p>
+          ) : null}
+          {(() => {
+            const denom =
+              photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview || 1
+
+            return (
+              <>
+                <progress
+                  className="mt-3 h-2 w-full overflow-hidden rounded-full accent-indigo-600 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-indigo-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-indigo-600"
+                  max={denom}
+                  value={Math.min(photosSavedCount, denom)}
+                />
+                <p className="mt-2 text-sm text-indigo-800">
+                  사진 저장 완료{' '}
+                  <span className="font-semibold text-indigo-950">
+                    {photosSavedCount}
+                  </span>{' '}
+                  / {denom}장 (
+                  {Math.min(
+                    100,
+                    Math.round((photosSavedCount / denom) * 100)
+                  )}
+                  %)
+                </p>
+              </>
+            )
+          })()}
           <p className="mt-2 text-xs text-indigo-700">
-            각 그룹 복사·인덱스 반영이 끝날 때마다 숫자가 올라갑니다. 잠시만
-            기다려 주세요.
+            저장 진행률은 복사·썸네일까지 끝낸 파일만 반영합니다. 잠시만 기다려
+            주세요.
           </p>
         </section>
       ) : null}
 
-      {previewResult ? (
+      {hidePreviewPanelWhileSaving &&
+      previewResult &&
+      savePipelineBusy &&
+      hasPendingPreviewGroups &&
+      !bulkSaveActive ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-900">저장 진행 중</h2>
+          {prepareProgress ? (
+            <p className="mt-1 text-xs text-slate-600">
+              원본 읽기·해시 {prepareProgress.completed} / {prepareProgress.total}장
+            </p>
+          ) : null}
+          <p className="mt-1 text-xs text-slate-600">
+            사진 저장 완료{' '}
+            <span className="font-medium text-slate-900">{photosSavedCount}</span> /{' '}
+            {(photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview) || '—'}장
+            {(photoFlowTotal > 0 || totalPhotosInPreview > 0
+              ? ` (${Math.min(
+                  100,
+                  Math.round(
+                    (photosSavedCount /
+                      (photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview)) *
+                      100
+                  )
+                )}%)`
+              : '')}
+          </p>
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-semibold text-slate-900">그룹별 저장 상태</p>
+            <ul className="mt-2 space-y-1.5">
+              {orderedPreviewGroups.map((g) => {
+                const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
+                const isCurrentRun =
+                  runningSaveTarget === g.groupKey ||
+                  runningSaveTarget === 'all'
+                return (
+                  <li
+                    key={g.groupKey}
+                    className={`flex flex-wrap items-center justify-between gap-2 text-xs ${
+                      phase === 'saving' || isCurrentRun
+                        ? 'font-medium text-sky-900'
+                        : 'text-slate-700'
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1 truncate" title={g.displayTitle}>
+                      {g.displayTitle}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 ${
+                        phase === 'saving' || isCurrentRun
+                          ? 'bg-amber-100 text-amber-900'
+                          : phase === 'done'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : phase === 'error'
+                              ? 'bg-red-100 text-red-800'
+                              : phase === 'queued'
+                                ? 'bg-slate-200 text-slate-800'
+                                : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {formatGroupSavePhaseLabel(phase)}
+                      {phase === 'saving' ? '…' : ''}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {previewResult && !hidePreviewPanelWhileSaving ? (
         <section className="rounded-xl border border-sky-200 bg-sky-50 p-5">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -937,7 +869,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                 <ul className="mt-2 space-y-1.5">
                   {orderedPreviewGroups.map((g) => {
                     const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
-                    const isCurrentRun = runningSaveGroupKey === g.groupKey
+                    const isCurrentRun =
+                  runningSaveTarget === g.groupKey ||
+                  runningSaveTarget === 'all'
                     return (
                       <li
                         key={g.groupKey}
@@ -970,6 +904,17 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                     )
                   })}
                 </ul>
+                {totalPhotosInPreview > 0 ? (
+                  <p className="mt-2 text-xs text-sky-800">
+                    사진{' '}
+                    <span className="font-medium text-sky-900">{photosSavedCount}</span> /{' '}
+                    {totalPhotosInPreview}장
+                    {` (${Math.min(
+                      100,
+                      Math.round((photosSavedCount / totalPhotosInPreview) * 100)
+                    )}%)`}
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -977,20 +922,15 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
               <div className="space-y-4">
                 {(() => {
                   const group = wizardGroup
-                  const customSplits = groupCustomSplits[group.groupKey] ?? []
-                  const assignedPhotoIdSet = getAssignedPhotoIdSet(customSplits)
-                  const hasExistingGroupAssignment =
-                    (groupAssignmentInputs[group.groupKey] ?? '').length > 0
-                  const mergeTargetCandidates =
-                    mergeAssignmentCandidatesFromLoadedIndex &&
-                    mergeAssignmentCandidatesFromLoadedIndex.length > 0
-                      ? mergeAssignmentCandidatesFromLoadedIndex
-                      : group.existingGroupCandidates
                   const phaseForGroup =
                     groupSavePhaseByKey[group.groupKey] ?? 'idle'
                   const saveBusyForThisGroup =
-                    runningSaveGroupKey === group.groupKey ||
-                    saveJobQueue.some((job) => job.copyGroupKey === group.groupKey) ||
+                    runningSaveTarget === group.groupKey ||
+                    runningSaveTarget === 'all' ||
+                    saveJobQueue.some(
+                      (job) =>
+                        job.copyGroupKeysInThisRun.includes(group.groupKey)
+                    ) ||
                     phaseForGroup === 'done'
                   const isLastInWizard =
                     orderedPreviewGroups.length > 0 &&
@@ -1033,23 +973,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                                 {getMissingGpsCategoryLabel(group.missingGpsCategory)}
                               </span>
                             ) : null}
-                            {group.assignmentMode === 'manual-existing-group' ? (
-                              <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
-                                기존 그룹 선택 필요
-                              </span>
-                            ) : null}
                           </div>
-                          {group.assignmentMode === 'manual-existing-group' ? (
-                            <p className="text-xs leading-relaxed text-slate-600">
-                              이 후보는 대표 GPS가 없어 지도에 새 점으로 묶을 수 없습니다.
-                              출력 라이브러리에는 이미 여러 그룹이 있으므로, 사진을{' '}
-                              <strong className="font-medium text-slate-800">
-                                어느 기존 그룹에 합칠지
-                              </strong>{' '}
-                              앱이 임의로 정할 수 없습니다. 아래에서 합칠 그룹을
-                              고르거나, 새 GPS 없는 그룹으로 두면 됩니다.
-                            </p>
-                          ) : null}
                           {getAssignmentModeDescription(group) ? (
                             <p className="text-xs text-slate-500">
                               {getAssignmentModeDescription(group)}
@@ -1061,50 +985,6 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                         </div>
                       </div>
 
-                      {group.assignmentMode === 'manual-existing-group' &&
-                      !hasExistingGroupAssignment ? (
-                        <div className="space-y-2">
-                          <p className="text-xs text-slate-600">
-                            분리할 사진을 선택하세요.
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                              onClick={() => selectAllSplitPhotosForGroup(group.groupKey)}
-                            >
-                              전체 선택
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                              onClick={() =>
-                                clearSplitPhotoSelectionForGroup(group.groupKey)
-                              }
-                            >
-                              전체 해제
-                            </button>
-                          </div>
-                          <GpsLessSplitPhotoGrid
-                            photos={group.representativePhotos}
-                            groupKey={group.groupKey}
-                            assignedPhotoIdSet={assignedPhotoIdSet}
-                            selectedPhotoIds={
-                              groupSelectedPhotoIds[group.groupKey] ?? []
-                            }
-                            previewImageLoadFailedByPhotoId={
-                              previewImageLoadFailedByPhotoId
-                            }
-                            onTogglePhoto={toggleGroupPhotoSelection}
-                            onImageError={(photoId) =>
-                              setPreviewImageLoadFailedByPhotoId((current) => ({
-                                ...current,
-                                [photoId]: true
-                              }))
-                            }
-                          />
-                        </div>
-                      ) : (
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1.5 sm:gap-2">
                           {group.representativePhotos.map((photo) => (
                             <div key={photo.id} className="min-w-0">
@@ -1142,7 +1022,6 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             </div>
                           ))}
                         </div>
-                      )}
 
                       <div className="space-y-3">
                         <div className="space-y-2">
@@ -1175,33 +1054,6 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                           )}
                         </div>
 
-                        {group.assignmentMode === 'manual-existing-group' ? (
-                          <label className="space-y-2">
-                            <span className="text-sm font-medium text-slate-800">
-                              합류시킬 기존 그룹
-                            </span>
-                            <select
-                              value={groupAssignmentInputs[group.groupKey] ?? ''}
-                              onChange={(event) =>
-                                setGroupAssignmentInputs((current) => ({
-                                  ...current,
-                                  [group.groupKey]: event.target.value
-                                }))
-                              }
-                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
-                              disabled={customSplits.length > 0}
-                            >
-                              <option value="">새 GPS 없는 그룹으로 유지</option>
-                              {mergeTargetCandidates.map((candidate) => (
-                                <option key={candidate.id} value={candidate.id}>
-                                  {candidate.title} · 사진 {candidate.photoCount}장
-                                  {candidate.representativeGps ? '' : ' · 출력 GPS 없음'}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ) : null}
-
                         <label className="space-y-2">
                           <span className="text-sm font-medium text-slate-800">
                             기본 그룹명
@@ -1216,86 +1068,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             }
                             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder={group.displayTitle}
-                            disabled={
-                              group.assignmentMode === 'manual-existing-group' &&
-                              hasExistingGroupAssignment
-                            }
                           />
                         </label>
-
-                        {group.assignmentMode === 'manual-existing-group' &&
-                        !hasExistingGroupAssignment ? (
-                          <div className="space-y-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-slate-900">
-                                선택 사진을 다른 그룹명으로 분리
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                위에서 분리할 사진을 선택한 뒤 새 그룹명을 입력하고
-                                분리합니다. 남은 사진은 위 기본 그룹명으로
-                                유지됩니다.
-                              </p>
-                            </div>
-
-                            <label className="space-y-2">
-                              <span className="text-sm font-medium text-slate-800">
-                                새 그룹명
-                              </span>
-                              <input
-                                value={groupSplitTitleInputs[group.groupKey] ?? ''}
-                                onChange={(event) =>
-                                  setGroupSplitTitleInputs((current) => ({
-                                    ...current,
-                                    [group.groupKey]: event.target.value
-                                  }))
-                                }
-                                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
-                                placeholder="예: 카페 / 실내 / 받은 사진"
-                              />
-                            </label>
-
-                            <div className="flex justify-end">
-                              <button
-                                type="button"
-                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
-                                disabled={
-                                  (groupSelectedPhotoIds[group.groupKey] ?? []).length === 0 ||
-                                  (groupSplitTitleInputs[group.groupKey]?.trim().length ?? 0) === 0
-                                }
-                                onClick={() => addCustomSplit(group.groupKey)}
-                              >
-                                선택 사진 분리
-                              </button>
-                            </div>
-
-                            {customSplits.length > 0 ? (
-                              <div className="space-y-2">
-                                {customSplits.map((split) => (
-                                  <div
-                                    key={split.id}
-                                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
-                                  >
-                                    <div className="flex-1 text-sm text-slate-700">
-                                      <span className="font-medium text-slate-900">
-                                        {split.title}
-                                      </span>
-                                      {` · ${split.photoIds.length}장`}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="text-xs font-medium text-rose-600"
-                                      onClick={() =>
-                                        removeCustomSplit(group.groupKey, split.id)
-                                      }
-                                    >
-                                      제거
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
 
                         <label className="space-y-2">
                           <span className="text-sm font-medium text-slate-800">
@@ -1311,10 +1085,6 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             }
                             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder="예: Alice, Bob"
-                            disabled={
-                              group.assignmentMode === 'manual-existing-group' &&
-                              hasExistingGroupAssignment
-                            }
                           />
                         </label>
 
@@ -1332,10 +1102,6 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             }
                             className="min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder="이 그룹에 대한 메모를 남겨두세요."
-                            disabled={
-                              group.assignmentMode === 'manual-existing-group' &&
-                              hasExistingGroupAssignment
-                            }
                           />
                         </label>
                       </div>

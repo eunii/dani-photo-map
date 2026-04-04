@@ -1,3 +1,4 @@
+import type { ScanPhotoLibraryExecuteOptions } from '@application/dto/ScanPhotoLibraryProgress'
 import {
   type ScanPhotoLibraryCommand,
   scanPhotoLibraryCommandSchema
@@ -87,8 +88,12 @@ export class ScanPhotoLibraryUseCase {
     this.rules = dependencies.rules ?? defaultOrganizationRules
   }
 
-  async execute(command: ScanPhotoLibraryCommand): Promise<ScanPhotoLibraryResult> {
+  async execute(
+    command: ScanPhotoLibraryCommand,
+    options?: ScanPhotoLibraryExecuteOptions
+  ): Promise<ScanPhotoLibraryResult> {
     const validatedCommand = scanPhotoLibraryCommandSchema.parse(command)
+    const onScanProgress = options?.onScanProgress
     const paths = this.createScanPathContext(validatedCommand)
     const issues: ScanPhotoLibraryIssue[] = []
     const existingOutputSnapshot = await this.dependencies.existingOutputScanner.scan(
@@ -135,6 +140,12 @@ export class ScanPhotoLibraryUseCase {
       if (preparedPhotoRecord) {
         preparedPhotoRecords.push(preparedPhotoRecord)
       }
+
+      onScanProgress?.({
+        kind: 'prepare',
+        completed: index + 1,
+        total: photoPaths.length
+      })
     }
 
     const photoIdToGroupKey = this.computePhotoIdToGroupKeyMap(
@@ -161,7 +172,8 @@ export class ScanPhotoLibraryUseCase {
             paths.outputRoot,
             existingOutputHashes,
             issues,
-            copyFilter
+            copyFilter,
+            onScanProgress
           )
     const index = await this.buildMergedLibraryIndex(
       paths,
@@ -310,10 +322,13 @@ export class ScanPhotoLibraryUseCase {
     outputRoot: string,
     existingOutputHashes: Set<string>,
     issues: ScanPhotoLibraryIssue[],
-    copyFilter?: {
-      keys: Set<string>
-      photoIdToGroupKey: Map<string, string>
-    }
+    copyFilter:
+      | {
+          keys: Set<string>
+          photoIdToGroupKey: Map<string, string>
+        }
+      | undefined,
+    onScanProgress?: ScanPhotoLibraryExecuteOptions['onScanProgress']
   ): Promise<FinalizedScanResult> {
     const photosForCanonical = copyFilter?.keys.size
       ? preparedPhotoRecords
@@ -330,17 +345,20 @@ export class ScanPhotoLibraryUseCase {
     let duplicateCount = 0
     let skippedExistingCount = 0
 
-    for (const preparedPhotoRecord of preparedPhotoRecords) {
-      if (copyFilter?.keys.size) {
-        const groupKey = copyFilter.photoIdToGroupKey.get(
-          preparedPhotoRecord.photo.id
-        )
+    const recordsToFinalize = copyFilter?.keys.size
+      ? preparedPhotoRecords.filter((record) => {
+          const groupKey = copyFilter.photoIdToGroupKey.get(record.photo.id)
 
-        if (groupKey === undefined || !copyFilter.keys.has(groupKey)) {
-          continue
-        }
-      }
+          return (
+            groupKey !== undefined && copyFilter.keys.has(groupKey)
+          )
+        })
+      : preparedPhotoRecords
 
+    const finalizeTotal = recordsToFinalize.length
+    let finalizeCompleted = 0
+
+    for (const preparedPhotoRecord of recordsToFinalize) {
       const finalizedPhoto = await this.finalizePreparedPhoto(
         preparedPhotoRecord,
         outputRoot,
@@ -348,6 +366,13 @@ export class ScanPhotoLibraryUseCase {
         existingOutputHashes,
         issues
       )
+
+      finalizeCompleted += 1
+      onScanProgress?.({
+        kind: 'fileFlowComplete',
+        completed: finalizeCompleted,
+        total: finalizeTotal
+      })
 
       if (finalizedPhoto === 'duplicate') {
         duplicateCount += 1

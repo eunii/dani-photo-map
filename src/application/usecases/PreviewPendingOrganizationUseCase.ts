@@ -244,7 +244,7 @@ export class PreviewPendingOrganizationUseCase {
       return 'auto-capture'
     }
 
-    return group.representativeGps ? 'new-group' : 'manual-existing-group'
+    return 'new-group'
   }
 
   private resolveSameGroupTitle(
