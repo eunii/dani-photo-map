@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 import type {
   GroupDetail,
   LibraryIndexLoadSource
@@ -24,16 +25,6 @@ interface GroupDetailPanelProps {
     destinationGroupId: string
     photoIds: string[]
   }) => Promise<void>
-}
-
-function toFileUrl(outputRoot: string, relativePath?: string): string | undefined {
-  if (!relativePath) {
-    return undefined
-  }
-
-  return encodeURI(
-    `file:///${`${outputRoot}/${relativePath}`.replace(/\\/g, '/').replace(/^\/+/, '')}`
-  )
 }
 
 export function GroupDetailPanel({
@@ -66,7 +57,10 @@ export function GroupDetailPanel({
   }, [group])
 
   const representativeThumbnailUrl = useMemo(
-    () => (outputRoot ? toFileUrl(outputRoot, group?.representativeThumbnailRelativePath) : undefined),
+    () =>
+      outputRoot
+        ? toOutputFileUrl(outputRoot, group?.representativeThumbnailRelativePath)
+        : undefined,
     [group?.representativeThumbnailRelativePath, outputRoot]
   )
   const moveTargetGroups = useMemo(

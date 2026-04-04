@@ -3,63 +3,36 @@ import { useEffect, useMemo, useState } from 'react'
 import { GroupDetailPanel } from '@presentation/renderer/components/GroupDetailPanel'
 import { GroupListPanel } from '@presentation/renderer/components/GroupListPanel'
 import { GroupsMap } from '@presentation/renderer/components/GroupsMap'
-import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
+import {
+  getLoadSourceBadge,
+  useOutputLibraryIndexPanel
+} from '@presentation/renderer/hooks/useOutputLibraryIndexPanel'
 import {
   buildGroupExplorerViewModel,
   type GroupSortOption
 } from '@presentation/renderer/view-models/groupExplorer'
 import { buildGroupTitleSuggestions } from '@presentation/renderer/view-models/groupTitleSuggestions'
-import type { LibraryIndexLoadSource } from '@shared/types/preload'
-
-const OUTPUT_DIALOG_OPTIONS = {
-  title: '출력 폴더 선택',
-  buttonLabel: '출력 폴더 선택'
-} as const
-
-function getLoadSourceBadge(
-  source: LibraryIndexLoadSource | null
-): { label: string; tone: string; description: string } | null {
-  if (source === 'merged') {
-    return {
-      label: '병합 기반',
-      tone: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-      description:
-        '출력 폴더 실제 파일 목록에 저장된 index 메타데이터를 병합해 조회 중입니다.'
-    }
-  }
-
-  if (source === 'fallback') {
-    return {
-      label: '복구 기반',
-      tone: 'border-amber-200 bg-amber-50 text-amber-800',
-      description:
-        'index.json을 사용할 수 없어 출력 폴더를 스캔해 가능한 범위만 복구했습니다.'
-    }
-  }
-
-  return null
-}
 
 export function BrowsePage() {
-  const outputRoot = useLibraryWorkspaceStore((state) => state.outputRoot)
-  const setOutputRoot = useLibraryWorkspaceStore((state) => state.setOutputRoot)
-  const lastLoadedIndex = useLibraryWorkspaceStore(
-    (state) => state.lastLoadedIndex
-  )
-  const setLastLoadedIndex = useLibraryWorkspaceStore(
-    (state) => state.setLastLoadedIndex
-  )
-  const [isLoadingIndex, setIsLoadingIndex] = useState(false)
+  const {
+    outputRoot,
+    libraryIndex,
+    loadSource,
+    setLastLoadedIndex,
+    isLoadingIndex,
+    errorMessage,
+    setErrorMessage,
+    selectOutputRoot,
+    reloadLibraryIndex
+  } = useOutputLibraryIndexPanel()
+
   const [isSavingGroup, setIsSavingGroup] = useState(false)
   const [isMovingPhotos, setIsMovingPhotos] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>()
   const [hoveredGroupId, setHoveredGroupId] = useState<string | undefined>()
   const [groupSortOption, setGroupSortOption] =
     useState<GroupSortOption>('recent')
 
-  const libraryIndex = lastLoadedIndex?.index ?? null
-  const loadSource = lastLoadedIndex?.source ?? null
   const selectedGroup = useMemo(
     () => libraryIndex?.groups.find((group) => group.id === selectedGroupId),
     [libraryIndex?.groups, selectedGroupId]
@@ -77,36 +50,14 @@ export function BrowsePage() {
 
   useEffect(() => {
     if (!outputRoot) {
-      setLastLoadedIndex(null)
       setSelectedGroupId(undefined)
       setHoveredGroupId(undefined)
-      return
     }
+  }, [outputRoot])
 
-    setIsLoadingIndex(true)
-    setErrorMessage(null)
-    setLastLoadedIndex(null)
-
-    void window.photoApp
-      .loadLibraryIndex({ outputRoot })
-      .then((result) => {
-        setLastLoadedIndex(result)
-        setHoveredGroupId(undefined)
-      })
-      .catch((error) => {
-        setLastLoadedIndex(null)
-        setSelectedGroupId(undefined)
-        setHoveredGroupId(undefined)
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : '저장된 출력 결과를 불러오지 못했습니다.'
-        )
-      })
-      .finally(() => {
-        setIsLoadingIndex(false)
-      })
-  }, [outputRoot, setLastLoadedIndex])
+  useEffect(() => {
+    setHoveredGroupId(undefined)
+  }, [libraryIndex?.generatedAt])
 
   useEffect(() => {
     const groups = libraryIndex?.groups ?? []
@@ -125,42 +76,6 @@ export function BrowsePage() {
       setSelectedGroupId(groups[0]?.id)
     }
   }, [libraryIndex?.groups, selectedGroupId])
-
-  async function selectOutputRoot(): Promise<void> {
-    const selectedPath = await window.photoApp.selectDirectory(
-      OUTPUT_DIALOG_OPTIONS
-    )
-
-    if (selectedPath) {
-      setOutputRoot(selectedPath)
-      setLastLoadedIndex(null)
-      setErrorMessage(null)
-    }
-  }
-
-  async function reloadLibraryIndex(): Promise<void> {
-    if (!outputRoot) {
-      setErrorMessage('출력 폴더를 먼저 선택하세요.')
-      return
-    }
-
-    setIsLoadingIndex(true)
-    setErrorMessage(null)
-
-    try {
-      const result = await window.photoApp.loadLibraryIndex({ outputRoot })
-      setLastLoadedIndex(result)
-      setHoveredGroupId(undefined)
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : '저장된 출력 결과를 불러오지 못했습니다.'
-      )
-    } finally {
-      setIsLoadingIndex(false)
-    }
-  }
 
   async function handleSaveGroup(nextGroup: {
     title: string

@@ -1,17 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { BrowsePage } from '@presentation/renderer/pages/BrowsePage'
+import { FileListPage } from '@presentation/renderer/pages/FileListPage'
 import { OrganizePage } from '@presentation/renderer/pages/OrganizePage'
 
-type AppRoute = 'organize' | 'browse'
+type AppRoute = 'organize' | 'files' | 'browse'
 
 const ROUTE_HASHES: Record<AppRoute, string> = {
   organize: '#/organize',
+  files: '#/files',
   browse: '#/browse'
 }
 
 function getRouteFromHash(hash: string): AppRoute {
-  return hash === ROUTE_HASHES.browse ? 'browse' : 'organize'
+  if (hash === ROUTE_HASHES.files) {
+    return 'files'
+  }
+  if (hash === ROUTE_HASHES.browse) {
+    return 'browse'
+  }
+  return 'organize'
 }
 
 export function App() {
@@ -35,10 +43,15 @@ export function App() {
     }
   }, [])
 
-  const routeTitle = useMemo(
-    () => (route === 'organize' ? '정리' : '조회'),
-    [route]
-  )
+  const routeTitle = useMemo(() => {
+    if (route === 'organize') {
+      return '정리'
+    }
+    if (route === 'files') {
+      return '파일 목록'
+    }
+    return '지도'
+  }, [route])
 
   function navigate(nextRoute: AppRoute): void {
     const nextHash = ROUTE_HASHES[nextRoute]
@@ -65,7 +78,8 @@ export function App() {
                 {routeTitle} 워크플로우
               </h1>
               <p className="text-sm text-slate-600">
-                정리와 조회를 분리해 실행 흐름과 결과 탐색 흐름을 각각 다룹니다.
+                정리, 파일 목록, 지도 조회를 분리해 실행 흐름과 결과 탐색을
+                각각 다룹니다.
               </p>
             </div>
 
@@ -84,19 +98,32 @@ export function App() {
               <button
                 type="button"
                 className={`rounded-lg px-4 py-2 text-sm font-medium ${
+                  route === 'files'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-slate-700'
+                }`}
+                onClick={() => navigate('files')}
+              >
+                파일 목록
+              </button>
+              <button
+                type="button"
+                className={`rounded-lg px-4 py-2 text-sm font-medium ${
                   route === 'browse'
                     ? 'bg-slate-900 text-white'
                     : 'bg-white text-slate-700'
                 }`}
                 onClick={() => navigate('browse')}
               >
-                조회
+                지도
               </button>
             </nav>
           </div>
 
           {route === 'organize' ? (
             <OrganizePage onNavigateToBrowse={() => navigate('browse')} />
+          ) : route === 'files' ? (
+            <FileListPage />
           ) : (
             <BrowsePage />
           )}
