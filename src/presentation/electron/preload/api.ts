@@ -12,7 +12,9 @@ const IPC_CHANNELS = {
   scanPhotoLibrary: 'photo-app/scan-photo-library',
   scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress',
   updatePhotoGroup: 'photo-app/update-photo-group',
-  movePhotosToGroup: 'photo-app/move-photos-to-group'
+  movePhotosToGroup: 'photo-app/move-photos-to-group',
+  deletePhotosFromLibrary: 'photo-app/delete-photos-from-library',
+  deleteOutputFolderSubtree: 'photo-app/delete-output-folder-subtree'
 } as const
 
 export const preloadBridge: PreloadBridge = {
@@ -65,5 +67,17 @@ export const preloadBridge: PreloadBridge = {
   },
   async movePhotosToGroup(request) {
     return ipcRenderer.invoke(IPC_CHANNELS.movePhotosToGroup, request)
+  },
+  async deletePhotosFromLibrary(request) {
+    return ipcRenderer.invoke(IPC_CHANNELS.deletePhotosFromLibrary, request)
+  },
+  async deleteOutputFolderSubtree(request) {
+    return ipcRenderer.invoke(IPC_CHANNELS.deleteOutputFolderSubtree, request)
+  },
+  async invokePhotoApp(channel: string, payload: unknown) {
+    if (typeof channel !== 'string' || !channel.startsWith('photo-app/')) {
+      throw new Error('Invalid IPC channel')
+    }
+    return ipcRenderer.invoke(channel, payload)
   }
 }

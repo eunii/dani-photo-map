@@ -13,6 +13,10 @@ import {
 } from '@presentation/renderer/hooks/useOutputLibraryIndexPanel'
 import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 import {
+  deleteOutputFolderSubtreeIpc,
+  deletePhotosFromLibraryIpc
+} from '@presentation/renderer/utils/photoAppIpc'
+import {
   flattenLibraryGroupsToPhotos,
   sortFlatPhotoRows,
   type PhotoListSortOption
@@ -98,6 +102,10 @@ export function FileListPage() {
   const [renameNewTitle, setRenameNewTitle] = useState('')
   const [isRenaming, setIsRenaming] = useState(false)
   const [isMovingPhotos, setIsMovingPhotos] = useState(false)
+  const [deletePhotosConfirmOpen, setDeletePhotosConfirmOpen] = useState(false)
+  const [deleteFolderConfirmOpen, setDeleteFolderConfirmOpen] = useState(false)
+  const [isDeletingPhotos, setIsDeletingPhotos] = useState(false)
+  const [isDeletingFolder, setIsDeletingFolder] = useState(false)
 
   const sourceBadge = getLoadSourceBadge(loadSource)
 
@@ -121,9 +129,10 @@ export function FileListPage() {
     [sortedRows, pathSegments]
   )
 
+  /** 인덱스가 다시 불러와져도 현재 트리 위치는 유지 (출력 폴더를 바꿀 때만 초기화) */
   useEffect(() => {
     setPathSegments([])
-  }, [libraryIndex?.generatedAt])
+  }, [outputRoot])
 
   useEffect(() => {
     setSelectedForMove(new Set())
@@ -303,13 +312,34 @@ export function FileListPage() {
     })
   }, [])
 
-  const selectAllVisibleForMove = useCallback(() => {
-    setSelectedForMove(new Set(visibleRows.map((row) => row.photo.id)))
-  }, [visibleRows])
+  const allVisibleSelected = useMemo(
+    () =>
+      visibleRows.length > 0 &&
+      visibleRows.every((row) => selectedForMove.has(row.photo.id)),
+    [visibleRows, selectedForMove]
+  )
 
-  const clearMoveSelection = useCallback(() => {
-    setSelectedForMove(new Set())
-  }, [])
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedForMove((previous) => {
+      if (visibleRows.length === 0) {
+        return previous
+      }
+      const everySelected = visibleRows.every((row) =>
+        previous.has(row.photo.id)
+      )
+      const next = new Set(previous)
+      if (everySelected) {
+        for (const row of visibleRows) {
+          next.delete(row.photo.id)
+        }
+      } else {
+        for (const row of visibleRows) {
+          next.add(row.photo.id)
+        }
+      }
+      return next
+    })
+  }, [visibleRows])
 
   function applyDestinationFromSelect(value: string): void {
     if (value === '') {
@@ -450,6 +480,55 @@ export function FileListPage() {
     }
   }
 
+  async function handleConfirmDeletePhotos(): Promise<void> {
+    if (!outputRoot || selectedForMove.size === 0) {
+      return
+    }
+    setIsDeletingPhotos(true)
+    setErrorMessage(null)
+    try {
+      await deletePhotosFromLibraryIpc({
+        outputRoot,
+        photoIds: [...selectedForMove]
+      })
+      setSelectedForMove(new Set())
+      setSelectedPhotoId(undefined)
+      setDeletePhotosConfirmOpen(false)
+      await reloadLibraryIndex()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '파일 삭제에 실패했습니다.'
+      )
+    } finally {
+      setIsDeletingPhotos(false)
+    }
+  }
+
+  async function handleConfirmDeleteFolder(): Promise<void> {
+    if (!outputRoot || pathSegments.length === 0) {
+      return
+    }
+    setIsDeletingFolder(true)
+    setErrorMessage(null)
+    try {
+      await deleteOutputFolderSubtreeIpc({
+        outputRoot,
+        pathSegments
+      })
+      setDeleteFolderConfirmOpen(false)
+      setPathSegments((segments) => segments.slice(0, -1))
+      setSelectedPhotoId(undefined)
+      setSelectedForMove(new Set())
+      await reloadLibraryIndex()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '폴더 삭제에 실패했습니다.'
+      )
+    } finally {
+      setIsDeletingFolder(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="space-y-3">
@@ -568,100 +647,143 @@ export function FileListPage() {
             </div>
 
             <div className="space-y-3 min-w-0">
-              <nav
-                className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-                aria-label="출력 경로"
-              >
-                <button
-                  type="button"
-                  className="rounded-md px-2 py-1 font-medium text-sky-700 hover:bg-sky-50"
-                  onClick={() => setPathSegments([])}
-                >
-                  출력
-                </button>
-                {pathSegments.map((segment, index) => (
-                  <span key={`${segment}-${index}`} className="flex items-center gap-1">
-                    <span className="text-slate-400" aria-hidden>
-                      /
-                    </span>
-                    <button
-                      type="button"
-                      className="max-w-[200px] truncate rounded-md px-2 py-1 font-medium text-sky-700 hover:bg-sky-50"
-                      title={formatPathSegmentLabel(segment)}
-                      onClick={() => setPathSegments(pathSegments.slice(0, index + 1))}
-                    >
-                      {formatPathSegmentLabel(segment)}
-                    </button>
-                  </span>
-                ))}
-              </nav>
-              <p className="text-xs text-slate-500">{breadcrumbPathLabel}</p>
-
-              {folderCount > 0 && libraryIndex ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                  <button
-                    type="button"
-                    className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-                    disabled={selectedForMove.size === 0 || isMovingPhotos}
-                    onClick={() => {
-                      const first = moveDestinationFolderOptions[0]
-                      if (first) {
-                        setDestinationSelect(first.groupId)
-                        setManualDestinationFolder(first.label)
-                      } else {
-                        setDestinationSelect(DEST_YEAR_MONTH_ONLY)
-                        setManualDestinationFolder('')
-                      }
-                      setMoveDialogOpen(true)
-                    }}
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex flex-wrap items-start gap-2 border-b border-slate-100 px-3 py-2 sm:items-center">
+                  <nav
+                    className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-sm text-slate-700"
+                    aria-label="출력 경로"
                   >
-                    선택한 {selectedForMove.size}장 폴더로 이동…
-                  </button>
-                  {canRenameGroupFolderFromTree ? (
                     <button
                       type="button"
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-md px-2 py-1 font-medium text-sky-700 hover:bg-sky-50"
+                      onClick={() => setPathSegments([])}
+                    >
+                      출력
+                    </button>
+                    {pathSegments.map((segment, index) => (
+                      <span key={`${segment}-${index}`} className="flex items-center gap-1">
+                        <span className="text-slate-400" aria-hidden>
+                          /
+                        </span>
+                        <button
+                          type="button"
+                          className="max-w-[min(200px,28vw)] truncate rounded-md px-2 py-1 font-medium text-sky-700 hover:bg-sky-50"
+                          title={formatPathSegmentLabel(segment)}
+                          onClick={() =>
+                            setPathSegments(pathSegments.slice(0, index + 1))
+                          }
+                        >
+                          {formatPathSegmentLabel(segment)}
+                        </button>
+                      </span>
+                    ))}
+                  </nav>
+                  {pathSegments.length > 0 && libraryIndex ? (
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={
-                        folderCount === 0 ||
-                        groupsInCurrentFolder.length === 0 ||
-                        isRenaming
+                        isDeletingFolder || isDeletingPhotos || isMovingPhotos
                       }
-                      onClick={() => {
-                        const first = groupsInCurrentFolder[0]
-                        if (!first || !libraryIndex) {
-                          return
-                        }
-                        setRenameTargetGroupId(first.id)
-                        const g = libraryIndex.groups.find((x) => x.id === first.id)
-                        setRenameNewTitle(
-                          folderRenameLabelWithoutDate(
-                            g?.title ?? g?.displayTitle ?? ''
-                          )
-                        )
-                        setRenameDialogOpen(true)
-                      }}
+                      onClick={() => setDeleteFolderConfirmOpen(true)}
                     >
-                      이름 변경…
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="text-sm font-medium text-sky-700 hover:underline"
-                    onClick={selectAllVisibleForMove}
-                  >
-                    이 목록 전체 선택
-                  </button>
-                  {selectedForMove.size > 0 ? (
-                    <button
-                      type="button"
-                      className="text-sm text-slate-600 hover:underline"
-                      onClick={clearMoveSelection}
-                    >
-                      선택 해제
+                      폴더 삭제
                     </button>
                   ) : null}
                 </div>
-              ) : null}
+                <p className="border-b border-slate-50 px-3 py-2 text-xs text-slate-500">
+                  {breadcrumbPathLabel}
+                </p>
+
+                {folderCount > 0 && libraryIndex ? (
+                  <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-between sm:gap-4">
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        이동 · 이름
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="inline-flex min-h-[2.25rem] items-center justify-center rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          disabled={selectedForMove.size === 0 || isMovingPhotos}
+                          onClick={() => {
+                            const first = moveDestinationFolderOptions[0]
+                            if (first) {
+                              setDestinationSelect(first.groupId)
+                              setManualDestinationFolder(first.label)
+                            } else {
+                              setDestinationSelect(DEST_YEAR_MONTH_ONLY)
+                              setManualDestinationFolder('')
+                            }
+                            setMoveDialogOpen(true)
+                          }}
+                        >
+                          {selectedForMove.size > 0
+                            ? `선택 ${selectedForMove.size}장 이동`
+                            : '폴더로 이동'}
+                        </button>
+                        {canRenameGroupFolderFromTree ? (
+                          <button
+                            type="button"
+                            className="inline-flex min-h-[2.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={
+                              folderCount === 0 ||
+                              groupsInCurrentFolder.length === 0 ||
+                              isRenaming
+                            }
+                            onClick={() => {
+                              const first = groupsInCurrentFolder[0]
+                              if (!first || !libraryIndex) {
+                                return
+                              }
+                              setRenameTargetGroupId(first.id)
+                              const g = libraryIndex.groups.find(
+                                (x) => x.id === first.id
+                              )
+                              setRenameNewTitle(
+                                folderRenameLabelWithoutDate(
+                                  g?.title ?? g?.displayTitle ?? ''
+                                )
+                              )
+                              setRenameDialogOpen(true)
+                            }}
+                          >
+                            이름 변경
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="hidden w-px shrink-0 bg-slate-200 sm:block sm:self-stretch" aria-hidden />
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        선택 · 삭제
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="inline-flex min-h-[2.25rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={visibleRows.length === 0}
+                          onClick={() => toggleSelectAllVisible()}
+                        >
+                          {allVisibleSelected ? '목록 선택 해제' : '목록 전체 선택'}
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex min-h-[2.25rem] items-center justify-center rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-900 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={
+                            selectedForMove.size === 0 ||
+                            isDeletingPhotos ||
+                            isDeletingFolder
+                          }
+                          onClick={() => setDeletePhotosConfirmOpen(true)}
+                        >
+                          선택 삭제
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
 
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="border-b border-slate-100 px-3 py-2">
@@ -677,7 +799,7 @@ export function FileListPage() {
                     </p>
                   ) : (
                     <>
-                      <ul className="divide-y divide-slate-100">
+                      <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-3 xl:grid-cols-4">
                         {visibleRows.map((row) => {
                           const isSelected = row.photo.id === selectedPhotoId
                           const thumb =
@@ -692,31 +814,32 @@ export function FileListPage() {
                               ))
 
                           return (
-                            <li
+                            <div
                               key={row.photo.id}
-                              className="[content-visibility:auto] flex items-stretch"
-                              style={{ containIntrinsicSize: '56px' }}
+                              className={`[content-visibility:auto] flex min-w-0 flex-col overflow-hidden rounded-xl border text-left transition-colors ${
+                                isSelected
+                                  ? 'border-sky-300 bg-sky-50 ring-1 ring-sky-200'
+                                  : 'border-slate-200 bg-white hover:border-slate-300'
+                              }`}
+                              style={{ containIntrinsicSize: '180px 220px' }}
                             >
-                              <label className="flex shrink-0 cursor-pointer items-center px-2">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded border-slate-300"
-                                  checked={selectedForMove.has(row.photo.id)}
-                                  onChange={() => toggleMoveSelection(row.photo.id)}
-                                  onClick={(event) => event.stopPropagation()}
-                                />
-                                <span className="sr-only">폴더 이동 대상에 포함</span>
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => setSelectedPhotoId(row.photo.id)}
-                                className={`flex min-w-0 flex-1 items-center gap-3 px-2 py-2 text-left transition-colors ${
-                                  isSelected
-                                    ? 'bg-sky-50 ring-1 ring-inset ring-sky-200'
-                                    : 'hover:bg-slate-50'
-                                }`}
-                              >
-                                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                              <div className="relative aspect-square w-full bg-slate-100">
+                                <label className="absolute left-2 top-2 z-10 flex cursor-pointer items-center rounded bg-white/90 p-1 shadow-sm">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-slate-300"
+                                    checked={selectedForMove.has(row.photo.id)}
+                                    onChange={() => toggleMoveSelection(row.photo.id)}
+                                    onClick={(event) => event.stopPropagation()}
+                                  />
+                                  <span className="sr-only">이동·삭제 대상에 포함</span>
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPhotoId(row.photo.id)}
+                                  className="absolute inset-0 block h-full w-full"
+                                  aria-label={`${row.photo.sourceFileName} 미리보기 선택`}
+                                >
                                   {thumb ? (
                                     <img
                                       src={thumb}
@@ -726,25 +849,29 @@ export function FileListPage() {
                                       className="h-full w-full object-cover"
                                     />
                                   ) : (
-                                    <div className="flex h-full items-center justify-center text-[10px] text-slate-400">
+                                    <div className="flex h-full items-center justify-center text-xs text-slate-400">
                                       —
                                     </div>
                                   )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-medium text-slate-900">
-                                    {row.photo.sourceFileName}
-                                  </p>
-                                  <p className="truncate text-xs text-slate-500">
-                                    {formatCapturedLabel(row.photo.capturedAtIso)} ·{' '}
-                                    {row.groupDisplayTitle}
-                                  </p>
-                                </div>
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPhotoId(row.photo.id)}
+                                className="min-w-0 flex-1 px-2 py-2 text-left"
+                              >
+                                <p className="line-clamp-2 text-xs font-medium text-slate-900">
+                                  {row.photo.sourceFileName}
+                                </p>
+                                <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">
+                                  {formatCapturedLabel(row.photo.capturedAtIso)} ·{' '}
+                                  {row.groupDisplayTitle}
+                                </p>
                               </button>
-                            </li>
+                            </div>
                           )
                         })}
-                      </ul>
+                      </div>
                       {hasMore ? (
                         <div
                           ref={loadMoreSentinelRef}
@@ -1029,6 +1156,107 @@ export function FileListPage() {
                 onClick={() => void handleConfirmRename()}
               >
                 {isRenaming ? '저장 중…' : '이름 저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deletePhotosConfirmOpen && outputRoot ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          role="dialog"
+          aria-modal
+          aria-labelledby="delete-photos-dialog-title"
+          onClick={() => {
+            if (!isDeletingPhotos) {
+              setDeletePhotosConfirmOpen(false)
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2
+              id="delete-photos-dialog-title"
+              className="text-lg font-semibold text-slate-900"
+            >
+              선택한 파일 삭제
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              선택한 {selectedForMove.size}장을 출력 폴더에서 지우고 index.json에서도
+              제거합니다. 이 작업은 되돌릴 수 없습니다.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+                disabled={isDeletingPhotos}
+                onClick={() => setDeletePhotosConfirmOpen(false)}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-red-300"
+                disabled={isDeletingPhotos}
+                onClick={() => void handleConfirmDeletePhotos()}
+              >
+                {isDeletingPhotos ? '삭제 중…' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteFolderConfirmOpen && outputRoot ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          role="dialog"
+          aria-modal
+          aria-labelledby="delete-folder-dialog-title"
+          onClick={() => {
+            if (!isDeletingFolder) {
+              setDeleteFolderConfirmOpen(false)
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2
+              id="delete-folder-dialog-title"
+              className="text-lg font-semibold text-slate-900"
+            >
+              폴더 삭제
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              현재 트리 위치{' '}
+              <span className="font-medium text-slate-800">{breadcrumbPathLabel}</span>
+              와 그 아래에 있는 모든 파일·하위 폴더를 디스크에서 지우고, 해당하는 사진을
+              index.json에서 제거합니다. 이 작업은 되돌릴 수 없습니다.
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              (이 경로 합계 약 {subtreeCount}장이 인덱스에서 사라질 수 있습니다.)
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+                disabled={isDeletingFolder}
+                onClick={() => setDeleteFolderConfirmOpen(false)}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-red-300"
+                disabled={isDeletingFolder}
+                onClick={() => void handleConfirmDeleteFolder()}
+              >
+                {isDeletingFolder ? '삭제 중…' : '폴더 삭제'}
               </button>
             </div>
           </div>

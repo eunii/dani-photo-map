@@ -78,6 +78,16 @@ export interface MovePhotosToGroupRequest {
   }
 }
 
+export interface DeletePhotosFromLibraryRequest {
+  outputRoot: string
+  photoIds: string[]
+}
+
+export interface DeleteOutputFolderSubtreeRequest {
+  outputRoot: string
+  pathSegments: string[]
+}
+
 export interface MapGroupSummary {
   id: string
   title: string
@@ -239,4 +249,14 @@ export interface PreloadBridge {
   movePhotosToGroup: (
     request: MovePhotosToGroupRequest
   ) => Promise<LibraryIndexView>
+  deletePhotosFromLibrary: (
+    request: DeletePhotosFromLibraryRequest
+  ) => Promise<LibraryIndexView>
+  deleteOutputFolderSubtree: (
+    request: DeleteOutputFolderSubtreeRequest
+  ) => Promise<LibraryIndexView>
+  /**
+   * `photo-app/` 로 시작하는 IPC만 허용. 프리로드에 개별 메서드가 없을 때도 동작합니다.
+   */
+  invokePhotoApp: (channel: string, payload: unknown) => Promise<unknown>
 }

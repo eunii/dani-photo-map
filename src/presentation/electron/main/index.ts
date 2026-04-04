@@ -1,6 +1,8 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 
+import { DeleteOutputFolderSubtreeUseCase } from '@application/usecases/DeleteOutputFolderSubtreeUseCase'
+import { DeletePhotosFromLibraryUseCase } from '@application/usecases/DeletePhotosFromLibraryUseCase'
 import { LoadLibraryIndexUseCase } from '@application/usecases/LoadLibraryIndexUseCase'
 import { MovePhotosToGroupUseCase } from '@application/usecases/MovePhotosToGroupUseCase'
 import { PreviewPendingOrganizationUseCase } from '@application/usecases/PreviewPendingOrganizationUseCase'
@@ -19,6 +21,8 @@ import { SharpPhotoPreviewGenerator } from '@infrastructure/thumbnails/SharpPhot
 import { SharpThumbnailGenerator } from '@infrastructure/thumbnails/SharpThumbnailGenerator'
 import { toLibraryIndexView } from '@presentation/common/mappers/toLibraryIndexView'
 import type {
+  DeleteOutputFolderSubtreeRequest,
+  DeletePhotosFromLibraryRequest,
   DirectorySelectionOptions,
   LoadLibraryIndexRequest,
   MovePhotosToGroupRequest,
@@ -34,7 +38,9 @@ const IPC_CHANNELS = {
   scanPhotoLibrary: 'photo-app/scan-photo-library',
   scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress',
   updatePhotoGroup: 'photo-app/update-photo-group',
-  movePhotosToGroup: 'photo-app/move-photos-to-group'
+  movePhotosToGroup: 'photo-app/move-photos-to-group',
+  deletePhotosFromLibrary: 'photo-app/delete-photos-from-library',
+  deleteOutputFolderSubtree: 'photo-app/delete-output-folder-subtree'
 } as const
 
 function createLibraryIndexStore(): JsonLibraryIndexStore {
@@ -109,6 +115,22 @@ function createMovePhotosToGroupUseCase(): MovePhotosToGroupUseCase {
   )
 }
 
+function createDeletePhotosFromLibraryUseCase(): DeletePhotosFromLibraryUseCase {
+  return new DeletePhotosFromLibraryUseCase(
+    createLibraryIndexStore(),
+    new NodePhotoLibraryFileSystem(),
+    new ExistingOutputLibraryScanner(defaultOrganizationRules)
+  )
+}
+
+function createDeleteOutputFolderSubtreeUseCase(): DeleteOutputFolderSubtreeUseCase {
+  return new DeleteOutputFolderSubtreeUseCase(
+    createLibraryIndexStore(),
+    new NodePhotoLibraryFileSystem(),
+    new ExistingOutputLibraryScanner(defaultOrganizationRules)
+  )
+}
+
 function registerIpcHandlers(): void {
   ipcMain.removeHandler(IPC_CHANNELS.selectDirectory)
   ipcMain.handle(
@@ -178,6 +200,28 @@ function registerIpcHandlers(): void {
     IPC_CHANNELS.movePhotosToGroup,
     async (_event, command: MovePhotosToGroupRequest) => {
       const useCase = createMovePhotosToGroupUseCase()
+      const index = await useCase.execute(command)
+
+      return toLibraryIndexView(index)
+    }
+  )
+
+  ipcMain.removeHandler(IPC_CHANNELS.deletePhotosFromLibrary)
+  ipcMain.handle(
+    IPC_CHANNELS.deletePhotosFromLibrary,
+    async (_event, command: DeletePhotosFromLibraryRequest) => {
+      const useCase = createDeletePhotosFromLibraryUseCase()
+      const index = await useCase.execute(command)
+
+      return toLibraryIndexView(index)
+    }
+  )
+
+  ipcMain.removeHandler(IPC_CHANNELS.deleteOutputFolderSubtree)
+  ipcMain.handle(
+    IPC_CHANNELS.deleteOutputFolderSubtree,
+    async (_event, command: DeleteOutputFolderSubtreeRequest) => {
+      const useCase = createDeleteOutputFolderSubtreeUseCase()
       const index = await useCase.execute(command)
 
       return toLibraryIndexView(index)

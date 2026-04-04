@@ -12,7 +12,9 @@ function createFileSystem() {
     listDirectoryFileNames: vi.fn().mockResolvedValue([]),
     ensureDirectory: vi.fn().mockResolvedValue(undefined),
     copyFile: vi.fn(),
-    moveFile: vi.fn().mockResolvedValue(undefined)
+    moveFile: vi.fn().mockResolvedValue(undefined),
+    removeFileIfExists: vi.fn().mockResolvedValue(undefined),
+    removeDirectoryRecursiveIfExists: vi.fn().mockResolvedValue(undefined)
   }
 }
 

@@ -15,7 +15,9 @@ function createUseCaseDependencies() {
         listDirectoryFileNames: vi.fn<() => Promise<string[]>>().mockResolvedValue([]),
         ensureDirectory: vi.fn<() => Promise<void>>(),
         copyFile: vi.fn<() => Promise<void>>(),
-        moveFile: vi.fn<() => Promise<void>>()
+        moveFile: vi.fn<() => Promise<void>>(),
+        removeFileIfExists: vi.fn<() => Promise<void>>(),
+        removeDirectoryRecursiveIfExists: vi.fn<() => Promise<void>>()
       },
       metadataReader: {
         read: vi.fn()

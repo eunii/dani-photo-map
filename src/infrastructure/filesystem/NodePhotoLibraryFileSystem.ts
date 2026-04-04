@@ -1,5 +1,5 @@
 import { constants } from 'node:fs'
-import { access, copyFile, mkdir, readdir, rename } from 'node:fs/promises'
+import { access, copyFile, mkdir, readdir, rename, rm } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
 import {
@@ -102,6 +102,36 @@ export class NodePhotoLibraryFileSystem implements PhotoLibraryFileSystemPort {
     }
 
     await rename(normalizedSourcePath, normalizedDestinationPath)
+  }
+
+  async removeFileIfExists(absolutePath: string): Promise<void> {
+    try {
+      await rm(normalize(absolutePath), { force: true })
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ENOENT'
+      ) {
+        return
+      }
+      throw error
+    }
+  }
+
+  async removeDirectoryRecursiveIfExists(absolutePath: string): Promise<void> {
+    try {
+      await rm(normalize(absolutePath), { recursive: true, force: true })
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ENOENT'
+      ) {
+        return
+      }
+      throw error
+    }
   }
 
   private async collectPhotoFiles(
