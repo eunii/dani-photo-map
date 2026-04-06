@@ -21,6 +21,14 @@ function isWindowsRenameConflictError(error: unknown): boolean {
   )
 }
 
+function isRenamePathMissingError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    error.code === 'ENOENT'
+  )
+}
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error'
 }
@@ -52,17 +60,19 @@ export class JsonLibraryIndexStore implements LibraryIndexStorePort {
     const validatedIndex = parseLibraryIndexDocument(index)
     const filePath = this.getFilePath(index.outputRoot)
     const tempFilePath = `${filePath}.${Date.now()}.${process.pid}.tmp`
+    const serializedIndex = `${JSON.stringify(validatedIndex, null, 2)}\n`
 
     await mkdir(dirname(filePath), { recursive: true })
-    await writeFile(
-      tempFilePath,
-      `${JSON.stringify(validatedIndex, null, 2)}\n`,
-      'utf-8'
-    )
+    await writeFile(tempFilePath, serializedIndex, 'utf-8')
 
     try {
       await rename(tempFilePath, filePath)
     } catch (error) {
+      if (isRenamePathMissingError(error)) {
+        await this.writeDirectlyAsFallback(filePath, tempFilePath, serializedIndex)
+        return
+      }
+
       if (!isWindowsRenameConflictError(error)) {
         await rm(tempFilePath, { force: true })
         throw new Error(
@@ -75,6 +85,11 @@ export class JsonLibraryIndexStore implements LibraryIndexStorePort {
       try {
         await rename(tempFilePath, filePath)
       } catch (renameError) {
+        if (isRenamePathMissingError(renameError)) {
+          await this.writeDirectlyAsFallback(filePath, tempFilePath, serializedIndex)
+          return
+        }
+
         await rm(tempFilePath, { force: true })
         throw new Error(
           `Failed to save library index at ${filePath}: ${getErrorMessage(renameError)}`
@@ -85,5 +100,15 @@ export class JsonLibraryIndexStore implements LibraryIndexStorePort {
 
   private getFilePath(outputRoot: string): string {
     return join(outputRoot, this.indexRelativePath)
+  }
+
+  private async writeDirectlyAsFallback(
+    filePath: string,
+    tempFilePath: string,
+    serializedIndex: string
+  ): Promise<void> {
+    await mkdir(dirname(filePath), { recursive: true })
+    await writeFile(filePath, serializedIndex, 'utf-8')
+    await rm(tempFilePath, { force: true })
   }
 }

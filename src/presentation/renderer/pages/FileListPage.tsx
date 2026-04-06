@@ -40,6 +40,10 @@ const DEST_YEAR_MONTH_ONLY = '__flat__'
 /** 드롭다운: 직접 입력과 목록이 일치하지 않음 */
 const DEST_CUSTOM = '__custom__'
 
+interface FileListPageProps {
+  onNavigateToSettings?: () => void
+}
+
 function normalizeFolderLabelForMatch(value: string): string {
   return value
     .trim()
@@ -76,7 +80,7 @@ function formatCapturedLabel(iso?: string): string {
   return d.toLocaleString()
 }
 
-export function FileListPage() {
+export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
   const {
     outputRoot,
     libraryIndex,
@@ -84,7 +88,6 @@ export function FileListPage() {
     isLoadingIndex,
     errorMessage,
     setErrorMessage,
-    selectOutputRoot,
     reloadLibraryIndex
   } = useOutputLibraryIndexPanel()
 
@@ -531,43 +534,14 @@ export function FileListPage() {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-3">
+      <div className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
           파일 목록
         </h1>
-        <p className="text-base leading-7 text-slate-600">
-          출력 경로를 단계마다 선택해 들어가면 폴더별로 나뉘어 한눈에 보기
-          쉽습니다. 폴더 안에서 사진을 고르면 미리보기가 표시됩니다.
+        <p className="text-sm text-slate-600">
+          정리된 결과를 폴더별로 확인합니다.
         </p>
       </div>
-
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900">출력 폴더</h2>
-            <p className="min-h-12 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-600">
-              {outputRoot || '아직 선택되지 않았습니다.'}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-              onClick={() => void selectOutputRoot()}
-            >
-              출력 폴더 선택
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
-              disabled={!outputRoot || isLoadingIndex}
-              onClick={() => void reloadLibraryIndex()}
-            >
-              {isLoadingIndex ? '불러오는 중...' : '다시 불러오기'}
-            </button>
-          </div>
-        </div>
-      </section>
 
       {sourceBadge ? (
         <section className={`rounded-xl border px-4 py-3 text-sm ${sourceBadge.tone}`}>
@@ -587,54 +561,65 @@ export function FileListPage() {
       ) : null}
 
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
-            전체 {totalCount}장
+        {outputRoot ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
+              전체 {totalCount}장
+            </div>
+            {pathSegments.length > 0 ? (
+              <div
+                className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                title="가장 안쪽 폴더에 있는 파일까지 모두 더한 수입니다."
+              >
+                이 경로 합계 {subtreeCount}장
+              </div>
+            ) : null}
+            {pathSegments.length > 0 && folderCount < subtreeCount ? (
+              <div
+                className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600"
+                title="이 경로 폴더에 직접 들어 있는 파일만. 목록에도 이 기준으로만 나옵니다."
+              >
+                이 폴더에만 {folderCount}장
+              </div>
+            ) : null}
+            {hasMore ? (
+              <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500">
+                목록 표시 {visibleRows.length} / 직접 {folderCount}
+              </div>
+            ) : null}
+            <label className="ml-auto flex items-center gap-2 text-sm text-slate-600">
+              정렬
+              <select
+                value={sortOption}
+                onChange={(event) =>
+                  setSortOption(event.target.value as PhotoListSortOption)
+                }
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="captured-desc">촬영일 최신순</option>
+                <option value="filename-asc">파일명 순</option>
+              </select>
+            </label>
           </div>
-          {pathSegments.length > 0 ? (
-            <div
-              className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700"
-              title="가장 안쪽 폴더에 있는 파일까지 모두 더한 수입니다."
-            >
-              이 경로 합계 {subtreeCount}장
-            </div>
-          ) : null}
-          {pathSegments.length > 0 && folderCount < subtreeCount ? (
-            <div
-              className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600"
-              title="이 경로 폴더에 직접 들어 있는 파일만. 목록에도 이 기준으로만 나옵니다."
-            >
-              이 폴더에만 {folderCount}장
-            </div>
-          ) : null}
-          {hasMore ? (
-            <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500">
-              목록 표시 {visibleRows.length} / 직접 {folderCount}
-            </div>
-          ) : null}
-          <label className="ml-auto flex items-center gap-2 text-sm text-slate-600">
-            정렬
-            <select
-              value={sortOption}
-              onChange={(event) =>
-                setSortOption(event.target.value as PhotoListSortOption)
-              }
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900"
-            >
-              <option value="captured-desc">촬영일 최신순</option>
-              <option value="filename-asc">파일명 순</option>
-            </select>
-          </label>
-        </div>
+        ) : null}
 
         {!outputRoot ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
             <p className="text-sm font-semibold text-slate-900">
-              출력 폴더를 선택하세요.
+              출력 폴더를 먼저 설정하세요.
             </p>
             <p className="mt-1 text-sm text-slate-600">
-              정리된 결과가 있는 폴더를 고르면 파일 목록이 표시됩니다.
+              설정 탭에서 정리 결과 폴더를 지정하면 목록이 표시됩니다.
             </p>
+            {onNavigateToSettings ? (
+              <button
+                type="button"
+                className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                onClick={onNavigateToSettings}
+              >
+                설정으로 이동
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="grid gap-4 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] lg:items-start">

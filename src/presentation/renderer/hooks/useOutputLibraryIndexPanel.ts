@@ -19,8 +19,7 @@ export function getLoadSourceBadge(
     return {
       label: '병합 기반',
       tone: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-      description:
-        '출력 폴더 실제 파일 목록에 저장된 index 메타데이터를 병합해 조회 중입니다.'
+      description: '출력 폴더와 index 메타데이터를 함께 반영해 표시 중입니다.'
     }
   }
 
@@ -28,8 +27,7 @@ export function getLoadSourceBadge(
     return {
       label: '복구 기반',
       tone: 'border-amber-200 bg-amber-50 text-amber-800',
-      description:
-        'index.json을 사용할 수 없어 출력 폴더를 스캔해 가능한 범위만 복구했습니다.'
+      description: 'index.json 없이 출력 폴더를 스캔해 가능한 범위만 복구했습니다.'
     }
   }
 

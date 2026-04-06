@@ -19,15 +19,17 @@ import {
   getQuickFilterDateRange
 } from '@presentation/renderer/view-models/map/mapPageSelectors'
 
-export function BrowsePage() {
+interface BrowsePageProps {
+  onNavigateToSettings?: () => void
+}
+
+export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
   const {
     outputRoot,
     libraryIndex,
     loadSource,
     isLoadingIndex,
-    errorMessage,
-    selectOutputRoot,
-    reloadLibraryIndex
+    errorMessage
   } = useOutputLibraryIndexPanel()
   const sourceBadge = getLoadSourceBadge(loadSource)
   const searchQuery = useBrowseMapStore((state) => state.searchQuery)
@@ -162,44 +164,14 @@ export function BrowsePage() {
 
   return (
     <div className="space-y-5">
-      <div className="space-y-3">
+      <div className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-          지도 기반 사진 그룹 탐색
+          지도
         </h1>
-        <p className="max-w-4xl text-base leading-7 text-slate-600">
-          지도는 사진 개별 좌표가 아니라 그룹 탐색을 위한 메인 인터페이스입니다.
-          검색과 날짜 필터가 지도와 바텀시트에 함께 반영되고, GPS 없는 사진도
-          그룹 안에서 함께 탐색할 수 있습니다.
+        <p className="text-sm text-slate-600">
+          그룹 단위로 사진을 탐색합니다.
         </p>
       </div>
-
-      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900">출력 폴더</h2>
-            <p className="min-h-12 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-600">
-              {outputRoot || '아직 선택되지 않았습니다.'}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-              onClick={() => void selectOutputRoot()}
-            >
-              출력 폴더 선택
-            </button>
-            <button
-              type="button"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
-              disabled={!outputRoot || isLoadingIndex}
-              onClick={() => void reloadLibraryIndex()}
-            >
-              {isLoadingIndex ? '불러오는 중...' : '다시 불러오기'}
-            </button>
-          </div>
-        </div>
-      </section>
 
       {sourceBadge ? (
         <section className={`rounded-2xl border px-4 py-3 text-sm ${sourceBadge.tone}`}>
@@ -221,12 +193,20 @@ export function BrowsePage() {
       {!outputRoot ? (
         <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center">
           <p className="text-base font-semibold text-slate-900">
-            조회할 출력 폴더를 선택하세요.
+            출력 폴더를 먼저 설정하세요.
           </p>
           <p className="mt-2 text-sm text-slate-600">
-            기존 정리 결과가 있는 폴더를 선택하면 지도 탐색 화면을 바로
-            불러옵니다.
+            설정 탭에서 정리 결과 폴더를 지정하면 바로 탐색할 수 있습니다.
           </p>
+          {onNavigateToSettings ? (
+            <button
+              type="button"
+              className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+              onClick={onNavigateToSettings}
+            >
+              설정으로 이동
+            </button>
+          ) : null}
         </div>
       ) : (
         <section className="space-y-4">

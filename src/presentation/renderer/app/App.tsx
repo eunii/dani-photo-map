@@ -3,13 +3,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { BrowsePage } from '@presentation/renderer/pages/BrowsePage'
 import { FileListPage } from '@presentation/renderer/pages/FileListPage'
 import { OrganizePage } from '@presentation/renderer/pages/OrganizePage'
+import { SettingsPage } from '@presentation/renderer/pages/SettingsPage'
 
-type AppRoute = 'organize' | 'files' | 'browse'
+type AppRoute = 'organize' | 'files' | 'browse' | 'settings'
 
 const ROUTE_HASHES: Record<AppRoute, string> = {
   organize: '#/organize',
   files: '#/files',
-  browse: '#/browse'
+  browse: '#/browse',
+  settings: '#/settings'
 }
 
 function getRouteFromHash(hash: string): AppRoute {
@@ -18,6 +20,9 @@ function getRouteFromHash(hash: string): AppRoute {
   }
   if (hash === ROUTE_HASHES.browse) {
     return 'browse'
+  }
+  if (hash === ROUTE_HASHES.settings) {
+    return 'settings'
   }
   return 'organize'
 }
@@ -50,7 +55,10 @@ export function App() {
     if (route === 'files') {
       return '파일 목록'
     }
-    return '지도'
+    if (route === 'browse') {
+      return '지도'
+    }
+    return '설정'
   }, [route])
 
   function navigate(nextRoute: AppRoute): void {
@@ -65,6 +73,12 @@ export function App() {
   }
 
   const isBrowseRoute = route === 'browse'
+  const navigationItems: Array<{ route: AppRoute; label: string }> = [
+    { route: 'organize', label: '정리' },
+    { route: 'files', label: '파일 목록' },
+    { route: 'browse', label: '지도' },
+    { route: 'settings', label: '설정' }
+  ]
 
   return (
     <main
@@ -75,72 +89,60 @@ export function App() {
           isBrowseRoute ? 'mx-auto max-w-[96vw] p-6' : 'max-w-7xl p-10'
         }`}
       >
-        <div className="space-y-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
+        <div className="space-y-6">
+          <header className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
                 Dani Photo Map
               </p>
-              <p className="text-xs text-slate-500">다니 포토 맵</p>
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                {routeTitle} 워크플로우
+                {routeTitle}
               </h1>
-              <p className="text-sm text-slate-600">
-                정리, 파일 목록, 지도 조회를 분리해 실행 흐름과 결과 탐색을
-                각각 다룹니다.
-              </p>
             </div>
 
-            <nav className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
-              <button
-                type="button"
-                className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                  route === 'organize'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white text-slate-700'
-                }`}
-                onClick={() => navigate('organize')}
-              >
-                정리
-              </button>
-              <button
-                type="button"
-                className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                  route === 'files'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white text-slate-700'
-                }`}
-                onClick={() => navigate('files')}
-              >
-                파일 목록
-              </button>
-              <button
-                type="button"
-                className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                  route === 'browse'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white text-slate-700'
-                }`}
-                onClick={() => navigate('browse')}
-              >
-                지도
-              </button>
+            <nav className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2">
+              {navigationItems.map((item) => (
+                <button
+                  key={item.route}
+                  type="button"
+                  className={`rounded-xl px-4 py-2 text-sm font-medium ${
+                    route === item.route
+                      ? 'bg-slate-900 text-white'
+                      : item.route === 'settings'
+                        ? 'bg-white text-slate-500'
+                        : 'bg-white text-slate-700'
+                  }`}
+                  onClick={() => navigate(item.route)}
+                >
+                  {item.label}
+                </button>
+              ))}
             </nav>
+          </header>
+
+          <div>
+            <p className="text-sm text-slate-500">
+              정리와 탐색은 분리하고, 공통 경로는 설정에서 관리합니다.
+            </p>
           </div>
 
           {route === 'organize' ? (
-            <OrganizePage onNavigateToBrowse={() => navigate('browse')} />
+            <OrganizePage
+              onNavigateToBrowse={() => navigate('browse')}
+              onNavigateToSettings={() => navigate('settings')}
+            />
           ) : route === 'files' ? (
-            <FileListPage />
+            <FileListPage onNavigateToSettings={() => navigate('settings')} />
+          ) : route === 'browse' ? (
+            <BrowsePage onNavigateToSettings={() => navigate('settings')} />
           ) : (
-            <BrowsePage />
+            <SettingsPage />
           )}
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
-            원본 파일은 수정하지 않고 복사 기준으로 처리합니다. 물리 폴더는
-            `year / month / region` 구조를 유지하고, 논리 그룹은
+          <p className="text-xs text-slate-500">
+            원본은 수정하지 않고, 정리 결과는 출력 폴더와
             `.photo-organizer/index.json`에 저장됩니다.
-          </div>
+          </p>
         </div>
       </section>
     </main>

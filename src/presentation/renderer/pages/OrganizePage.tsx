@@ -24,11 +24,6 @@ const SOURCE_DIALOG_OPTIONS = {
   buttonLabel: '원본 폴더 선택'
 } as const
 
-const OUTPUT_DIALOG_OPTIONS = {
-  title: '출력 폴더 선택',
-  buttonLabel: '출력 폴더 선택'
-} as const
-
 const EMPTY_GROUP_ASSIGNMENTS: Record<string, string> = {}
 const EMPTY_CUSTOM_SPLITS: Record<string, OrganizeCustomSplitInput[]> = {}
 const MISSING_GPS_GROUPING_OPTIONS: Array<{
@@ -250,6 +245,7 @@ function getGroupLinePercent(
 
 interface OrganizePageProps {
   onNavigateToBrowse?: () => void
+  onNavigateToSettings?: () => void
 }
 
 function getInitialGroupTitleValue(
@@ -336,11 +332,13 @@ function PendingPreviewImageBlock({
   )
 }
 
-export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
+export function OrganizePage({
+  onNavigateToBrowse,
+  onNavigateToSettings
+}: OrganizePageProps) {
   const sourceRoot = useLibraryWorkspaceStore((state) => state.sourceRoot)
   const outputRoot = useLibraryWorkspaceStore((state) => state.outputRoot)
   const setSourceRoot = useLibraryWorkspaceStore((state) => state.setSourceRoot)
-  const setOutputRoot = useLibraryWorkspaceStore((state) => state.setOutputRoot)
   const lastLoadedIndex = useLibraryWorkspaceStore(
     (state) => state.lastLoadedIndex
   )
@@ -706,44 +704,11 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     }
   }
 
-  async function selectOutputRoot(): Promise<void> {
-    const selectedPath = await window.photoApp.selectDirectory(
-      OUTPUT_DIALOG_OPTIONS
-    )
-
-    if (selectedPath) {
-      setOutputRoot(selectedPath)
-      setWizardStepIndex(0)
-      setLastLoadedIndex(null)
-      setPreviewResult(null)
-      setGroupTitleInputs({})
-      setGroupCompanionsInputs({})
-      setGroupNotesInputs({})
-      setPreviewImageLoadFailedByPhotoId({})
-      setSummary(null)
-      setOpenScanResultDetail(null)
-      setErrorMessage(null)
-      setSaveJobQueue([])
-      setRunningSaveTarget(null)
-      bulkSaveActiveRef.current = false
-      setBulkSaveActive(false)
-      bulkRunTotalPhotosRef.current = null
-      bulkSaveStartIndexRef.current = 0
-      setBulkRunStartIndex(null)
-      setGroupSavePhaseByKey({})
-      setHidePreviewPanelWhileSaving(false)
-      setPhotosSavedCount(0)
-      setPhotoFlowTotal(0)
-      setPrepareProgress(null)
-      setActiveSaveJobMeta(null)
-    }
-  }
-
   async function handlePreview(
     basis: MissingGpsGroupingBasis = missingGpsGroupingBasis
   ): Promise<void> {
     if (!sourceRoot || !outputRoot) {
-      setErrorMessage('원본 사진 폴더와 출력 폴더를 먼저 선택하세요.')
+      setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
       return
     }
 
@@ -801,7 +766,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
   function enqueueSaveAllGroups(): void {
     if (!sourceRoot || !outputRoot) {
-      setErrorMessage('원본 사진 폴더와 출력 폴더를 먼저 선택하세요.')
+      setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
       return
     }
 
@@ -916,7 +881,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
   function enqueueSaveCurrentGroup(): void {
     if (!sourceRoot || !outputRoot) {
-      setErrorMessage('원본 사진 폴더와 출력 폴더를 먼저 선택하세요.')
+      setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
       return
     }
 
@@ -996,52 +961,54 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-3">
+      <div className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
           사진 정리 실행
         </h1>
-        <p className="text-base leading-7 text-slate-600">
-          원본·출력 폴더를 선택한 뒤 후보를 불러오면, 그룹이 하나씩 표시됩니다.
-          각 단계에서 메타를 입력하고 저장하면 해당 그룹 사진만 복사·인덱스에
-          반영됩니다.
+        <p className="text-sm text-slate-600">
+          원본 폴더를 스캔해 그룹별로 정리를 실행합니다.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900">
-              원본 사진 폴더
-            </h2>
-            <p className="min-h-12 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-600">
-              {sourceRoot || '아직 선택되지 않았습니다.'}
-            </p>
-            <button
-              type="button"
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-              onClick={() => void selectSourceRoot()}
-            >
-              원본 폴더 선택
-            </button>
-          </div>
-        </section>
+      <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-900">원본 사진 폴더</h2>
+          <p className="min-h-12 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-600">
+            {sourceRoot || '아직 선택되지 않았습니다.'}
+          </p>
+          <button
+            type="button"
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+            onClick={() => void selectSourceRoot()}
+          >
+            원본 폴더 선택
+          </button>
+        </div>
+      </section>
 
-        <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900">출력 폴더</h2>
-            <p className="min-h-12 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-600">
-              {outputRoot || '아직 선택되지 않았습니다.'}
-            </p>
-            <button
-              type="button"
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-              onClick={() => void selectOutputRoot()}
-            >
-              출력 폴더 선택
-            </button>
+      {!outputRoot ? (
+        <section className="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold text-slate-900">
+                출력 폴더가 설정되지 않았습니다.
+              </h2>
+              <p className="text-sm text-slate-600">
+                공통 출력 폴더는 설정 탭에서 지정합니다.
+              </p>
+            </div>
+            {onNavigateToSettings ? (
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
+                onClick={onNavigateToSettings}
+              >
+                설정으로 이동
+              </button>
+            ) : null}
           </div>
         </section>
-      </div>
+      ) : null}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="space-y-3">
