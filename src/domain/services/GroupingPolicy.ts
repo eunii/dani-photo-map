@@ -113,6 +113,14 @@ function buildGroupDisplayTitle(seed: GroupSeed): string {
     return seed.manualGroupTitle
   }
 
+  if (!seed.displayRegionLabel && seed.basis === 'week') {
+    return seed.day
+  }
+
+  if (!seed.displayRegionLabel && seed.basis === 'day') {
+    return seed.day
+  }
+
   return seed.displayRegionLabel
 }
 

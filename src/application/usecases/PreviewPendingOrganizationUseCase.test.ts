@@ -439,4 +439,43 @@ describe('PreviewPendingOrganizationUseCase', () => {
       '2026/04/10/2026-04-10_080000_IMG_DAY.JPG'
     )
   })
+
+  it('uses the week folder name as the default display title for missing-gps weekly groups', async () => {
+    const dependencies = createDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_WEEK.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      missingGpsCategory: 'missing-original-gps',
+      capturedAt: {
+        iso: '2026-04-10T08:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '10',
+        time: '080000'
+      }
+    })
+    dependencies.hasher.createSha256.mockResolvedValue('preview-week-hash')
+    dependencies.photoPreview.createDataUrl.mockResolvedValue(
+      'data:image/webp;base64,preview'
+    )
+    dependencies.existingOutputScanner.scan.mockResolvedValue({
+      outputRoot: 'C:/output',
+      photos: []
+    })
+    dependencies.libraryIndexStore.load.mockResolvedValue(null)
+
+    const useCase = new PreviewPendingOrganizationUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      missingGpsGroupingBasis: 'week'
+    })
+
+    expect(result.groups[0]).toMatchObject({
+      displayTitle: 'week2'
+    })
+  })
 })

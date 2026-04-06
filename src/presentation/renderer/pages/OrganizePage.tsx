@@ -252,6 +252,16 @@ interface OrganizePageProps {
   onNavigateToBrowse?: () => void
 }
 
+function getInitialGroupTitleValue(
+  group: PreviewPendingOrganizationResult['groups'][number]
+): string {
+  if (!group.representativeGps && group.displayTitle.trim().length > 0) {
+    return group.displayTitle
+  }
+
+  return group.suggestedTitles[0] ?? group.displayTitle
+}
+
 function effectiveGroupTitle(
   group: PreviewPendingOrganizationResult['groups'][number],
   groupTitleInputs: Record<string, string>
@@ -263,7 +273,7 @@ function effectiveGroupTitle(
     return trimmed.length > 0 ? trimmed : '제목 없음'
   }
 
-  return group.suggestedTitles[0] ?? group.displayTitle
+  return getInitialGroupTitleValue(group)
 }
 
 function buildEffectiveOrganizeInputs(
@@ -279,8 +289,7 @@ function buildEffectiveOrganizeInputs(
 
   for (const group of groups) {
     if (groupTitleInputs[group.groupKey] === undefined) {
-      groupTitleInputs[group.groupKey] =
-        group.suggestedTitles[0] ?? group.displayTitle
+      groupTitleInputs[group.groupKey] = getInitialGroupTitleValue(group)
     }
   }
 
@@ -753,10 +762,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       setPreviewImageLoadFailedByPhotoId({})
       setGroupTitleInputs(
         Object.fromEntries(
-          nextPreview.groups.map((group) => [
-            group.groupKey,
-            group.suggestedTitles[0] ?? group.displayTitle
-          ])
+          nextPreview.groups.map((group) => [group.groupKey, getInitialGroupTitleValue(group)])
         )
       )
       setGroupCompanionsInputs(
