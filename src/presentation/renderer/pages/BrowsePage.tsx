@@ -230,6 +230,25 @@ export function BrowsePage() {
         </div>
       ) : (
         <section className="space-y-4">
+          <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+            <MapSearchBar
+              value={searchQuery}
+              resultCount={filteredRecords.length}
+              onChange={setSearchQuery}
+              onClear={() => setSearchQuery('')}
+            />
+
+            <MapFilterBar
+              quickFilter={quickFilter}
+              dateRange={dateRange}
+              onQuickFilterChange={handleQuickFilterChange}
+              onDateRangeChange={handleCustomDateRangeChange}
+              onReset={() => {
+                resetFilters()
+              }}
+            />
+          </div>
+
           <div className="flex flex-wrap gap-2 text-xs text-slate-600">
             <span className="rounded-full bg-slate-100 px-3 py-1.5">
               필터 결과 {filteredRecords.length}개
@@ -266,29 +285,6 @@ export function BrowsePage() {
                 onSelectGroup={handleSelectGroup}
                 onViewportChange={handleViewportChange}
               />
-
-              <div className="pointer-events-none absolute inset-x-3 top-3 z-10 space-y-3">
-                <div className="pointer-events-auto">
-                  <MapSearchBar
-                    value={searchQuery}
-                    resultCount={filteredRecords.length}
-                    onChange={setSearchQuery}
-                    onClear={() => setSearchQuery('')}
-                  />
-                </div>
-
-                <div className="pointer-events-auto">
-                  <MapFilterBar
-                    quickFilter={quickFilter}
-                    dateRange={dateRange}
-                    onQuickFilterChange={handleQuickFilterChange}
-                    onDateRangeChange={handleCustomDateRangeChange}
-                    onReset={() => {
-                      resetFilters()
-                    }}
-                  />
-                </div>
-              </div>
 
               <MapPhotoPreviewOverlay
                 outputRoot={libraryIndex?.outputRoot ?? outputRoot}
