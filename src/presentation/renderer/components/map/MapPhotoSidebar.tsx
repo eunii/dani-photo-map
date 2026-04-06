@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import { GroupPhotoGrid, getGpsBadge } from '@presentation/renderer/components/map/GroupPhotoGrid'
+import { GroupPhotoGrid } from '@presentation/renderer/components/map/GroupPhotoGrid'
 import { GroupPreviewCard } from '@presentation/renderer/components/map/GroupPreviewCard'
-import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
-import type { GroupDetail } from '@shared/types/preload'
 import type { MapGroupRecord } from '@presentation/renderer/view-models/map/mapPageSelectors'
 
 interface MapPhotoSidebarProps {
@@ -12,18 +10,7 @@ interface MapPhotoSidebarProps {
   filteredGroups: MapGroupRecord[]
   unmappedGroups: MapGroupRecord[]
   onSelectGroup: (groupId: string) => void
-}
-
-function resolvePreviewPhoto(group?: GroupDetail, selectedPhotoId?: string) {
-  if (!group) {
-    return undefined
-  }
-
-  return (
-    group.photos.find((photo) => photo.id === selectedPhotoId) ??
-    group.photos.find((photo) => photo.id === group.representativePhotoId) ??
-    group.photos[0]
-  )
+  onPreviewPhoto: (photoId: string) => void
 }
 
 export function MapPhotoSidebar({
@@ -31,7 +18,8 @@ export function MapPhotoSidebar({
   selectedGroup,
   filteredGroups,
   unmappedGroups,
-  onSelectGroup
+  onSelectGroup,
+  onPreviewPhoto
 }: MapPhotoSidebarProps) {
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | undefined>()
 
@@ -42,24 +30,12 @@ export function MapPhotoSidebar({
     setSelectedPhotoId(nextDefaultPhotoId)
   }, [selectedGroup?.group.id, selectedGroup?.group.photos, selectedGroup?.group.representativePhotoId])
 
-  const previewPhoto = useMemo(
-    () => resolvePreviewPhoto(selectedGroup?.group, selectedPhotoId),
-    [selectedGroup?.group, selectedPhotoId]
-  )
-
-  const previewImageUrl =
-    outputRoot &&
-    toOutputFileUrl(
-      outputRoot,
-      previewPhoto?.thumbnailRelativePath ?? previewPhoto?.outputRelativePath
-    )
-
   return (
     <aside className="flex h-[78vh] min-h-[720px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50">
       <div className="border-b border-slate-200 bg-white px-5 py-4">
         <p className="text-sm font-semibold text-slate-900">사진 미리보기</p>
         <p className="mt-1 text-xs text-slate-500">
-          작은 썸네일을 클릭하면 위쪽에 크게 표시됩니다.
+          작은 썸네일을 클릭하면 지도 위에 크게 표시됩니다.
         </p>
       </div>
 
@@ -82,46 +58,6 @@ export function MapPhotoSidebar({
                 </span>
               </div>
 
-              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-100">
-                <div className="aspect-[4/3] bg-slate-100">
-                  {previewImageUrl ? (
-                    <img
-                      src={previewImageUrl}
-                      alt={previewPhoto?.sourceFileName ?? selectedGroup.displayTitle}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                      큰 미리보기를 표시할 사진이 없습니다.
-                    </div>
-                  )}
-                </div>
-                {previewPhoto ? (
-                  <div className="space-y-2 border-t border-slate-200 bg-white p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="truncate text-sm font-medium text-slate-900">
-                        {previewPhoto.sourceFileName}
-                      </p>
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                        {getGpsBadge(previewPhoto)}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-xs text-slate-600">
-                      {previewPhoto.regionName ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-1">
-                          {previewPhoto.regionName}
-                        </span>
-                      ) : null}
-                      {previewPhoto.capturedAtIso ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-1">
-                          {previewPhoto.capturedAtIso}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-2 text-xs text-slate-600">
                   <span className="rounded-full bg-slate-100 px-2.5 py-1.5">
@@ -140,7 +76,10 @@ export function MapPhotoSidebar({
                   outputRoot={outputRoot}
                   compact={false}
                   selectedPhotoId={selectedPhotoId}
-                  onPhotoClick={setSelectedPhotoId}
+                  onPhotoClick={(photoId) => {
+                    setSelectedPhotoId(photoId)
+                    onPreviewPhoto(photoId)
+                  }}
                 />
               </div>
             </section>

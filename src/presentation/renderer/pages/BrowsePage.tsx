@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { MapFilterBar } from '@presentation/renderer/components/map/MapFilterBar'
 import { MapPhotoSidebar } from '@presentation/renderer/components/map/MapPhotoSidebar'
+import { MapPhotoPreviewOverlay } from '@presentation/renderer/components/map/MapPhotoPreviewOverlay'
 import { MapSearchBar } from '@presentation/renderer/components/map/MapSearchBar'
 import { PhotoGroupMap } from '@presentation/renderer/components/map/PhotoGroupMap'
 import { useDebouncedValue } from '@presentation/renderer/hooks/useDebouncedValue'
@@ -41,6 +42,7 @@ export function BrowsePage() {
   const setSelectedGroupId = useBrowseMapStore((state) => state.setSelectedGroupId)
   const resetFilters = useBrowseMapStore((state) => state.resetFilters)
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 220)
+  const [previewPhotoId, setPreviewPhotoId] = useState<string | undefined>()
 
   const derivedState = useMemo(
     () =>
@@ -52,6 +54,14 @@ export function BrowsePage() {
         selectedGroupId
       }),
     [dateRange, debouncedSearchQuery, libraryIndex?.groups, mapBounds, selectedGroupId, zoomLevel]
+  )
+
+  const selectedMappedGroup = useMemo(
+    () =>
+      derivedState.filteredGroups.find(
+        (record) => record.group.id === selectedGroupId && record.pinLocation
+      ) ?? null,
+    [derivedState.filteredGroups, selectedGroupId]
   )
 
   const effectiveVisibleGroups = useMemo(() => {
@@ -70,6 +80,11 @@ export function BrowsePage() {
 
     return derivedState.visibleGroups
   }, [derivedState.filteredGroups, derivedState.visibleGroups, selectedGroupId])
+
+  const mapCanvasGroups = useMemo(
+    () => derivedState.mappedGroups,
+    [derivedState.mappedGroups]
+  )
 
   const mapZoomPolicy = useMemo(() => getMapZoomPolicy(zoomLevel), [zoomLevel])
 
@@ -111,6 +126,10 @@ export function BrowsePage() {
       setSelectedGroupId(derivedState.filteredGroups[0]?.group.id)
     }
   }, [derivedState.filteredGroups, setSelectedGroupId])
+
+  useEffect(() => {
+    setPreviewPhotoId(undefined)
+  }, [selectedGroupId])
 
   const handleQuickFilterChange = useCallback((nextFilter: typeof quickFilter): void => {
     setQuickFilter(nextFilter)
@@ -225,7 +244,7 @@ export function BrowsePage() {
               GPS 없는 그룹 {derivedState.unmappedGroups.length}개
             </span>
             <span className="rounded-full bg-slate-100 px-3 py-1.5">
-              현재 표시 {effectiveVisibleGroups.length}개
+              지도 표시 {mapCanvasGroups.length}개
             </span>
             {searchQuery ? (
               <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">
@@ -242,7 +261,8 @@ export function BrowsePage() {
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="relative h-[78vh] min-h-[720px]">
               <PhotoGroupMap
-                groups={effectiveVisibleGroups}
+                groups={mapCanvasGroups}
+                outputRoot={libraryIndex?.outputRoot ?? outputRoot}
                 selectedGroupId={selectedGroupId}
                 unclusteredMinZoom={mapZoomPolicy.unclusteredMinZoom}
                 onSelectGroup={handleSelectGroup}
@@ -271,6 +291,14 @@ export function BrowsePage() {
                   />
                 </div>
               </div>
+
+              <MapPhotoPreviewOverlay
+                outputRoot={libraryIndex?.outputRoot ?? outputRoot}
+                group={derivedState.selectedGroup?.group}
+                photoId={previewPhotoId}
+                onChangePhoto={setPreviewPhotoId}
+                onClose={() => setPreviewPhotoId(undefined)}
+              />
             </div>
 
             <MapPhotoSidebar
@@ -279,6 +307,7 @@ export function BrowsePage() {
               filteredGroups={derivedState.filteredGroups}
               unmappedGroups={derivedState.unmappedGroups}
               onSelectGroup={handleSelectGroup}
+              onPreviewPhoto={setPreviewPhotoId}
             />
           </div>
         </section>

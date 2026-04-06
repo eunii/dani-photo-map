@@ -5,9 +5,11 @@ import type {
   MapGroupRecord,
   MapViewportBounds
 } from '@presentation/renderer/view-models/map/mapPageSelectors'
+import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 
 interface PhotoGroupMapProps {
   groups: MapGroupRecord[]
+  outputRoot?: string
   selectedGroupId?: string
   unclusteredMinZoom: number
   onSelectGroup: (groupId: string) => void
@@ -48,6 +50,12 @@ const CLUSTER_LAYER_ID = 'photo-group-clusters'
 const CLUSTER_COUNT_LAYER_ID = 'photo-group-cluster-count'
 const GROUP_LAYER_ID = 'photo-group-points'
 const SELECTED_LAYER_ID = 'photo-group-selected'
+
+interface GroupMarkerBinding {
+  groupId: string
+  marker: maplibregl.Marker
+  element: HTMLButtonElement
+}
 
 function createMapStyle(): StyleSpecification {
   return {
@@ -163,6 +171,7 @@ function fitToGroups(map: maplibregl.Map, groups: MapGroupRecord[]): void {
 
 export function PhotoGroupMap({
   groups,
+  outputRoot,
   selectedGroupId,
   unclusteredMinZoom,
   onSelectGroup,
@@ -170,6 +179,7 @@ export function PhotoGroupMap({
 }: PhotoGroupMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
+  const markersRef = useRef<GroupMarkerBinding[]>([])
   const moveDebounceRef = useRef<number | null>(null)
   const hasInitialFitRef = useRef(false)
   const onSelectGroupRef = useRef(onSelectGroup)
@@ -178,12 +188,77 @@ export function PhotoGroupMap({
   const groupsRef = useRef<MapGroupRecord[]>(groups)
   const featureCollectionRef = useRef(featureCollection)
   const lastSelectedGroupIdRef = useRef<string | undefined>(undefined)
+  const unclusteredMinZoomRef = useRef(unclusteredMinZoom)
   const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null)
 
   groupsRef.current = groups
   featureCollectionRef.current = featureCollection
   onSelectGroupRef.current = onSelectGroup
   onViewportChangeRef.current = onViewportChange
+  unclusteredMinZoomRef.current = unclusteredMinZoom
+
+  function clearMarkers(): void {
+    for (const binding of markersRef.current) {
+      binding.marker.remove()
+    }
+
+    markersRef.current = []
+  }
+
+  function updateMarkerPresentation(): void {
+    const currentZoom = mapRef.current?.getZoom() ?? DEFAULT_ZOOM
+    const shouldShowMarkers = currentZoom >= unclusteredMinZoomRef.current
+
+    for (const binding of markersRef.current) {
+      const isSelected = binding.groupId === selectedGroupId
+
+      binding.element.className = [
+        'overflow-hidden rounded-xl border-2 bg-white shadow-lg transition-all',
+        isSelected
+          ? 'border-blue-500 ring-4 ring-blue-200 scale-105'
+          : 'border-white hover:border-slate-200'
+      ].join(' ')
+      binding.element.style.display = shouldShowMarkers ? 'block' : 'none'
+    }
+  }
+
+  function buildMarkerElement(group: MapGroupRecord): HTMLButtonElement {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.setAttribute('aria-label', group.displayTitle)
+    button.style.width = '46px'
+    button.style.height = '46px'
+
+    const thumbnailUrl = outputRoot
+      ? toOutputFileUrl(
+          outputRoot,
+          group.group.representativeThumbnailRelativePath ??
+            group.group.photos[0]?.thumbnailRelativePath ??
+            group.group.photos[0]?.outputRelativePath
+        )
+      : undefined
+
+    if (thumbnailUrl) {
+      const image = document.createElement('img')
+      image.src = thumbnailUrl
+      image.alt = group.displayTitle
+      image.className = 'h-full w-full object-cover'
+      image.loading = 'lazy'
+      button.appendChild(image)
+    } else {
+      const placeholder = document.createElement('div')
+      placeholder.className =
+        'flex h-full w-full items-center justify-center bg-slate-200 text-[10px] font-medium text-slate-600'
+      placeholder.textContent = 'PHOTO'
+      button.appendChild(placeholder)
+    }
+
+    button.addEventListener('click', () => {
+      onSelectGroupRef.current(group.group.id)
+    })
+
+    return button
+  }
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -252,19 +327,9 @@ export function PhotoGroupMap({
           minzoom: unclusteredMinZoom,
           paint: {
             'circle-color': '#2563eb',
-            'circle-radius': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              4,
-              6,
-              10,
-              10,
-              14,
-              13
-            ],
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#ffffff'
+            'circle-radius': 1,
+            'circle-stroke-width': 0,
+            'circle-opacity': 0
           }
         })
 
@@ -276,20 +341,10 @@ export function PhotoGroupMap({
           minzoom: unclusteredMinZoom,
           paint: {
             'circle-color': '#1d4ed8',
-            'circle-radius': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              4,
-              10,
-              10,
-              14,
-              14,
-              18
-            ],
-            'circle-stroke-width': 4,
+            'circle-radius': 1,
+            'circle-stroke-width': 0,
             'circle-stroke-color': '#bfdbfe',
-            'circle-opacity': 0.45
+            'circle-opacity': 0
           }
         })
 
@@ -339,6 +394,8 @@ export function PhotoGroupMap({
         map.on('mouseleave', GROUP_LAYER_ID, clearPointerCursor)
 
         map.on('move', () => {
+          updateMarkerPresentation()
+
           if (moveDebounceRef.current !== null) {
             window.clearTimeout(moveDebounceRef.current)
           }
@@ -350,6 +407,8 @@ export function PhotoGroupMap({
             })
           }, 120)
         })
+
+        updateMarkerPresentation()
 
         onViewportChangeRef.current({
           bounds: toViewportBounds(map),
@@ -383,6 +442,7 @@ export function PhotoGroupMap({
         window.clearTimeout(moveDebounceRef.current)
       }
 
+      clearMarkers()
       mapRef.current?.remove()
       mapRef.current = null
     }
@@ -397,6 +457,29 @@ export function PhotoGroupMap({
 
     const source = map.getSource(SOURCE_ID) as GeoJSONSource
     source.setData(featureCollection)
+    clearMarkers()
+
+    for (const group of groups) {
+      if (!group.pinLocation) {
+        continue
+      }
+
+      const markerElement = buildMarkerElement(group)
+      const marker = new maplibregl.Marker({
+        element: markerElement,
+        anchor: 'bottom'
+      })
+        .setLngLat([group.pinLocation.longitude, group.pinLocation.latitude])
+        .addTo(map)
+
+      markersRef.current.push({
+        groupId: group.group.id,
+        marker,
+        element: markerElement
+      })
+    }
+
+    updateMarkerPresentation()
 
     if (!hasInitialFitRef.current) {
       fitToGroups(map, groups)
@@ -407,7 +490,7 @@ export function PhotoGroupMap({
     if (groups.length === 1) {
       fitToGroups(map, groups)
     }
-  }, [featureCollection, groups])
+  }, [featureCollection, groups, outputRoot, selectedGroupId])
 
   useEffect(() => {
     const map = mapRef.current
@@ -423,6 +506,8 @@ export function PhotoGroupMap({
     if (map.getLayer(SELECTED_LAYER_ID)) {
       map.setLayerZoomRange(SELECTED_LAYER_ID, unclusteredMinZoom, 24)
     }
+
+    updateMarkerPresentation()
   }, [unclusteredMinZoom])
 
   const selectedGroup = useMemo(
@@ -441,22 +526,25 @@ export function PhotoGroupMap({
 
     if (!selectedGroup?.pinLocation) {
       lastSelectedGroupIdRef.current = selectedGroupId
+      updateMarkerPresentation()
       return
     }
 
     if (lastSelectedGroupIdRef.current === selectedGroupId) {
+      updateMarkerPresentation()
       return
     }
 
     lastSelectedGroupIdRef.current = selectedGroupId
+    updateMarkerPresentation()
 
     map.easeTo({
       center: [
         selectedGroup.pinLocation.longitude,
         selectedGroup.pinLocation.latitude
       ],
-      zoom: Math.max(map.getZoom(), 7),
-      duration: 500
+      zoom: Math.max(map.getZoom(), 12),
+      duration: 650
     })
   }, [
     selectedGroup?.pinLocation?.latitude,
