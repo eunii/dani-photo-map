@@ -1,12 +1,18 @@
 import type { Photo } from '@domain/entities/Photo'
 import type { PhotoGroup } from '@domain/entities/PhotoGroup'
-import { groupPhotosByPolicy } from '@domain/services/GroupingPolicy'
+import {
+  groupPhotosByPolicy,
+  type GroupingPolicyOptions
+} from '@domain/services/GroupingPolicy'
 import { selectRepresentativePhoto } from '@domain/services/RepresentativePhotoPolicy'
 
-export function createPhotoGroups(photos: Photo[]): PhotoGroup[] {
+export function createPhotoGroups(
+  photos: Photo[],
+  options: GroupingPolicyOptions = {}
+): PhotoGroup[] {
   const uniquePhotos = photos.filter((photo) => !photo.isDuplicate)
 
-  return groupPhotosByPolicy(uniquePhotos).map((bucket) => {
+  return groupPhotosByPolicy(uniquePhotos, options).map((bucket) => {
     const representativePhoto = selectRepresentativePhoto(bucket.photos)
 
     return {

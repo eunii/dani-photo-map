@@ -78,6 +78,10 @@ describe('PhotoNamingService', () => {
     const relativePath = buildScanPhotoOutputRelativePath(
       {
         sourceFileName: 'IMG_1001.JPG',
+        gps: {
+          latitude: 37.5,
+          longitude: 127
+        },
         capturedAt: {
           iso: '2025-04-03T10:11:12.000Z',
           year: '2025',
@@ -116,7 +120,7 @@ describe('PhotoNamingService', () => {
     expect(relativePath).toBe('2025/04/2025-04-03_101112_a.JPG')
   })
 
-  it('routes capture label to capture subfolder', () => {
+  it('keeps missing-gps monthly output under year/month', () => {
     const relativePath = buildScanPhotoOutputRelativePath(
       {
         sourceFileName: 'shot.png',
@@ -133,8 +137,48 @@ describe('PhotoNamingService', () => {
       ''
     )
 
-    expect(relativePath).toBe(
-      '2025/04/capture/2025-04-03_101112_shot.png'
+    expect(relativePath).toBe('2025/04/2025-04-03_101112_shot.png')
+  })
+
+  it('routes missing-gps weekly output to year/month/weekN', () => {
+    const relativePath = buildScanPhotoOutputRelativePath(
+      {
+        sourceFileName: 'weekly.png',
+        missingGpsGroupingBasis: 'week',
+        capturedAt: {
+          iso: '2025-04-10T10:11:12.000Z',
+          year: '2025',
+          month: '04',
+          day: '10',
+          time: '101112'
+        }
+      },
+      'base',
+      defaultOrganizationRules,
+      ''
     )
+
+    expect(relativePath).toBe('2025/04/week2/2025-04-10_101112_weekly.png')
+  })
+
+  it('routes missing-gps daily output to year/month/day', () => {
+    const relativePath = buildScanPhotoOutputRelativePath(
+      {
+        sourceFileName: 'daily.png',
+        missingGpsGroupingBasis: 'day',
+        capturedAt: {
+          iso: '2025-04-10T10:11:12.000Z',
+          year: '2025',
+          month: '04',
+          day: '10',
+          time: '101112'
+        }
+      },
+      'base',
+      defaultOrganizationRules,
+      ''
+    )
+
+    expect(relativePath).toBe('2025/04/10/2025-04-10_101112_daily.png')
   })
 })

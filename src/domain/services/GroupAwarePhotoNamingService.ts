@@ -2,7 +2,6 @@ import type { Photo } from '@domain/entities/Photo'
 import type { OrganizationRules } from '@domain/policies/OrganizationRules'
 import type { PhotoTimestamp } from '@domain/value-objects/PhotoTimestamp'
 import {
-  buildScanOutputDirectoryRelativePath,
   createOrganizedPhotoFileName,
   resolveGroupLabelForOutputFileName
 } from '@domain/services/PhotoNamingService'
@@ -30,6 +29,15 @@ function formatSequenceNumber(sequenceNumber: number): string {
   return String(sequenceNumber).padStart(3, '0')
 }
 
+function getDirectoryTimestamp(
+  timestamp?: PhotoTimestamp
+): Pick<PhotoTimestamp, 'year' | 'month'> {
+  return {
+    year: timestamp?.year ?? '0000',
+    month: timestamp?.month ?? '00'
+  }
+}
+
 /**
  * 그룹 이동·이름 변경 시 파일명: `YYYY-MM-DD_HHMMSS_원본베이스_시퀀스.확장자` (시퀀스는 최소 001).
  */
@@ -54,6 +62,7 @@ export function buildGroupAwarePhotoOutputRelativePath(
     | 'gps'
     | 'regionName'
     | 'sourceFileName'
+    | 'missingGpsGroupingBasis'
     | 'missingGpsCategory'
   >,
   groupTitle: string,
@@ -64,7 +73,11 @@ export function buildGroupAwarePhotoOutputRelativePath(
     { displayTitle: groupTitle },
     rules
   )
-  const directory = buildScanOutputDirectoryRelativePath(photo, groupLabel, rules)
+  const timestamp = getDirectoryTimestamp(photo.capturedAt)
+  const directory =
+    groupLabel === rules.unknownRegionLabel
+      ? [timestamp.year, timestamp.month].join('/')
+      : [timestamp.year, timestamp.month, groupLabel].join('/')
   const fileName = createGroupAwarePhotoFileName(
     photo.sourceFileName,
     sequenceNumber,

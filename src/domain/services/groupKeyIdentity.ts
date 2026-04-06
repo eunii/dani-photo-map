@@ -8,6 +8,7 @@ export interface ParsedGroupKeyParts {
   region: string
   year: string
   month: string
+  basis?: string
   day: string
   slot: string
   manual?: string
@@ -56,6 +57,7 @@ export function parseGroupKeyParts(groupKey: string): ParsedGroupKeyParts | null
     region,
     year,
     month,
+    ...(map.basis !== undefined ? { basis: map.basis } : {}),
     day,
     slot,
     ...(map.manual !== undefined ? { manual: map.manual } : {})
@@ -70,5 +72,11 @@ export function groupKeyIdentitySignature(groupKey: string): string | null {
     return null
   }
 
-  return `${parsed.region}|${parsed.year}|${parsed.month}|${parsed.slot}|${parsed.manual ?? ''}`
+  const basis = parsed.basis ?? 'month'
+
+  if (basis === 'month') {
+    return `${parsed.region}|${parsed.year}|${parsed.month}|month|${parsed.slot}|${parsed.manual ?? ''}`
+  }
+
+  return `${parsed.region}|${parsed.year}|${parsed.month}|${basis}|${parsed.day}|${parsed.slot}|${parsed.manual ?? ''}`
 }

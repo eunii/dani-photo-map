@@ -1,4 +1,8 @@
 import type { Photo } from '@domain/entities/Photo'
+import {
+  defaultMissingGpsGroupingBasis,
+  type MissingGpsGroupingBasis
+} from '@domain/policies/MissingGpsGroupingBasis'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import {
   isUsableCapturedAtValue,
@@ -16,12 +20,17 @@ interface GroupSeed {
   regionName: string
   /** 자동 그룹 표시용: GPS 기반 지역명만, GPS 없으면 빈 문자열 */
   displayRegionLabel: string
+  basis: MissingGpsGroupingBasis
   year: string
   month: string
   day: string
   slotIndex: number
   manualGroupId?: string
   manualGroupTitle?: string
+}
+
+export interface GroupingPolicyOptions {
+  missingGpsGroupingBasis?: MissingGpsGroupingBasis
 }
 
 function getPhotoRegionName(photo: Photo): string {
@@ -52,6 +61,53 @@ function getPhotoDay(photo: Photo): string {
   return photo.capturedAt?.day ?? '00'
 }
 
+function getMonthWeekSegment(photo: Photo): string {
+  const day = Number.parseInt(getPhotoDay(photo), 10)
+
+  if (!Number.isFinite(day) || day <= 0) {
+    return 'week0'
+  }
+
+  return `week${Math.floor((day - 1) / 7) + 1}`
+}
+
+function resolveGroupingBasis(
+  photo: Photo,
+  options: GroupingPolicyOptions
+): MissingGpsGroupingBasis {
+  if (photo.gps) {
+    return 'month'
+  }
+
+  return (
+    photo.missingGpsGroupingBasis ??
+    options.missingGpsGroupingBasis ??
+    defaultMissingGpsGroupingBasis
+  )
+}
+
+function getPhotoBucketDay(
+  photo: Photo,
+  basis: MissingGpsGroupingBasis
+): string {
+  switch (basis) {
+    case 'day':
+      return getPhotoDay(photo)
+    case 'week':
+      return getMonthWeekSegment(photo)
+    case 'month':
+    default:
+      return '00'
+  }
+}
+
+function getPhotoPeriodId(
+  photo: Photo,
+  basis: MissingGpsGroupingBasis
+): string {
+  return [getPhotoYearMonthId(photo), getPhotoBucketDay(photo, basis)].join('|')
+}
+
 function buildGroupDisplayTitle(seed: GroupSeed): string {
   if (seed.manualGroupTitle) {
     return seed.manualGroupTitle
@@ -66,6 +122,7 @@ function buildGroupKey(seed: GroupSeed): string {
     `region=${encodeURIComponent(seed.regionName)}`,
     `year=${seed.year}`,
     `month=${seed.month}`,
+    `basis=${seed.basis}`,
     `day=${seed.day}`,
     `slot=${seed.slotIndex}`
   ]
@@ -77,7 +134,11 @@ function buildGroupKey(seed: GroupSeed): string {
   return baseKey.join('|')
 }
 
-function finalizeGroupSeed(photos: Photo[], seed: GroupSeed): GroupSeed {
+function finalizeGroupSeed(
+  photos: Photo[],
+  seed: GroupSeed,
+  options: GroupingPolicyOptions
+): GroupSeed {
   const manual = photos.find(
     (photo) => photo.manualGroupId && photo.manualGroupTitle?.trim()
   )
@@ -107,7 +168,14 @@ function finalizeGroupSeed(photos: Photo[], seed: GroupSeed): GroupSeed {
     ...seed,
     year: earliest.year,
     month: earliest.month,
-    day: '00',
+    day: getPhotoBucketDay(
+      {
+        ...photos[0],
+        capturedAt: earliest,
+        missingGpsGroupingBasis: seed.basis
+      },
+      seed.basis
+    ),
     displayRegionLabel
   }
 }
@@ -125,7 +193,8 @@ function comparePhotosByTimeline(left: Photo, right: Photo): number {
 
 function shouldStartNewGroup(
   previousPhoto: Photo | undefined,
-  nextPhoto: Photo
+  nextPhoto: Photo,
+  options: GroupingPolicyOptions
 ): boolean {
   if (!previousPhoto) {
     return true
@@ -137,7 +206,15 @@ function shouldStartNewGroup(
   if (
     previousUsable &&
     nextUsable &&
-    getPhotoYearMonthId(previousPhoto) !== getPhotoYearMonthId(nextPhoto)
+    (
+      resolveGroupingBasis(previousPhoto, options) !==
+        resolveGroupingBasis(nextPhoto, options) ||
+      getPhotoPeriodId(
+        previousPhoto,
+        resolveGroupingBasis(previousPhoto, options)
+      ) !==
+        getPhotoPeriodId(nextPhoto, resolveGroupingBasis(nextPhoto, options))
+    )
   ) {
     return true
   }
@@ -149,7 +226,10 @@ function shouldStartNewGroup(
   return false
 }
 
-export function groupPhotosByPolicy(photos: Photo[]): PhotoGroupBucket[] {
+export function groupPhotosByPolicy(
+  photos: Photo[],
+  options: GroupingPolicyOptions = {}
+): PhotoGroupBucket[] {
   const photosByRegion = new Map<string, Photo[]>()
 
   for (const photo of photos) {
@@ -169,9 +249,9 @@ export function groupPhotosByPolicy(photos: Photo[]): PhotoGroupBucket[] {
     let slotIndex = 0
 
     for (const photo of sortedPhotos) {
-      if (shouldStartNewGroup(currentPhotos.at(-1), photo)) {
+      if (shouldStartNewGroup(currentPhotos.at(-1), photo, options)) {
         if (currentSeed && currentPhotos.length > 0) {
-          const finalizedSeed = finalizeGroupSeed(currentPhotos, currentSeed)
+          const finalizedSeed = finalizeGroupSeed(currentPhotos, currentSeed, options)
 
           buckets.push({
             groupKey: buildGroupKey(finalizedSeed),
@@ -181,12 +261,14 @@ export function groupPhotosByPolicy(photos: Photo[]): PhotoGroupBucket[] {
         }
 
         slotIndex += 1
+        const basis = resolveGroupingBasis(photo, options)
         currentSeed = {
           regionName,
           displayRegionLabel: getAutoGroupDisplayRegionLabel(photo),
+          basis,
           year: getPhotoYear(photo),
           month: getPhotoMonth(photo),
-          day: getPhotoDay(photo),
+          day: getPhotoBucketDay(photo, basis),
           slotIndex,
           manualGroupId: photo.manualGroupId,
           manualGroupTitle: photo.manualGroupTitle
@@ -198,7 +280,7 @@ export function groupPhotosByPolicy(photos: Photo[]): PhotoGroupBucket[] {
     }
 
     if (currentSeed && currentPhotos.length > 0) {
-      const finalizedSeed = finalizeGroupSeed(currentPhotos, currentSeed)
+      const finalizedSeed = finalizeGroupSeed(currentPhotos, currentSeed, options)
 
       buckets.push({
         groupKey: buildGroupKey(finalizedSeed),

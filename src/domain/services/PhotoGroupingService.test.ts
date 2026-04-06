@@ -12,6 +12,8 @@ function createPhoto(overrides: Partial<Photo> & Pick<Photo, 'id' | 'sourceFileN
     capturedAt: overrides.capturedAt,
     capturedAtSource: overrides.capturedAtSource,
     gps: overrides.gps,
+    missingGpsCategory: overrides.missingGpsCategory,
+    missingGpsGroupingBasis: overrides.missingGpsGroupingBasis,
     regionName: overrides.regionName,
     outputRelativePath: overrides.outputRelativePath,
     thumbnailRelativePath: overrides.thumbnailRelativePath,
@@ -76,7 +78,7 @@ describe('PhotoGroupingService', () => {
     expect(groups[0]).toMatchObject({
       title: '',
       displayTitle: '',
-      groupKey: 'group|region=base|year=2026|month=04|day=00|slot=1'
+      groupKey: 'group|region=base|year=2026|month=04|basis=month|day=00|slot=1'
     })
   })
 
@@ -153,5 +155,127 @@ describe('PhotoGroupingService', () => {
       },
       representativeThumbnailRelativePath: 'thumb-2.webp'
     })
+  })
+
+  it('splits missing-gps photos by month-week when requested', () => {
+    const groups = createPhotoGroups([
+      createPhoto({
+        id: 'photo-1',
+        sourceFileName: 'IMG_0101.JPG',
+        regionName: 'base',
+        missingGpsCategory: 'missing-original-gps',
+        missingGpsGroupingBasis: 'week',
+        capturedAt: {
+          iso: '2026-04-03T08:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '080000'
+        }
+      }),
+      createPhoto({
+        id: 'photo-2',
+        sourceFileName: 'IMG_0102.JPG',
+        regionName: 'base',
+        missingGpsCategory: 'missing-original-gps',
+        missingGpsGroupingBasis: 'week',
+        capturedAt: {
+          iso: '2026-04-10T08:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '10',
+          time: '080000'
+        }
+      })
+    ])
+
+    expect(groups).toHaveLength(2)
+    expect(groups.map((group) => group.groupKey)).toEqual([
+      'group|region=base|year=2026|month=04|basis=week|day=week1|slot=1',
+      'group|region=base|year=2026|month=04|basis=week|day=week2|slot=2'
+    ])
+  })
+
+  it('splits missing-gps photos by day when requested', () => {
+    const groups = createPhotoGroups([
+      createPhoto({
+        id: 'photo-1',
+        sourceFileName: 'IMG_0201.JPG',
+        regionName: 'base',
+        missingGpsCategory: 'missing-original-gps',
+        missingGpsGroupingBasis: 'day',
+        capturedAt: {
+          iso: '2026-04-03T08:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '080000'
+        }
+      }),
+      createPhoto({
+        id: 'photo-2',
+        sourceFileName: 'IMG_0202.JPG',
+        regionName: 'base',
+        missingGpsCategory: 'missing-original-gps',
+        missingGpsGroupingBasis: 'day',
+        capturedAt: {
+          iso: '2026-04-04T08:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '04',
+          time: '080000'
+        }
+      })
+    ])
+
+    expect(groups).toHaveLength(2)
+    expect(groups.map((group) => group.groupKey)).toEqual([
+      'group|region=base|year=2026|month=04|basis=day|day=03|slot=1',
+      'group|region=base|year=2026|month=04|basis=day|day=04|slot=2'
+    ])
+  })
+
+  it('keeps gps photos monthly even when missing-gps basis is day', () => {
+    const groups = createPhotoGroups([
+      createPhoto({
+        id: 'photo-1',
+        sourceFileName: 'IMG_0301.JPG',
+        regionName: 'seoul',
+        missingGpsGroupingBasis: 'day',
+        capturedAt: {
+          iso: '2026-04-03T08:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '080000'
+        },
+        gps: {
+          latitude: 37.5,
+          longitude: 127
+        }
+      }),
+      createPhoto({
+        id: 'photo-2',
+        sourceFileName: 'IMG_0302.JPG',
+        regionName: 'seoul',
+        missingGpsGroupingBasis: 'day',
+        capturedAt: {
+          iso: '2026-04-20T08:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '20',
+          time: '080000'
+        },
+        gps: {
+          latitude: 37.5,
+          longitude: 127
+        }
+      })
+    ])
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.groupKey).toBe(
+      'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1'
+    )
   })
 })

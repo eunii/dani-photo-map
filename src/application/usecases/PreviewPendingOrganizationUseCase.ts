@@ -131,7 +131,8 @@ export class PreviewPendingOrganizationUseCase {
           photoId: `preview-photo-${index + 1}`,
           sourcePath,
           sourceFileName: getPathBaseName(sourcePath)
-        }
+        },
+        validatedCommand.missingGpsGroupingBasis
       )
 
       if (candidatePhoto) {
@@ -308,7 +309,8 @@ export class PreviewPendingOrganizationUseCase {
   }
 
   private async prepareCandidatePhoto(
-    context: PreviewPhotoContext
+    context: PreviewPhotoContext,
+    missingGpsGroupingBasis: PreviewPendingOrganizationCommand['missingGpsGroupingBasis']
   ): Promise<Photo | null> {
     const metadata = await this.readMetadataSafely(context.sourcePath)
     const sha256 = await this.createSha256Safely(context.sourcePath)
@@ -333,6 +335,9 @@ export class PreviewPendingOrganizationUseCase {
       gps: metadata.gps,
       locationSource: metadata.gps ? 'exif' : 'none',
       missingGpsCategory: metadata.missingGpsCategory,
+      missingGpsGroupingBasis: metadata.gps
+        ? undefined
+        : missingGpsGroupingBasis,
       regionName,
       isDuplicate: false,
       metadataIssues: metadata.metadataIssues ?? []
@@ -416,7 +421,8 @@ export class PreviewPendingOrganizationUseCase {
     storedIndex: LibraryIndex | null
   ): LibraryIndex | null {
     const rebuiltIndex = rebuildLibraryIndexFromExistingOutput(
-      existingOutputSnapshot
+      existingOutputSnapshot,
+      storedIndex
     )
 
     if (!rebuiltIndex) {

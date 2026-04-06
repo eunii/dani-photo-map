@@ -215,7 +215,7 @@ describe('UpdatePhotoGroupUseCase', () => {
 
     const updatedIndex = await useCase.execute({
       outputRoot: 'C:/photos/output',
-      groupId: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
+      groupId: 'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1',
       title: '서울 산책',
       companions: ['Alice']
     })

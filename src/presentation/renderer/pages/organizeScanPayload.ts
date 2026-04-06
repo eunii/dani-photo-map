@@ -2,6 +2,7 @@ import type {
   PreviewPendingOrganizationResult,
   ScanPhotoLibraryRequest
 } from '@shared/types/preload'
+import type { MissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
 
 export interface OrganizeCustomSplitInput {
   id: string
@@ -10,6 +11,7 @@ export interface OrganizeCustomSplitInput {
 }
 
 export interface OrganizeScanFormInputs {
+  missingGpsGroupingBasis: MissingGpsGroupingBasis
   groupTitleInputs: Record<string, string>
   groupCompanionsInputs: Record<string, string>
   groupNotesInputs: Record<string, string>
@@ -23,12 +25,14 @@ export function buildOrganizeScanPayload(
   inputs: OrganizeScanFormInputs
 ): Pick<
   ScanPhotoLibraryRequest,
+  | 'missingGpsGroupingBasis'
   | 'groupMetadataOverrides'
   | 'pendingGroupAssignments'
   | 'pendingCustomGroupSplits'
   | 'defaultTitleManualPhotoIds'
 > {
   const {
+    missingGpsGroupingBasis,
     groupTitleInputs,
     groupCompanionsInputs,
     groupNotesInputs,
@@ -106,6 +110,7 @@ export function buildOrganizeScanPayload(
   }
 
   return {
+    missingGpsGroupingBasis,
     groupMetadataOverrides,
     pendingGroupAssignments,
     pendingCustomGroupSplits,

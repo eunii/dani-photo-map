@@ -397,4 +397,46 @@ describe('PreviewPendingOrganizationUseCase', () => {
     expect(result.groups[0]?.suggestedTitles).toEqual(['서울 산책'])
     expect(dependencies.metadataReader.read).toHaveBeenCalledTimes(2)
   })
+
+  it('shows day-based preview paths for missing-gps photos when requested', async () => {
+    const dependencies = createDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_DAY.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      missingGpsCategory: 'missing-original-gps',
+      capturedAt: {
+        iso: '2026-04-10T08:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '10',
+        time: '080000'
+      }
+    })
+    dependencies.hasher.createSha256.mockResolvedValue('preview-day-hash')
+    dependencies.photoPreview.createDataUrl.mockResolvedValue(
+      'data:image/webp;base64,preview'
+    )
+    dependencies.existingOutputScanner.scan.mockResolvedValue({
+      outputRoot: 'C:/output',
+      photos: []
+    })
+    dependencies.libraryIndexStore.load.mockResolvedValue(null)
+
+    const useCase = new PreviewPendingOrganizationUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      missingGpsGroupingBasis: 'day'
+    })
+
+    expect(result.groups[0]?.groupKey).toBe(
+      'group|region=base|year=2026|month=04|basis=day|day=10|slot=1'
+    )
+    expect(result.groups[0]?.representativePhotos[0]?.outputRelativePath).toBe(
+      '2026/04/10/2026-04-10_080000_IMG_DAY.JPG'
+    )
+  })
 })

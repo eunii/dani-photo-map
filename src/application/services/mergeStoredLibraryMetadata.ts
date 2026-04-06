@@ -41,6 +41,8 @@ export function mergeStoredLibraryMetadata(
       locationSource: storedPhoto.locationSource ?? photo.locationSource,
       missingGpsCategory:
         storedPhoto.missingGpsCategory ?? photo.missingGpsCategory,
+      missingGpsGroupingBasis:
+        storedPhoto.missingGpsGroupingBasis ?? photo.missingGpsGroupingBasis,
       manualGroupId: storedPhoto.manualGroupId ?? photo.manualGroupId,
       manualGroupTitle: storedPhoto.manualGroupTitle ?? photo.manualGroupTitle,
       regionName: storedPhoto.regionName ?? photo.regionName,

@@ -4,6 +4,9 @@ import {
   LIBRARY_INDEX_VERSION
 } from '@domain/entities/LibraryIndex'
 import {
+  missingGpsGroupingBases
+} from '@domain/policies/MissingGpsGroupingBasis'
+import {
   missingGpsCategories,
   photoCapturedAtSources,
   photoLocationSources
@@ -41,6 +44,7 @@ export const photoSchema = z.object({
   gps: geoPointSchema.optional(),
   locationSource: z.enum(photoLocationSources).optional(),
   missingGpsCategory: z.enum(missingGpsCategories).optional(),
+  missingGpsGroupingBasis: z.enum(missingGpsGroupingBases).optional(),
   manualGroupId: z.string().min(1).optional(),
   manualGroupTitle: z.string().min(1).optional(),
   regionName: z.string().min(1).optional(),

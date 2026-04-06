@@ -1,3 +1,4 @@
+import type { MissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
 import type { GeoPoint } from '@domain/value-objects/GeoPoint'
 import type { PhotoTimestamp } from '@domain/value-objects/PhotoTimestamp'
 
@@ -37,6 +38,7 @@ export interface Photo {
   gps?: GeoPoint
   locationSource?: PhotoLocationSource
   missingGpsCategory?: MissingGpsCategory
+  missingGpsGroupingBasis?: MissingGpsGroupingBasis
   manualGroupId?: string
   manualGroupTitle?: string
   regionName?: string

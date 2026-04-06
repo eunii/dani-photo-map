@@ -1,5 +1,9 @@
 import type { Photo } from '@domain/entities/Photo'
 import {
+  defaultMissingGpsGroupingBasis,
+  type MissingGpsGroupingBasis
+} from '@domain/policies/MissingGpsGroupingBasis'
+import {
   defaultOrganizationRules,
   type OrganizationRules
 } from '@domain/policies/OrganizationRules'
@@ -113,6 +117,46 @@ function resolvePhotoRegionSegment(
   return photo.regionName ?? rules.unknownRegionLabel
 }
 
+function resolveMissingGpsGroupingBasis(
+  photo: Pick<Photo, 'gps' | 'missingGpsGroupingBasis'>
+): MissingGpsGroupingBasis {
+  if (photo.gps) {
+    return 'month'
+  }
+
+  return photo.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
+}
+
+function resolveMonthWeekSegment(
+  photo: Pick<Photo, 'capturedAt'>
+): string {
+  const day = Number.parseInt(photo.capturedAt?.day ?? '00', 10)
+
+  if (!Number.isFinite(day) || day <= 0) {
+    return 'week0'
+  }
+
+  return `week${Math.floor((day - 1) / 7) + 1}`
+}
+
+export function resolveMissingGpsOutputFolderSegment(
+  photo: Pick<Photo, 'capturedAt' | 'gps' | 'missingGpsGroupingBasis'>
+): string | null {
+  if (photo.gps) {
+    return null
+  }
+
+  switch (resolveMissingGpsGroupingBasis(photo)) {
+    case 'week':
+      return resolveMonthWeekSegment(photo)
+    case 'day':
+      return photo.capturedAt?.day ?? '00'
+    case 'month':
+    default:
+      return null
+  }
+}
+
 export function createOrganizedPhotoFileName(
   originalFileName: string,
   timestamp?: PhotoTimestamp,
@@ -169,11 +213,21 @@ export function buildPhotoOutputDirectoryRelativePath(
  * 라벨이 `unknownRegionLabel`(base)이면 `year/month`만 (중간 폴더 생략).
  */
 export function buildScanOutputDirectoryRelativePath(
-  photo: Pick<Photo, 'capturedAt'>,
+  photo: Pick<Photo, 'capturedAt' | 'gps' | 'missingGpsGroupingBasis'>,
   groupFileLabel: string,
   rules: OrganizationRules
 ): string {
   const safeTimestamp = getSafeTimestamp(photo.capturedAt)
+  const missingGpsFolderSegment = resolveMissingGpsOutputFolderSegment(photo)
+
+  if (missingGpsFolderSegment) {
+    return [safeTimestamp.year, safeTimestamp.month, missingGpsFolderSegment].join('/')
+  }
+
+  if (!photo.gps) {
+    return [safeTimestamp.year, safeTimestamp.month].join('/')
+  }
+
   const segment = sanitizeGroupDisplayTitleForFileName(groupFileLabel)
 
   if (segment === rules.unknownRegionLabel) {
@@ -188,7 +242,10 @@ export function buildScanOutputDirectoryRelativePath(
  * 파일명은 `YYYY-MM-DD_HHMMSS_원본파일명`(충돌 시 `_001` 등).
  */
 export function buildScanPhotoOutputRelativePath(
-  photo: Pick<Photo, 'capturedAt' | 'sourceFileName'>,
+  photo: Pick<
+    Photo,
+    'capturedAt' | 'sourceFileName' | 'gps' | 'missingGpsGroupingBasis'
+  >,
   groupFileLabel: string,
   rules: OrganizationRules,
   nameCollisionSuffix: string

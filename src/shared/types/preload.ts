@@ -4,6 +4,7 @@ import type {
   InBatchDuplicateDetail
 } from '@application/dto/ScanPhotoLibraryResult'
 import type { MissingGpsCategory } from '@domain/entities/Photo'
+import type { MissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
 
 export type { ScanPhotoLibraryProgressPayload }
 export type { ExistingOutputSkipDetail, InBatchDuplicateDetail }
@@ -21,6 +22,7 @@ export interface DirectorySelectionOptions {
 export interface ScanPhotoLibraryRequest {
   sourceRoot: string
   outputRoot: string
+  missingGpsGroupingBasis?: MissingGpsGroupingBasis
   groupMetadataOverrides?: Array<{
     groupKey: string
     title: string
@@ -52,6 +54,7 @@ export interface LoadLibraryIndexRequest {
 export interface PreviewPendingOrganizationRequest {
   sourceRoot: string
   outputRoot: string
+  missingGpsGroupingBasis?: MissingGpsGroupingBasis
 }
 
 export type LibraryIndexLoadSource = 'merged' | 'fallback'

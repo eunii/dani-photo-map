@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
+import {
+  defaultMissingGpsGroupingBasis,
+  type MissingGpsGroupingBasis
+} from '@domain/policies/MissingGpsGroupingBasis'
 import type {
   PendingOrganizationPreviewPhoto,
   PreviewPendingOrganizationResult,
@@ -27,6 +31,14 @@ const OUTPUT_DIALOG_OPTIONS = {
 
 const EMPTY_GROUP_ASSIGNMENTS: Record<string, string> = {}
 const EMPTY_CUSTOM_SPLITS: Record<string, OrganizeCustomSplitInput[]> = {}
+const MISSING_GPS_GROUPING_OPTIONS: Array<{
+  value: MissingGpsGroupingBasis
+  label: string
+}> = [
+  { value: 'month', label: '월별' },
+  { value: 'week', label: '주별' },
+  { value: 'day', label: '일별' }
+]
 
 function fileUrlFromAbsolutePath(absolutePath: string): string {
   const normalized = normalizePathSeparators(absolutePath)
@@ -148,10 +160,33 @@ function getAssignmentModeDescription(
 ): string | null {
   switch (group.assignmentMode) {
     case 'auto-capture':
-      return '자동으로 캡처 폴더로 분리됩니다.'
+      return '자동 그룹으로 분리됩니다.'
     case 'new-group':
     default:
       return null
+  }
+}
+
+function formatMissingGpsGroupingBasisLabel(
+  basis: MissingGpsGroupingBasis
+): string {
+  return (
+    MISSING_GPS_GROUPING_OPTIONS.find((option) => option.value === basis)?.label ??
+    '월별'
+  )
+}
+
+function formatMissingGpsFolderPattern(
+  basis: MissingGpsGroupingBasis
+): string {
+  switch (basis) {
+    case 'week':
+      return 'year/month/weekN'
+    case 'day':
+      return 'year/month/day'
+    case 'month':
+    default:
+      return 'year/month'
   }
 }
 
@@ -234,6 +269,7 @@ function effectiveGroupTitle(
 function buildEffectiveOrganizeInputs(
   groups: PreviewPendingOrganizationResult['groups'],
   inputs: {
+    missingGpsGroupingBasis: MissingGpsGroupingBasis
     groupTitleInputs: Record<string, string>
     groupCompanionsInputs: Record<string, string>
     groupNotesInputs: Record<string, string>
@@ -249,6 +285,7 @@ function buildEffectiveOrganizeInputs(
   }
 
   return {
+    missingGpsGroupingBasis: inputs.missingGpsGroupingBasis,
     groupTitleInputs,
     groupCompanionsInputs: inputs.groupCompanionsInputs,
     groupNotesInputs: inputs.groupNotesInputs,
@@ -306,6 +343,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
   const [summary, setSummary] = useState<ScanPhotoLibrarySummary | null>(null)
   const [previewResult, setPreviewResult] =
     useState<PreviewPendingOrganizationResult | null>(null)
+  const [missingGpsGroupingBasis, setMissingGpsGroupingBasis] =
+    useState<MissingGpsGroupingBasis>(defaultMissingGpsGroupingBasis)
   const [groupTitleInputs, setGroupTitleInputs] = useState<
     Record<string, string>
   >({})
@@ -691,7 +730,9 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     }
   }
 
-  async function handlePreview(): Promise<void> {
+  async function handlePreview(
+    basis: MissingGpsGroupingBasis = missingGpsGroupingBasis
+  ): Promise<void> {
     if (!sourceRoot || !outputRoot) {
       setErrorMessage('원본 사진 폴더와 출력 폴더를 먼저 선택하세요.')
       return
@@ -703,7 +744,8 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     try {
       const nextPreview = await window.photoApp.previewPendingOrganization({
         sourceRoot,
-        outputRoot
+        outputRoot,
+        missingGpsGroupingBasis: basis
       })
 
       setPreviewResult(nextPreview)
@@ -772,6 +814,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
     }
 
     const effectiveInputs = buildEffectiveOrganizeInputs(previewResult.groups, {
+      missingGpsGroupingBasis,
       groupTitleInputs,
       groupCompanionsInputs,
       groupNotesInputs
@@ -894,6 +937,7 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
       previewResult,
       includedGroupKeySet,
       buildEffectiveOrganizeInputs(previewResult.groups, {
+        missingGpsGroupingBasis,
         groupTitleInputs,
         groupCompanionsInputs,
         groupNotesInputs
@@ -992,6 +1036,55 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
           </div>
         </section>
       </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold text-slate-900">
+              GPS 없는 사진 그룹 기준
+            </h2>
+            <p className="text-sm text-slate-600">
+              GPS 없는 사진만 선택한 기준으로 추천하고 저장합니다. GPS 있는 사진은
+              계속 월별로 유지됩니다.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {MISSING_GPS_GROUPING_OPTIONS.map((option) => {
+              const isSelected = missingGpsGroupingBasis === option.value
+
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`rounded-full border px-3 py-1.5 text-sm font-medium ${
+                    isSelected
+                      ? 'border-blue-600 bg-blue-50 text-blue-700'
+                      : 'border-slate-300 bg-white text-slate-700'
+                  }`}
+                  disabled={isLoadingPreview || savePipelineBusy}
+                  onClick={() => {
+                    if (option.value === missingGpsGroupingBasis) {
+                      return
+                    }
+
+                    setMissingGpsGroupingBasis(option.value)
+
+                    if (previewResult && sourceRoot && outputRoot) {
+                      void handlePreview(option.value)
+                    }
+                  }}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-xs text-slate-500">
+            실제 폴더: `{formatMissingGpsFolderPattern(missingGpsGroupingBasis)}`.
+            주별은 `week1`, `week2` 식으로 월 안에서 나뉩니다.
+          </p>
+        </div>
+      </section>
 
       <div className="flex flex-wrap items-center gap-3">
         {!previewResult ? (
@@ -1383,6 +1476,13 @@ export function OrganizePage({ onNavigateToBrowse }: OrganizePageProps) {
                             사진 {group.photoCount}장
                             {group.representativeGps ? ' · GPS 기반 그룹' : ' · GPS 없음'}
                           </p>
+                          {!group.representativeGps ? (
+                            <p className="text-xs text-slate-500">
+                              현재 기준: {formatMissingGpsGroupingBasisLabel(missingGpsGroupingBasis)}
+                              {' · '}
+                              실제 폴더: {formatMissingGpsFolderPattern(missingGpsGroupingBasis)}
+                            </p>
+                          ) : null}
                           <div className="flex flex-wrap gap-2">
                             {getMissingGpsCategoryLabel(group.missingGpsCategory) ? (
                               <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">

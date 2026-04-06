@@ -140,6 +140,7 @@ export class ScanPhotoLibraryUseCase {
           sourcePath,
           sourceFileName: getPathBaseName(sourcePath)
         },
+        validatedCommand.missingGpsGroupingBasis,
         issues
       )
 
@@ -251,6 +252,7 @@ export class ScanPhotoLibraryUseCase {
 
   private async preparePhotoRecord(
     context: ScanPhotoContext,
+    missingGpsGroupingBasis: ScanPhotoLibraryCommand['missingGpsGroupingBasis'],
     issues: ScanPhotoLibraryIssue[]
   ): Promise<PreparedPhotoRecord | null> {
     const metadata = await this.readMetadataSafely(context, issues)
@@ -280,6 +282,9 @@ export class ScanPhotoLibraryUseCase {
       gps: metadata.gps,
       locationSource: metadata.gps ? 'exif' : 'none',
       missingGpsCategory: metadata.missingGpsCategory,
+      missingGpsGroupingBasis: metadata.gps
+        ? undefined
+        : missingGpsGroupingBasis,
       regionName,
       isDuplicate: false,
       metadataIssues
@@ -626,7 +631,8 @@ export class ScanPhotoLibraryUseCase {
     }>
   ): Promise<LibraryIndex> {
     const rebuiltExistingIndex = rebuildLibraryIndexFromExistingOutput(
-      existingOutputSnapshot
+      existingOutputSnapshot,
+      storedIndex
     )
     const mergedBasePhotos = rebuiltExistingIndex?.photos ?? []
     const afterSplits = this.applyPendingCustomGroupSplits(

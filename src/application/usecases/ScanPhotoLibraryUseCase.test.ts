@@ -249,6 +249,42 @@ describe('ScanPhotoLibraryUseCase', () => {
     })
   })
 
+  it('stores missing-gps photos in weekly folders when requested', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_WEEK.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      missingGpsCategory: 'missing-original-gps',
+      capturedAt: {
+        iso: '2026-04-10T08:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '10',
+        time: '080000'
+      }
+    })
+    dependencies.hasher.createSha256.mockResolvedValue('week-hash')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      missingGpsGroupingBasis: 'week'
+    })
+
+    expect(getSavedIndex()?.photos[0]).toMatchObject({
+      missingGpsGroupingBasis: 'week',
+      outputRelativePath: '2026/04/week2/2026-04-10_080000_IMG_WEEK.JPG'
+    })
+    expect(getSavedIndex()?.groups[0]?.groupKey).toBe(
+      'group|region=base|year=2026|month=04|basis=week|day=week2|slot=1'
+    )
+  })
+
   it('applies provided group metadata overrides to newly organized groups', async () => {
     const { dependencies, getSavedIndex } = createUseCaseDependencies()
 
@@ -279,7 +315,8 @@ describe('ScanPhotoLibraryUseCase', () => {
       outputRoot: 'C:\\output',
       groupMetadataOverrides: [
         {
-          groupKey: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
+          groupKey:
+            'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1',
           title: '서울 산책',
           companions: ['Alice', ' Bob '],
           notes: '  봄 산책 메모  '
@@ -441,8 +478,9 @@ describe('ScanPhotoLibraryUseCase', () => {
       ],
       groups: [
         {
-          id: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
-          groupKey: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
+          id: 'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1',
+          groupKey:
+            'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1',
           title: '서울 산책',
           displayTitle: 'seoul',
           photoIds: ['stored-photo-1'],
@@ -467,8 +505,10 @@ describe('ScanPhotoLibraryUseCase', () => {
       outputRoot: 'C:\\output',
       pendingGroupAssignments: [
         {
-          groupKey: 'group|region=base|year=2026|month=04|day=00|slot=1',
-          targetGroupId: 'group|region=seoul|year=2026|month=04|day=00|slot=1'
+          groupKey:
+            'group|region=base|year=2026|month=04|basis=month|day=00|slot=1',
+          targetGroupId:
+            'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1'
         }
       ]
     })
@@ -522,13 +562,15 @@ describe('ScanPhotoLibraryUseCase', () => {
       outputRoot: 'C:\\output',
       pendingCustomGroupSplits: [
         {
-          groupKey: 'group|region=base|year=2026|month=04|day=00|slot=1',
+          groupKey:
+            'group|region=base|year=2026|month=04|basis=month|day=00|slot=1',
           splitId: 'split-a',
           title: '카페',
           photoIds: ['photo-1']
         },
         {
-          groupKey: 'group|region=base|year=2026|month=04|day=00|slot=1',
+          groupKey:
+            'group|region=base|year=2026|month=04|basis=month|day=00|slot=1',
           splitId: 'split-b',
           title: '실내',
           photoIds: ['photo-2']
@@ -658,14 +700,15 @@ describe('ScanPhotoLibraryUseCase', () => {
       outputRoot: 'C:\\output',
       groupMetadataOverrides: [
         {
-          groupKey: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
+          groupKey:
+            'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1',
           title: '동일제목',
           companions: [],
           notes: undefined
         },
         {
           groupKey:
-            'group|region=base|year=2026|month=04|day=00|slot=1',
+            'group|region=base|year=2026|month=04|basis=month|day=00|slot=1',
           title: '동일제목',
           companions: [],
           notes: undefined
@@ -721,14 +764,14 @@ describe('ScanPhotoLibraryUseCase', () => {
       groupMetadataOverrides: [
         {
           groupKey:
-            'group|region=base|year=2026|month=04|day=00|slot=1',
+            'group|region=base|year=2026|month=04|basis=month|day=00|slot=1',
           title: '무GPS동일제목',
           companions: [],
           notes: undefined
         },
         {
           groupKey:
-            'group|region=base|year=2026|month=05|day=00|slot=2',
+            'group|region=base|year=2026|month=05|basis=month|day=00|slot=2',
           title: '무GPS동일제목',
           companions: [],
           notes: undefined
@@ -786,7 +829,7 @@ describe('ScanPhotoLibraryUseCase', () => {
       sourceRoot: 'C:\\source',
       outputRoot: 'C:\\output',
       copyGroupKeysInThisRun: [
-        'group|region=seoul|year=2026|month=04|day=00|slot=1'
+        'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1'
       ]
     })
 
@@ -843,7 +886,7 @@ describe('ScanPhotoLibraryUseCase', () => {
         sourceRoot: 'C:\\source',
         outputRoot: 'C:\\output',
         copyGroupKeysInThisRun: [
-          'group|region=seoul|year=2026|month=04|day=00|slot=1'
+          'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1'
         ]
       },
       {
