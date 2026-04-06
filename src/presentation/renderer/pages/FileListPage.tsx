@@ -533,18 +533,18 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900">
           파일 목록
-        </h1>
+        </h2>
         <p className="text-sm text-slate-600">
           정리된 결과를 폴더별로 확인합니다.
         </p>
       </div>
 
       {sourceBadge ? (
-        <section className={`rounded-xl border px-4 py-3 text-sm ${sourceBadge.tone}`}>
+        <section className={`rounded-2xl border px-4 py-3 text-sm ${sourceBadge.tone}`}>
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full border border-current/20 bg-white/70 px-3 py-1 text-xs font-semibold">
               {sourceBadge.label}
@@ -555,14 +555,14 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
         </div>
       ) : null}
 
       <section className="space-y-3">
         {outputRoot ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
             <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
               전체 {totalCount}장
             </div>

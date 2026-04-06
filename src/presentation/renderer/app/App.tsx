@@ -48,6 +48,10 @@ export function App() {
     }
   }, [])
 
+  useEffect(() => {
+    window.scrollTo({ top: 0 })
+  }, [route])
+
   const routeTitle = useMemo(() => {
     if (route === 'organize') {
       return '정리'
@@ -72,7 +76,6 @@ export function App() {
     setRoute(nextRoute)
   }
 
-  const isBrowseRoute = route === 'browse'
   const navigationItems: Array<{ route: AppRoute; label: string }> = [
     { route: 'organize', label: '정리' },
     { route: 'files', label: '파일 목록' },
@@ -81,36 +84,32 @@ export function App() {
   ]
 
   return (
-    <main
-      className={`flex min-h-screen ${isBrowseRoute ? 'items-stretch p-4' : 'items-center justify-center p-8'}`}
-    >
-      <section
-        className={`w-full rounded-2xl border border-slate-200 bg-white shadow-sm ${
-          isBrowseRoute ? 'mx-auto max-w-[96vw] p-6' : 'max-w-7xl p-10'
-        }`}
-      >
-        <div className="space-y-6">
-          <header className="space-y-4">
-            <div className="space-y-1">
+    <main className="min-h-screen bg-slate-50 px-4 py-4 lg:px-5 lg:py-5">
+      <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[min(96vw,1600px)] flex-col rounded-2xl border border-slate-200 bg-white shadow-sm lg:min-h-[calc(100vh-2.5rem)]">
+        <div className="flex flex-1 flex-col gap-6 px-5 py-5 lg:px-8 lg:py-7">
+          <header className="space-y-4 border-b border-slate-100 pb-5">
+            <div className="space-y-1.5">
               <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
                 Dani Photo Map
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900 lg:text-3xl">
                 {routeTitle}
               </h1>
+              <p className="text-sm text-slate-500">
+                정리와 탐색은 같은 작업공간 안에서 이어집니다.
+              </p>
             </div>
 
-            <nav className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2">
+            <nav className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
               {navigationItems.map((item) => (
                 <button
                   key={item.route}
                   type="button"
-                  className={`rounded-xl px-4 py-2 text-sm font-medium ${
+                  aria-current={route === item.route ? 'page' : undefined}
+                  className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors min-w-[120px] ${
                     route === item.route
-                      ? 'bg-slate-900 text-white'
-                      : item.route === 'settings'
-                        ? 'bg-white text-slate-500'
-                        : 'bg-white text-slate-700'
+                      ? 'bg-slate-900 text-white shadow-sm'
+                      : 'bg-white text-slate-700 hover:bg-slate-100'
                   }`}
                   onClick={() => navigate(item.route)}
                 >
@@ -120,29 +119,27 @@ export function App() {
             </nav>
           </header>
 
-          <div>
-            <p className="text-sm text-slate-500">
-              정리와 탐색은 분리하고, 공통 경로는 설정에서 관리합니다.
-            </p>
+          <div className="flex-1">
+            {route === 'organize' ? (
+              <OrganizePage
+                onNavigateToBrowse={() => navigate('browse')}
+                onNavigateToSettings={() => navigate('settings')}
+              />
+            ) : route === 'files' ? (
+              <FileListPage onNavigateToSettings={() => navigate('settings')} />
+            ) : route === 'browse' ? (
+              <BrowsePage onNavigateToSettings={() => navigate('settings')} />
+            ) : (
+              <SettingsPage />
+            )}
           </div>
 
-          {route === 'organize' ? (
-            <OrganizePage
-              onNavigateToBrowse={() => navigate('browse')}
-              onNavigateToSettings={() => navigate('settings')}
-            />
-          ) : route === 'files' ? (
-            <FileListPage onNavigateToSettings={() => navigate('settings')} />
-          ) : route === 'browse' ? (
-            <BrowsePage onNavigateToSettings={() => navigate('settings')} />
-          ) : (
-            <SettingsPage />
-          )}
-
-          <p className="text-xs text-slate-500">
-            원본은 수정하지 않고, 정리 결과는 출력 폴더와
-            `.photo-organizer/index.json`에 저장됩니다.
-          </p>
+          <footer className="border-t border-slate-100 pt-4">
+            <p className="text-xs text-slate-500">
+              원본은 수정하지 않고, 정리 결과는 출력 폴더와
+              `.photo-organizer/index.json`에 저장됩니다.
+            </p>
+          </footer>
         </div>
       </section>
     </main>

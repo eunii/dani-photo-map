@@ -1,22 +1,6 @@
 import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 import type { GroupDetail } from '@shared/types/preload'
 
-export function getGpsBadge(photo: GroupDetail['photos'][number]): string {
-  if (photo.originalGps) {
-    return 'Exact GPS'
-  }
-
-  if (photo.gps && photo.locationSource === 'assigned-from-group') {
-    return 'Inferred GPS'
-  }
-
-  if (photo.gps) {
-    return 'GPS'
-  }
-
-  return 'No GPS'
-}
-
 interface GroupPhotoGridProps {
   group: GroupDetail
   outputRoot?: string
@@ -54,7 +38,7 @@ export function GroupPhotoGrid({
           <button
             type="button"
             key={photo.id}
-            className={`overflow-hidden rounded-2xl border bg-white text-left transition ${
+            className={`overflow-hidden rounded-t-xl rounded-b-none border bg-white text-left transition ${
               selectedPhotoId === photo.id
                 ? 'border-blue-400 ring-2 ring-blue-200'
                 : 'border-slate-200 hover:border-slate-300'
@@ -75,20 +59,10 @@ export function GroupPhotoGrid({
                 </div>
               )}
             </div>
-            <div className="space-y-2 p-2.5">
-              <p className="truncate text-xs font-medium text-slate-900">
+            <div className="px-1.5 py-1">
+              <p className="truncate text-[11px] leading-tight font-medium text-slate-900">
                 {photo.sourceFileName}
               </p>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                  {getGpsBadge(photo)}
-                </span>
-                {photo.regionName ? (
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-                    {photo.regionName}
-                  </span>
-                ) : null}
-              </div>
             </div>
           </button>
         )

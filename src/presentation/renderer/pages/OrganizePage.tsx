@@ -960,17 +960,17 @@ export function OrganizePage({
   }
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900">
           사진 정리 실행
-        </h1>
+        </h2>
         <p className="text-sm text-slate-600">
           원본 폴더를 스캔해 그룹별로 정리를 실행합니다.
         </p>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-slate-900">원본 사진 폴더</h2>
           <p className="min-h-12 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-600">
@@ -987,7 +987,7 @@ export function OrganizePage({
       </section>
 
       {!outputRoot ? (
-        <section className="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+        <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
               <h2 className="text-sm font-semibold text-slate-900">
@@ -1010,7 +1010,7 @@ export function OrganizePage({
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
         <div className="space-y-3">
           <div className="space-y-1">
             <h2 className="text-sm font-semibold text-slate-900">

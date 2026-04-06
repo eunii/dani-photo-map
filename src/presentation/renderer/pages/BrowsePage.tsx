@@ -6,10 +6,7 @@ import { MapPhotoPreviewOverlay } from '@presentation/renderer/components/map/Ma
 import { MapSearchBar } from '@presentation/renderer/components/map/MapSearchBar'
 import { PhotoGroupMap } from '@presentation/renderer/components/map/PhotoGroupMap'
 import { useDebouncedValue } from '@presentation/renderer/hooks/useDebouncedValue'
-import {
-  getLoadSourceBadge,
-  useOutputLibraryIndexPanel
-} from '@presentation/renderer/hooks/useOutputLibraryIndexPanel'
+import { useOutputLibraryIndexPanel } from '@presentation/renderer/hooks/useOutputLibraryIndexPanel'
 import { useBrowseMapStore } from '@presentation/renderer/store/useBrowseMapStore'
 import {
   buildMapGroupRecords,
@@ -27,11 +24,9 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
   const {
     outputRoot,
     libraryIndex,
-    loadSource,
     isLoadingIndex,
     errorMessage
   } = useOutputLibraryIndexPanel()
-  const sourceBadge = getLoadSourceBadge(loadSource)
   const searchQuery = useBrowseMapStore((state) => state.searchQuery)
   const quickFilter = useBrowseMapStore((state) => state.quickFilter)
   const dateRange = useBrowseMapStore((state) => state.dateRange)
@@ -163,35 +158,24 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
   )
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900">
           지도
-        </h1>
+        </h2>
         <p className="text-sm text-slate-600">
           그룹 단위로 사진을 탐색합니다.
         </p>
       </div>
 
-      {sourceBadge ? (
-        <section className={`rounded-2xl border px-4 py-3 text-sm ${sourceBadge.tone}`}>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-full border border-current/20 bg-white/70 px-3 py-1 text-xs font-semibold">
-              {sourceBadge.label}
-            </span>
-            <p>{sourceBadge.description}</p>
-          </div>
-        </section>
-      ) : null}
-
       {errorMessage ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
         </div>
       ) : null}
 
       {!outputRoot ? (
-        <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center">
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-base font-semibold text-slate-900">
             출력 폴더를 먼저 설정하세요.
           </p>
@@ -201,7 +185,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
           {onNavigateToSettings ? (
             <button
               type="button"
-              className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
               onClick={onNavigateToSettings}
             >
               설정으로 이동
@@ -210,7 +194,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
         </div>
       ) : (
         <section className="space-y-4">
-          <div className="space-y-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <MapSearchBar
               value={searchQuery}
               resultCount={filteredRecords.length}
@@ -254,8 +238,8 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
             ) : null}
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <div className="relative h-[78vh] min-h-[720px]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,560px)]">
+            <div className="relative h-[min(68vh,720px)] min-h-[560px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
               <PhotoGroupMap
                 sourceGroups={mapCanvasGroups}
                 markerGroups={markerGroups}

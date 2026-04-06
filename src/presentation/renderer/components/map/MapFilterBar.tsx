@@ -32,7 +32,7 @@ export function MapFilterBar({
   const hasRange = Boolean(dateRange.start || dateRange.end)
 
   return (
-    <div className="space-y-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
       <div className="flex flex-wrap gap-2">
         {QUICK_FILTER_LABELS.map((filter) => (
           <button
@@ -71,7 +71,7 @@ export function MapFilterBar({
                 start: event.target.value || undefined
               })
             }
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
           />
         </label>
         <label className="space-y-1">
@@ -85,7 +85,7 @@ export function MapFilterBar({
                 end: event.target.value || undefined
               })
             }
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
           />
         </label>
       </div>

@@ -92,7 +92,7 @@ export function MapPhotoPreviewOverlay({
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 bg-slate-950/35">
-      <div className="pointer-events-auto absolute inset-4 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+      <div className="pointer-events-auto absolute inset-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-900">
@@ -104,7 +104,7 @@ export function MapPhotoPreviewOverlay({
           </div>
           <button
             type="button"
-            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700"
             onClick={onClose}
           >
             닫기

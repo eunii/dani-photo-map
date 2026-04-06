@@ -22,6 +22,7 @@ export function MapPhotoSidebar({
   onPreviewPhoto
 }: MapPhotoSidebarProps) {
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | undefined>()
+  const [isFilteredGroupsExpanded, setIsFilteredGroupsExpanded] = useState(true)
 
   useEffect(() => {
     const nextDefaultPhotoId =
@@ -31,7 +32,7 @@ export function MapPhotoSidebar({
   }, [selectedGroup?.group.id, selectedGroup?.group.photos, selectedGroup?.group.representativePhotoId])
 
   return (
-    <aside className="flex h-[78vh] min-h-[720px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50">
+    <aside className="flex h-[min(68vh,720px)] min-h-[560px] min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 xl:min-w-[420px]">
       <div className="border-b border-slate-200 bg-white px-5 py-4">
         <p className="text-sm font-semibold text-slate-900">사진 미리보기</p>
         <p className="mt-1 text-xs text-slate-500">
@@ -42,7 +43,44 @@ export function MapPhotoSidebar({
       <div className="flex-1 overflow-y-auto p-5">
         {selectedGroup ? (
           <div className="space-y-5">
-            <section className="space-y-4 rounded-3xl bg-white p-4">
+            <section className="space-y-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-xl bg-white px-4 py-3 text-left"
+                aria-expanded={isFilteredGroupsExpanded}
+                aria-controls="filtered-groups-panel"
+                onClick={() =>
+                  setIsFilteredGroupsExpanded((expanded) => !expanded)
+                }
+              >
+                <span className="text-sm font-semibold text-slate-900">
+                  검색/필터 결과
+                </span>
+                <span className="text-xs text-slate-500">
+                  총 {filteredGroups.length}개 ·{' '}
+                  {isFilteredGroupsExpanded ? '접기' : '펼치기'}
+                </span>
+              </button>
+              {isFilteredGroupsExpanded ? (
+                <div
+                  id="filtered-groups-panel"
+                  className="grid grid-cols-3 gap-2 sm:grid-cols-4 2xl:grid-cols-5"
+                >
+                  {filteredGroups.slice(0, 8).map((record) => (
+                    <GroupPreviewCard
+                      key={record.group.id}
+                      record={record}
+                      outputRoot={outputRoot}
+                      selected={selectedGroup.group.id === record.group.id}
+                      onClick={onSelectGroup}
+                      compact
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </section>
+
+            <section className="space-y-4 rounded-2xl bg-white p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <h2 className="text-xl font-semibold text-slate-900">
@@ -84,28 +122,6 @@ export function MapPhotoSidebar({
               </div>
             </section>
 
-            <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-900">
-                  검색/필터 결과
-                </h3>
-                <span className="text-xs text-slate-500">
-                  총 {filteredGroups.length}개
-                </span>
-              </div>
-              <div className="grid gap-3">
-                {filteredGroups.slice(0, 8).map((record) => (
-                  <GroupPreviewCard
-                    key={record.group.id}
-                    record={record}
-                    outputRoot={outputRoot}
-                    selected={selectedGroup.group.id === record.group.id}
-                    onClick={onSelectGroup}
-                  />
-                ))}
-              </div>
-            </section>
-
             {unmappedGroups.length > 0 ? (
               <section className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -133,7 +149,7 @@ export function MapPhotoSidebar({
             ) : null}
           </div>
         ) : (
-          <div className="flex h-full min-h-80 items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white text-center">
+          <div className="flex h-full min-h-80 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white text-center">
             <div className="space-y-2">
               <p className="text-sm font-semibold text-slate-900">
                 그룹을 선택하면 사진이 오른쪽에 표시됩니다.

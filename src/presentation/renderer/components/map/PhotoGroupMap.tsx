@@ -594,10 +594,10 @@ export function PhotoGroupMap({
   ])
 
   return (
-    <div className="relative h-full overflow-hidden rounded-[28px] border border-slate-200 bg-slate-100">
+    <div className="relative h-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
       <div ref={containerRef} className="h-full w-full" />
 
-      <div className="pointer-events-none absolute left-4 top-4 rounded-2xl bg-slate-950/80 px-4 py-3 text-xs text-white shadow-lg">
+      <div className="pointer-events-none absolute left-4 top-4 rounded-xl bg-slate-950/80 px-4 py-3 text-xs text-white shadow-lg">
         <p className="font-semibold">Map-based Photo Group Explorer</p>
         <p className="mt-1 text-slate-200">
           그룹 핀, 클러스터, bounds 기반 샘플링으로 탐색합니다.
@@ -606,7 +606,7 @@ export function PhotoGroupMap({
 
       {mapErrorMessage ? (
         <div className="absolute inset-0 flex items-center justify-center bg-white/95">
-          <div className="max-w-sm rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-center">
+          <div className="max-w-sm rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-center">
             <p className="text-sm font-semibold text-amber-900">
               지도를 불러오지 못했습니다.
             </p>

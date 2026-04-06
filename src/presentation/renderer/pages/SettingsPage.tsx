@@ -16,8 +16,8 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <h2 className="text-3xl font-semibold tracking-tight text-slate-900">설정</h2>
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900">출력 폴더 설정</h2>
         <p className="text-sm text-slate-600">
           공통 출력 폴더는 여기서만 관리합니다.
         </p>
