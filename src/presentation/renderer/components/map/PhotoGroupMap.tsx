@@ -8,7 +8,8 @@ import type {
 import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 
 interface PhotoGroupMapProps {
-  groups: MapGroupRecord[]
+  sourceGroups: MapGroupRecord[]
+  markerGroups: MapGroupRecord[]
   outputRoot?: string
   selectedGroupId?: string
   unclusteredMinZoom: number
@@ -170,7 +171,8 @@ function fitToGroups(map: maplibregl.Map, groups: MapGroupRecord[]): void {
 }
 
 export function PhotoGroupMap({
-  groups,
+  sourceGroups,
+  markerGroups,
   outputRoot,
   selectedGroupId,
   unclusteredMinZoom,
@@ -184,14 +186,17 @@ export function PhotoGroupMap({
   const hasInitialFitRef = useRef(false)
   const onSelectGroupRef = useRef(onSelectGroup)
   const onViewportChangeRef = useRef(onViewportChange)
-  const featureCollection = useMemo(() => buildFeatureCollection(groups), [groups])
-  const groupsRef = useRef<MapGroupRecord[]>(groups)
+  const featureCollection = useMemo(
+    () => buildFeatureCollection(sourceGroups),
+    [sourceGroups]
+  )
+  const groupsRef = useRef<MapGroupRecord[]>(sourceGroups)
   const featureCollectionRef = useRef(featureCollection)
   const lastSelectedGroupIdRef = useRef<string | undefined>(undefined)
   const unclusteredMinZoomRef = useRef(unclusteredMinZoom)
   const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null)
 
-  groupsRef.current = groups
+  groupsRef.current = sourceGroups
   featureCollectionRef.current = featureCollection
   onSelectGroupRef.current = onSelectGroup
   onViewportChangeRef.current = onViewportChange
@@ -206,19 +211,17 @@ export function PhotoGroupMap({
   }
 
   function updateMarkerPresentation(): void {
-    const currentZoom = mapRef.current?.getZoom() ?? DEFAULT_ZOOM
-    const shouldShowMarkers = currentZoom >= unclusteredMinZoomRef.current
-
     for (const binding of markersRef.current) {
       const isSelected = binding.groupId === selectedGroupId
 
       binding.element.className = [
-        'overflow-hidden rounded-xl border-2 bg-white shadow-lg transition-all',
+        'relative flex items-center justify-center overflow-hidden rounded-xl border-2 bg-white shadow-lg transition-all',
         isSelected
-          ? 'border-blue-500 ring-4 ring-blue-200 scale-105'
+          ? 'border-blue-500 ring-4 ring-blue-200'
           : 'border-white hover:border-slate-200'
       ].join(' ')
-      binding.element.style.display = shouldShowMarkers ? 'block' : 'none'
+      binding.element.style.display = 'block'
+      binding.element.style.zIndex = isSelected ? '3' : '2'
     }
   }
 
@@ -226,8 +229,10 @@ export function PhotoGroupMap({
     const button = document.createElement('button')
     button.type = 'button'
     button.setAttribute('aria-label', group.displayTitle)
-    button.style.width = '46px'
-    button.style.height = '46px'
+    button.style.width = '58px'
+    button.style.height = '58px'
+    button.style.transformOrigin = 'center center'
+    button.style.backgroundColor = '#e2e8f0'
 
     const thumbnailUrl = outputRoot
       ? toOutputFileUrl(
@@ -238,23 +243,48 @@ export function PhotoGroupMap({
         )
       : undefined
 
+    const placeholder = document.createElement('div')
+    placeholder.className =
+      'flex h-full w-full items-center justify-center bg-slate-200 text-[10px] font-semibold tracking-wide text-slate-700'
+    placeholder.textContent = 'PHOTO'
+    button.appendChild(placeholder)
+
     if (thumbnailUrl) {
       const image = document.createElement('img')
       image.src = thumbnailUrl
       image.alt = group.displayTitle
-      image.className = 'h-full w-full object-cover'
+      image.className = 'absolute inset-0 h-full w-full object-cover'
       image.loading = 'lazy'
+      image.addEventListener('load', () => {
+        placeholder.style.display = 'none'
+      })
+      image.addEventListener('error', () => {
+        image.remove()
+        placeholder.style.display = 'flex'
+      })
       button.appendChild(image)
-    } else {
-      const placeholder = document.createElement('div')
-      placeholder.className =
-        'flex h-full w-full items-center justify-center bg-slate-200 text-[10px] font-medium text-slate-600'
-      placeholder.textContent = 'PHOTO'
-      button.appendChild(placeholder)
     }
 
     button.addEventListener('click', () => {
       onSelectGroupRef.current(group.group.id)
+
+      if (!group.pinLocation) {
+        return
+      }
+
+      const map = mapRef.current
+
+      if (!map) {
+        return
+      }
+
+      map.stop()
+      map.easeTo({
+        center: [group.pinLocation.longitude, group.pinLocation.latitude],
+        zoom: Math.min(map.getZoom() + 1.25, 17),
+        duration: 450,
+        essential: true
+      })
     })
 
     return button
@@ -408,6 +438,10 @@ export function PhotoGroupMap({
           }, 120)
         })
 
+        map.on('zoom', () => {
+          updateMarkerPresentation()
+        })
+
         updateMarkerPresentation()
 
         onViewportChangeRef.current({
@@ -459,7 +493,7 @@ export function PhotoGroupMap({
     source.setData(featureCollection)
     clearMarkers()
 
-    for (const group of groups) {
+    for (const group of markerGroups) {
       if (!group.pinLocation) {
         continue
       }
@@ -467,7 +501,7 @@ export function PhotoGroupMap({
       const markerElement = buildMarkerElement(group)
       const marker = new maplibregl.Marker({
         element: markerElement,
-        anchor: 'bottom'
+        anchor: 'center'
       })
         .setLngLat([group.pinLocation.longitude, group.pinLocation.latitude])
         .addTo(map)
@@ -481,16 +515,15 @@ export function PhotoGroupMap({
 
     updateMarkerPresentation()
 
-    if (!hasInitialFitRef.current) {
-      fitToGroups(map, groups)
-      hasInitialFitRef.current = true
-      return
-    }
+    window.requestAnimationFrame(() => {
+      updateMarkerPresentation()
+    })
 
-    if (groups.length === 1) {
-      fitToGroups(map, groups)
+    if (!hasInitialFitRef.current) {
+      fitToGroups(map, sourceGroups)
+      hasInitialFitRef.current = true
     }
-  }, [featureCollection, groups, outputRoot, selectedGroupId])
+  }, [featureCollection, markerGroups, outputRoot, sourceGroups])
 
   useEffect(() => {
     const map = mapRef.current
@@ -510,9 +543,13 @@ export function PhotoGroupMap({
     updateMarkerPresentation()
   }, [unclusteredMinZoom])
 
+  useEffect(() => {
+    updateMarkerPresentation()
+  }, [selectedGroupId])
+
   const selectedGroup = useMemo(
-    () => groups.find((group) => group.group.id === selectedGroupId),
-    [groups, selectedGroupId]
+    () => sourceGroups.find((group) => group.group.id === selectedGroupId),
+    [sourceGroups, selectedGroupId]
   )
 
   useEffect(() => {
@@ -537,14 +574,18 @@ export function PhotoGroupMap({
 
     lastSelectedGroupIdRef.current = selectedGroupId
     updateMarkerPresentation()
+    map.stop()
 
     map.easeTo({
       center: [
         selectedGroup.pinLocation.longitude,
         selectedGroup.pinLocation.latitude
       ],
-      zoom: Math.max(map.getZoom(), 12),
-      duration: 650
+      zoom: 12,
+      bearing: 0,
+      pitch: 0,
+      duration: 650,
+      essential: true
     })
   }, [
     selectedGroup?.pinLocation?.latitude,
@@ -577,7 +618,7 @@ export function PhotoGroupMap({
         </div>
       ) : null}
 
-      {groups.length === 0 ? (
+      {sourceGroups.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/10">
           <div className="rounded-2xl bg-white/95 px-6 py-5 text-center shadow-sm">
             <p className="text-sm font-semibold text-slate-900">

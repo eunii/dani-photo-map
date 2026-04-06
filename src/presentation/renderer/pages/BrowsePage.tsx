@@ -12,7 +12,9 @@ import {
 } from '@presentation/renderer/hooks/useOutputLibraryIndexPanel'
 import { useBrowseMapStore } from '@presentation/renderer/store/useBrowseMapStore'
 import {
-  deriveMapPageState,
+  buildMapGroupRecords,
+  buildRepresentativeMarkerGroups,
+  filterMapGroupRecords,
   getMapZoomPolicy,
   getQuickFilterDateRange
 } from '@presentation/renderer/view-models/map/mapPageSelectors'
@@ -44,46 +46,42 @@ export function BrowsePage() {
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 220)
   const [previewPhotoId, setPreviewPhotoId] = useState<string | undefined>()
 
-  const derivedState = useMemo(
+  const allMapRecords = useMemo(
+    () => buildMapGroupRecords(libraryIndex?.groups ?? []),
+    [libraryIndex?.groups]
+  )
+  const filteredRecords = useMemo(
     () =>
-      deriveMapPageState(libraryIndex?.groups ?? [], {
+      filterMapGroupRecords(allMapRecords, {
         searchQuery: debouncedSearchQuery,
-        dateRange,
-        bounds: mapBounds,
-        zoomLevel,
-        selectedGroupId
+        dateRange
       }),
-    [dateRange, debouncedSearchQuery, libraryIndex?.groups, mapBounds, selectedGroupId, zoomLevel]
+    [allMapRecords, dateRange, debouncedSearchQuery]
   )
-
-  const selectedMappedGroup = useMemo(
-    () =>
-      derivedState.filteredGroups.find(
-        (record) => record.group.id === selectedGroupId && record.pinLocation
-      ) ?? null,
-    [derivedState.filteredGroups, selectedGroupId]
+  const mappedRecords = useMemo(
+    () => filteredRecords.filter((record) => record.pinLocation),
+    [filteredRecords]
   )
-
-  const effectiveVisibleGroups = useMemo(() => {
-    const selectedMappedGroup = derivedState.filteredGroups.find(
-      (record) => record.group.id === selectedGroupId && record.pinLocation
-    )
-
-    if (
-      selectedMappedGroup &&
-      !derivedState.visibleGroups.some(
-        (record) => record.group.id === selectedMappedGroup.group.id
-      )
-    ) {
-      return [selectedMappedGroup, ...derivedState.visibleGroups]
-    }
-
-    return derivedState.visibleGroups
-  }, [derivedState.filteredGroups, derivedState.visibleGroups, selectedGroupId])
+  const unmappedRecords = useMemo(
+    () => filteredRecords.filter((record) => !record.pinLocation),
+    [filteredRecords]
+  )
+  const selectedGroup = useMemo(
+    () => filteredRecords.find((record) => record.group.id === selectedGroupId) ?? null,
+    [filteredRecords, selectedGroupId]
+  )
 
   const mapCanvasGroups = useMemo(
-    () => derivedState.mappedGroups,
-    [derivedState.mappedGroups]
+    () => mappedRecords,
+    [mappedRecords]
+  )
+  const markerGroups = useMemo(
+    () =>
+      buildRepresentativeMarkerGroups(filteredRecords, {
+        bounds: mapBounds,
+        zoomLevel
+      }),
+    [filteredRecords, mapBounds, zoomLevel]
   )
 
   const mapZoomPolicy = useMemo(() => getMapZoomPolicy(zoomLevel), [zoomLevel])
@@ -94,12 +92,12 @@ export function BrowsePage() {
       return
     }
 
-    if (derivedState.filteredGroups.length === 0) {
+    if (filteredRecords.length === 0) {
       setSelectedGroupId(undefined)
       return
     }
 
-    const selectedStillExists = derivedState.filteredGroups.some(
+    const selectedStillExists = filteredRecords.some(
       (record) => record.group.id === selectedGroupId
     )
 
@@ -107,25 +105,24 @@ export function BrowsePage() {
       return
     }
 
-    const preferredGroup =
-      derivedState.mappedGroups[0] ?? derivedState.filteredGroups[0] ?? null
+    const preferredGroup = mappedRecords[0] ?? filteredRecords[0] ?? null
 
     if (preferredGroup) {
       setSelectedGroupId(preferredGroup.group.id)
     }
   }, [
-    derivedState.filteredGroups,
-    derivedState.mappedGroups,
+    filteredRecords,
+    mappedRecords,
     outputRoot,
     selectedGroupId,
     setSelectedGroupId
   ])
 
   useEffect(() => {
-    if (derivedState.filteredGroups.length === 1) {
-      setSelectedGroupId(derivedState.filteredGroups[0]?.group.id)
+    if (filteredRecords.length === 1) {
+      setSelectedGroupId(filteredRecords[0]?.group.id)
     }
-  }, [derivedState.filteredGroups, setSelectedGroupId])
+  }, [filteredRecords, setSelectedGroupId])
 
   useEffect(() => {
     setPreviewPhotoId(undefined)
@@ -235,16 +232,16 @@ export function BrowsePage() {
         <section className="space-y-4">
           <div className="flex flex-wrap gap-2 text-xs text-slate-600">
             <span className="rounded-full bg-slate-100 px-3 py-1.5">
-              필터 결과 {derivedState.filteredGroups.length}개
+              필터 결과 {filteredRecords.length}개
             </span>
             <span className="rounded-full bg-slate-100 px-3 py-1.5">
-              지도 가능 {derivedState.mappedGroups.length}개
+              지도 가능 {mappedRecords.length}개
             </span>
             <span className="rounded-full bg-slate-100 px-3 py-1.5">
-              GPS 없는 그룹 {derivedState.unmappedGroups.length}개
+              GPS 없는 그룹 {unmappedRecords.length}개
             </span>
             <span className="rounded-full bg-slate-100 px-3 py-1.5">
-              지도 표시 {mapCanvasGroups.length}개
+              대표 핀 {markerGroups.length}개
             </span>
             {searchQuery ? (
               <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">
@@ -261,7 +258,8 @@ export function BrowsePage() {
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="relative h-[78vh] min-h-[720px]">
               <PhotoGroupMap
-                groups={mapCanvasGroups}
+                sourceGroups={mapCanvasGroups}
+                markerGroups={markerGroups}
                 outputRoot={libraryIndex?.outputRoot ?? outputRoot}
                 selectedGroupId={selectedGroupId}
                 unclusteredMinZoom={mapZoomPolicy.unclusteredMinZoom}
@@ -273,7 +271,7 @@ export function BrowsePage() {
                 <div className="pointer-events-auto">
                   <MapSearchBar
                     value={searchQuery}
-                    resultCount={derivedState.filteredGroups.length}
+                    resultCount={filteredRecords.length}
                     onChange={setSearchQuery}
                     onClear={() => setSearchQuery('')}
                   />
@@ -294,7 +292,7 @@ export function BrowsePage() {
 
               <MapPhotoPreviewOverlay
                 outputRoot={libraryIndex?.outputRoot ?? outputRoot}
-                group={derivedState.selectedGroup?.group}
+                group={selectedGroup?.group}
                 photoId={previewPhotoId}
                 onChangePhoto={setPreviewPhotoId}
                 onClose={() => setPreviewPhotoId(undefined)}
@@ -303,9 +301,9 @@ export function BrowsePage() {
 
             <MapPhotoSidebar
               outputRoot={libraryIndex?.outputRoot ?? outputRoot}
-              selectedGroup={derivedState.selectedGroup}
-              filteredGroups={derivedState.filteredGroups}
-              unmappedGroups={derivedState.unmappedGroups}
+              selectedGroup={selectedGroup}
+              filteredGroups={filteredRecords}
+              unmappedGroups={unmappedRecords}
               onSelectGroup={handleSelectGroup}
               onPreviewPhoto={setPreviewPhotoId}
             />

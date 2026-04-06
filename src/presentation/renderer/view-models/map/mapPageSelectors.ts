@@ -564,6 +564,44 @@ export function buildVisibleMapGroups(
   return sampleGroupsByRegion(pool, policy.perRegionLimit)
 }
 
+export function buildRepresentativeMarkerGroups(
+  records: MapGroupRecord[],
+  options: {
+    bounds?: MapViewportBounds | null
+    zoomLevel: number
+  }
+): MapGroupRecord[] {
+  const mappedRecords = records.filter((record) => record.pinLocation)
+  const inBounds = mappedRecords.filter((record) =>
+    isWithinBounds(record.pinLocation!, options.bounds)
+  )
+  const pool = inBounds.length > 0 ? inBounds : mappedRecords
+
+  if (options.zoomLevel < 3) {
+    return []
+  }
+
+  if (options.zoomLevel < 5) {
+    return [...pool]
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 1)
+  }
+
+  if (options.zoomLevel < 8) {
+    return sampleGroupsByRegion(pool, 1)
+  }
+
+  if (options.zoomLevel < 10) {
+    return sampleGroupsByRegion(pool, 2)
+  }
+
+  if (options.zoomLevel < 12) {
+    return sampleGroupsByRegion(pool, 4)
+  }
+
+  return [...pool].sort((left, right) => right.score - left.score)
+}
+
 export function deriveMapPageState(
   groups: GroupDetail[],
   options: {
