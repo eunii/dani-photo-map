@@ -1,187 +1,195 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
-import { GroupDetailPanel } from '@presentation/renderer/components/GroupDetailPanel'
-import { GroupListPanel } from '@presentation/renderer/components/GroupListPanel'
-import { GroupsMap } from '@presentation/renderer/components/GroupsMap'
+import { MapBottomSheet } from '@presentation/renderer/components/map/MapBottomSheet'
+import { MapFilterBar } from '@presentation/renderer/components/map/MapFilterBar'
+import { MapSearchBar } from '@presentation/renderer/components/map/MapSearchBar'
+import { PhotoGroupMap } from '@presentation/renderer/components/map/PhotoGroupMap'
+import { useDebouncedValue } from '@presentation/renderer/hooks/useDebouncedValue'
 import {
   getLoadSourceBadge,
   useOutputLibraryIndexPanel
 } from '@presentation/renderer/hooks/useOutputLibraryIndexPanel'
+import { useBrowseMapStore } from '@presentation/renderer/store/useBrowseMapStore'
 import {
-  buildGroupExplorerViewModel,
-  type GroupSortOption
-} from '@presentation/renderer/view-models/groupExplorer'
-import { buildGroupTitleSuggestions } from '@presentation/renderer/view-models/groupTitleSuggestions'
+  deriveMapPageState,
+  getMapZoomPolicy,
+  getQuickFilterDateRange
+} from '@presentation/renderer/view-models/map/mapPageSelectors'
 
 export function BrowsePage() {
   const {
     outputRoot,
     libraryIndex,
     loadSource,
-    setLastLoadedIndex,
     isLoadingIndex,
     errorMessage,
-    setErrorMessage,
     selectOutputRoot,
     reloadLibraryIndex
   } = useOutputLibraryIndexPanel()
-
-  const [isSavingGroup, setIsSavingGroup] = useState(false)
-  const [isMovingPhotos, setIsMovingPhotos] = useState(false)
-  const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>()
-  const [hoveredGroupId, setHoveredGroupId] = useState<string | undefined>()
-  const [groupSortOption, setGroupSortOption] =
-    useState<GroupSortOption>('recent')
-
-  const selectedGroup = useMemo(
-    () => libraryIndex?.groups.find((group) => group.id === selectedGroupId),
-    [libraryIndex?.groups, selectedGroupId]
-  )
-  const explorerViewModel = useMemo(
-    () =>
-      buildGroupExplorerViewModel(libraryIndex?.groups ?? [], groupSortOption),
-    [groupSortOption, libraryIndex?.groups]
-  )
-  const titleSuggestions = useMemo(
-    () => buildGroupTitleSuggestions(selectedGroup, libraryIndex?.groups ?? []),
-    [libraryIndex?.groups, selectedGroup]
-  )
   const sourceBadge = getLoadSourceBadge(loadSource)
+  const searchQuery = useBrowseMapStore((state) => state.searchQuery)
+  const quickFilter = useBrowseMapStore((state) => state.quickFilter)
+  const dateRange = useBrowseMapStore((state) => state.dateRange)
+  const mapBounds = useBrowseMapStore((state) => state.mapBounds)
+  const zoomLevel = useBrowseMapStore((state) => state.zoomLevel)
+  const selectedGroupId = useBrowseMapStore((state) => state.selectedGroupId)
+  const bottomSheetState = useBrowseMapStore((state) => state.bottomSheetState)
+  const setSearchQuery = useBrowseMapStore((state) => state.setSearchQuery)
+  const setQuickFilter = useBrowseMapStore((state) => state.setQuickFilter)
+  const setDateRange = useBrowseMapStore((state) => state.setDateRange)
+  const setMapBounds = useBrowseMapStore((state) => state.setMapBounds)
+  const setZoomLevel = useBrowseMapStore((state) => state.setZoomLevel)
+  const setSelectedGroupId = useBrowseMapStore((state) => state.setSelectedGroupId)
+  const setBottomSheetState = useBrowseMapStore(
+    (state) => state.setBottomSheetState
+  )
+  const resetFilters = useBrowseMapStore((state) => state.resetFilters)
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 220)
 
-  useEffect(() => {
-    if (!outputRoot) {
-      setSelectedGroupId(undefined)
-      setHoveredGroupId(undefined)
-    }
-  }, [outputRoot])
+  const derivedState = useMemo(
+    () =>
+      deriveMapPageState(libraryIndex?.groups ?? [], {
+        searchQuery: debouncedSearchQuery,
+        dateRange,
+        bounds: mapBounds,
+        zoomLevel,
+        selectedGroupId
+      }),
+    [dateRange, debouncedSearchQuery, libraryIndex?.groups, mapBounds, selectedGroupId, zoomLevel]
+  )
 
-  useEffect(() => {
-    setHoveredGroupId(undefined)
-  }, [libraryIndex?.generatedAt])
-
-  useEffect(() => {
-    const groups = libraryIndex?.groups ?? []
-
-    if (groups.length === 0) {
-      setSelectedGroupId(undefined)
-      setHoveredGroupId(undefined)
-      return
-    }
-
-    const selectedGroupStillExists = groups.some(
-      (group) => group.id === selectedGroupId
+  const effectiveVisibleGroups = useMemo(() => {
+    const selectedMappedGroup = derivedState.filteredGroups.find(
+      (record) => record.group.id === selectedGroupId && record.pinLocation
     )
 
-    if (!selectedGroupStillExists) {
-      setSelectedGroupId(groups[0]?.id)
-    }
-  }, [libraryIndex?.groups, selectedGroupId])
-
-  async function handleSaveGroup(nextGroup: {
-    title: string
-    companions: string[]
-    notes?: string
-    representativePhotoId?: string
-  }): Promise<void> {
-    if (!outputRoot || !selectedGroup) {
-      return
-    }
-
-    setIsSavingGroup(true)
-    setErrorMessage(null)
-
-    try {
-      const updatedIndex = await window.photoApp.updatePhotoGroup({
-        outputRoot,
-        groupId: selectedGroup.id,
-        title: nextGroup.title,
-        companions: nextGroup.companions,
-        notes: nextGroup.notes,
-        representativePhotoId: nextGroup.representativePhotoId
-      })
-
-      setLastLoadedIndex({
-        source: 'merged',
-        index: updatedIndex
-      })
-      setSelectedGroupId(selectedGroup.id)
-      setHoveredGroupId(undefined)
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : '그룹 저장에 실패했습니다.'
+    if (
+      selectedMappedGroup &&
+      !derivedState.visibleGroups.some(
+        (record) => record.group.id === selectedMappedGroup.group.id
       )
-    } finally {
-      setIsSavingGroup(false)
+    ) {
+      return [selectedMappedGroup, ...derivedState.visibleGroups]
     }
-  }
 
-  async function handleMovePhotos(nextMove: {
-    sourceGroupId: string
-    destinationGroupId: string
-    photoIds: string[]
-  }): Promise<void> {
+    return derivedState.visibleGroups
+  }, [derivedState.filteredGroups, derivedState.visibleGroups, selectedGroupId])
+
+  const mapZoomPolicy = useMemo(() => getMapZoomPolicy(zoomLevel), [zoomLevel])
+
+  useEffect(() => {
     if (!outputRoot) {
+      setSelectedGroupId(undefined)
       return
     }
 
-    setIsMovingPhotos(true)
-    setErrorMessage(null)
-
-    try {
-      const updatedIndex = await window.photoApp.movePhotosToGroup({
-        outputRoot,
-        sourceGroupId: nextMove.sourceGroupId,
-        destinationGroupId: nextMove.destinationGroupId,
-        photoIds: nextMove.photoIds
-      })
-
-      setLastLoadedIndex({
-        source: 'merged',
-        index: updatedIndex
-      })
-      setSelectedGroupId(nextMove.destinationGroupId)
-      setHoveredGroupId(undefined)
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : '사진 이동에 실패했습니다.'
-      )
-    } finally {
-      setIsMovingPhotos(false)
+    if (derivedState.filteredGroups.length === 0) {
+      setSelectedGroupId(undefined)
+      return
     }
-  }
+
+    const selectedStillExists = derivedState.filteredGroups.some(
+      (record) => record.group.id === selectedGroupId
+    )
+
+    if (selectedStillExists) {
+      return
+    }
+
+    const preferredGroup =
+      derivedState.mappedGroups[0] ?? derivedState.filteredGroups[0] ?? null
+
+    if (preferredGroup) {
+      setSelectedGroupId(preferredGroup.group.id)
+    }
+  }, [
+    derivedState.filteredGroups,
+    derivedState.mappedGroups,
+    outputRoot,
+    selectedGroupId,
+    setSelectedGroupId
+  ])
+
+  useEffect(() => {
+    if (derivedState.filteredGroups.length === 1) {
+      setSelectedGroupId(derivedState.filteredGroups[0]?.group.id)
+
+      if (bottomSheetState === 'collapsed') {
+        setBottomSheetState('half')
+      }
+    }
+  }, [
+    bottomSheetState,
+    derivedState.filteredGroups,
+    setBottomSheetState,
+    setSelectedGroupId
+  ])
+
+  const handleQuickFilterChange = useCallback((nextFilter: typeof quickFilter): void => {
+    setQuickFilter(nextFilter)
+
+    if (nextFilter === 'all') {
+      setDateRange({})
+      return
+    }
+
+    if (nextFilter === 'custom') {
+      return
+    }
+
+    setDateRange(getQuickFilterDateRange(nextFilter))
+  }, [setDateRange, setQuickFilter])
+
+  const handleCustomDateRangeChange = useCallback((nextRange: typeof dateRange): void => {
+    setQuickFilter('custom')
+    setDateRange(nextRange)
+  }, [setDateRange, setQuickFilter])
+
+  const handleSelectGroup = useCallback((groupId: string): void => {
+    setSelectedGroupId(groupId)
+    setBottomSheetState('half')
+  }, [setBottomSheetState, setSelectedGroupId])
+
+  const handleViewportChange = useCallback(
+    ({ bounds, zoomLevel: nextZoomLevel }: { bounds: typeof mapBounds; zoomLevel: number }) => {
+      setMapBounds(bounds)
+      setZoomLevel(nextZoomLevel)
+    },
+    [setMapBounds, setZoomLevel]
+  )
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div className="space-y-3">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-          조회 및 그룹 편집
+          지도 기반 사진 그룹 탐색
         </h1>
-        <p className="text-base leading-7 text-slate-600">
-          선택한 출력 폴더에서 기존 결과를 바로 불러옵니다. `index.json`이
-          있으면 우선 사용하고, 없거나 깨졌으면 출력 폴더를 스캔해 조회 가능한
-          범위만 복구합니다.
+        <p className="max-w-4xl text-base leading-7 text-slate-600">
+          지도는 사진 개별 좌표가 아니라 그룹 탐색을 위한 메인 인터페이스입니다.
+          검색과 날짜 필터가 지도와 바텀시트에 함께 반영되고, GPS 없는 사진도
+          그룹 안에서 함께 탐색할 수 있습니다.
         </p>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-slate-900">출력 폴더</h2>
-            <p className="min-h-12 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-600">
+            <p className="min-h-12 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-600">
               {outputRoot || '아직 선택되지 않았습니다.'}
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
               onClick={() => void selectOutputRoot()}
             >
               출력 폴더 선택
             </button>
             <button
               type="button"
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
               disabled={!outputRoot || isLoadingIndex}
               onClick={() => void reloadLibraryIndex()}
             >
@@ -192,7 +200,7 @@ export function BrowsePage() {
       </section>
 
       {sourceBadge ? (
-        <section className={`rounded-xl border px-4 py-3 text-sm ${sourceBadge.tone}`}>
+        <section className={`rounded-2xl border px-4 py-3 text-sm ${sourceBadge.tone}`}>
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full border border-current/20 bg-white/70 px-3 py-1 text-xs font-semibold">
               {sourceBadge.label}
@@ -203,95 +211,96 @@ export function BrowsePage() {
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
         </div>
       ) : null}
 
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
-            지도 가능 그룹 {explorerViewModel.mappedGroups.length}
-          </div>
-          <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
-            GPS 없는 그룹 {explorerViewModel.unmappedGroups.length}
-          </div>
-          <label className="ml-auto flex items-center gap-2 text-sm text-slate-600">
-            정렬
-            <select
-              value={groupSortOption}
-              onChange={(event) =>
-                setGroupSortOption(event.target.value as GroupSortOption)
-              }
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900"
-            >
-              <option value="recent">최근 촬영 순</option>
-              <option value="photo-count">사진 많은 순</option>
-              <option value="title">제목 순</option>
-            </select>
-          </label>
-        </div>
-
-        {!outputRoot ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-            <p className="text-sm font-semibold text-slate-900">
-              조회할 출력 폴더를 선택하세요.
-            </p>
-            <p className="mt-1 text-sm text-slate-600">
-              기존 정리 결과가 있는 폴더를 선택하면 지도와 그룹 패널을
-              불러옵니다.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)_minmax(360px,1fr)]">
-            <GroupsMap
-              groups={libraryIndex?.mapGroups ?? []}
-              outputRoot={libraryIndex?.outputRoot}
-              selectedGroupId={selectedGroupId}
-              hoveredGroupId={hoveredGroupId}
-              onSelectGroup={setSelectedGroupId}
-              onHoverGroup={setHoveredGroupId}
-            />
-            <div className="space-y-4">
-              <GroupListPanel
-                title="지도 그룹"
-                description="GPS가 있는 그룹입니다. hover와 선택이 지도와 연동됩니다."
-                groups={explorerViewModel.mappedGroups}
-                selectedGroupId={selectedGroupId}
-                hoveredGroupId={hoveredGroupId}
-                onSelectGroup={setSelectedGroupId}
-                onHoverGroup={setHoveredGroupId}
-              />
-              <GroupListPanel
-                title="GPS 없는 그룹"
-                description="지도에는 보이지 않지만 상세 패널에서 편집할 수 있습니다."
-                groups={explorerViewModel.unmappedGroups}
-                selectedGroupId={selectedGroupId}
-                hoveredGroupId={hoveredGroupId}
-                onSelectGroup={setSelectedGroupId}
-                onHoverGroup={setHoveredGroupId}
-              />
-            </div>
-            <GroupDetailPanel
-              group={selectedGroup}
-              allGroups={libraryIndex?.groups ?? []}
-              titleSuggestions={titleSuggestions}
-              outputRoot={libraryIndex?.outputRoot}
-              loadSource={loadSource}
-              isSaving={isSavingGroup}
-              isMovingPhotos={isMovingPhotos}
-              onSave={handleSaveGroup}
-              onMovePhotos={handleMovePhotos}
-            />
-          </div>
-        )}
-
-        {isLoadingIndex ? (
-          <p className="text-sm text-slate-500">
-            출력 결과를 불러오는 중입니다...
+      {!outputRoot ? (
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center">
+          <p className="text-base font-semibold text-slate-900">
+            조회할 출력 폴더를 선택하세요.
           </p>
-        ) : null}
-      </section>
+          <p className="mt-2 text-sm text-slate-600">
+            기존 정리 결과가 있는 폴더를 선택하면 지도 탐색 화면을 바로
+            불러옵니다.
+          </p>
+        </div>
+      ) : (
+        <section className="space-y-4">
+          <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+            <span className="rounded-full bg-slate-100 px-3 py-1.5">
+              필터 결과 {derivedState.filteredGroups.length}개
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5">
+              지도 가능 {derivedState.mappedGroups.length}개
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5">
+              GPS 없는 그룹 {derivedState.unmappedGroups.length}개
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5">
+              현재 표시 {effectiveVisibleGroups.length}개
+            </span>
+            {searchQuery ? (
+              <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">
+                검색: {searchQuery}
+              </span>
+            ) : null}
+            {dateRange.start || dateRange.end ? (
+              <span className="rounded-full bg-violet-50 px-3 py-1.5 text-violet-700">
+                날짜: {dateRange.start ?? '시작'} ~ {dateRange.end ?? '종료'}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="relative h-[78vh] min-h-[720px]">
+            <PhotoGroupMap
+              groups={effectiveVisibleGroups}
+              selectedGroupId={selectedGroupId}
+              unclusteredMinZoom={mapZoomPolicy.unclusteredMinZoom}
+              onSelectGroup={handleSelectGroup}
+              onViewportChange={handleViewportChange}
+            />
+
+            <div className="pointer-events-none absolute inset-x-3 top-3 z-10 space-y-3">
+              <div className="pointer-events-auto">
+                <MapSearchBar
+                  value={searchQuery}
+                  resultCount={derivedState.filteredGroups.length}
+                  onChange={setSearchQuery}
+                  onClear={() => setSearchQuery('')}
+                />
+              </div>
+
+              <div className="pointer-events-auto">
+                <MapFilterBar
+                  quickFilter={quickFilter}
+                  dateRange={dateRange}
+                  onQuickFilterChange={handleQuickFilterChange}
+                  onDateRangeChange={handleCustomDateRangeChange}
+                  onReset={() => {
+                    resetFilters()
+                  }}
+                />
+              </div>
+            </div>
+
+            <MapBottomSheet
+              state={bottomSheetState}
+              outputRoot={libraryIndex?.outputRoot ?? outputRoot}
+              selectedGroup={derivedState.selectedGroup}
+              filteredGroups={derivedState.filteredGroups}
+              unmappedGroups={derivedState.unmappedGroups}
+              onSelectGroup={handleSelectGroup}
+              onStateChange={setBottomSheetState}
+            />
+          </div>
+        </section>
+      )}
+
+      {isLoadingIndex ? (
+        <p className="text-sm text-slate-500">출력 결과를 불러오는 중입니다...</p>
+      ) : null}
     </div>
   )
 }

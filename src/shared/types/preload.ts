@@ -105,6 +105,16 @@ export interface GroupPhotoSummary {
   sourceFileName: string
   capturedAtIso?: string
   capturedAtSource?: string
+  originalGps?: {
+    latitude: number
+    longitude: number
+  }
+  gps?: {
+    latitude: number
+    longitude: number
+  }
+  locationSource?: 'exif' | 'assigned-from-group' | 'none'
+  regionName?: string
   thumbnailRelativePath?: string
   outputRelativePath?: string
   hasGps: boolean

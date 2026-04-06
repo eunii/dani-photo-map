@@ -64,9 +64,17 @@ export function App() {
     setRoute(nextRoute)
   }
 
+  const isBrowseRoute = route === 'browse'
+
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <section className="w-full max-w-7xl rounded-2xl border border-slate-200 bg-white p-10 shadow-sm">
+    <main
+      className={`flex min-h-screen ${isBrowseRoute ? 'items-stretch p-4' : 'items-center justify-center p-8'}`}
+    >
+      <section
+        className={`w-full rounded-2xl border border-slate-200 bg-white shadow-sm ${
+          isBrowseRoute ? 'mx-auto max-w-[96vw] p-6' : 'max-w-7xl p-10'
+        }`}
+      >
         <div className="space-y-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-2">

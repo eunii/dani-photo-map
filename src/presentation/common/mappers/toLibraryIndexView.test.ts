@@ -29,6 +29,12 @@ function createLibraryIndex(): LibraryIndex {
           latitude: 37.5665,
           longitude: 126.978
         },
+        originalGps: {
+          latitude: 37.5665,
+          longitude: 126.978
+        },
+        locationSource: 'exif',
+        regionName: 'seoul',
         outputRelativePath: '2026/04/seoul/IMG_0001.JPG',
         thumbnailRelativePath: '.photo-organizer/thumbnails/photo-1.webp',
         isDuplicate: false,
@@ -76,7 +82,17 @@ describe('toLibraryIndexView', () => {
         {
           id: 'photo-1',
           capturedAtSource: 'exif-date-time-original',
-          hasGps: true
+          hasGps: true,
+          locationSource: 'exif',
+          regionName: 'seoul',
+          gps: {
+            latitude: 37.5665,
+            longitude: 126.978
+          },
+          originalGps: {
+            latitude: 37.5665,
+            longitude: 126.978
+          }
         },
         {
           id: 'photo-2',

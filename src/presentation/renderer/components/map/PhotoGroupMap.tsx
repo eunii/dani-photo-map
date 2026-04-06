@@ -1,0 +1,506 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import maplibregl, { type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
+
+import type {
+  MapGroupRecord,
+  MapViewportBounds
+} from '@presentation/renderer/view-models/map/mapPageSelectors'
+
+interface PhotoGroupMapProps {
+  groups: MapGroupRecord[]
+  selectedGroupId?: string
+  unclusteredMinZoom: number
+  onSelectGroup: (groupId: string) => void
+  onViewportChange: (state: {
+    bounds: MapViewportBounds
+    zoomLevel: number
+  }) => void
+}
+
+interface GroupFeatureProperties {
+  groupId: string
+  title: string
+  photoCount: number
+  score: number
+  regionLabel: string
+}
+
+interface PointGeometry {
+  type: 'Point'
+  coordinates: [number, number]
+}
+
+interface GroupFeature {
+  type: 'Feature'
+  geometry: PointGeometry
+  properties: GroupFeatureProperties
+}
+
+interface GroupFeatureCollection {
+  type: 'FeatureCollection'
+  features: GroupFeature[]
+}
+
+const DEFAULT_CENTER: [number, number] = [127.0, 30.0]
+const DEFAULT_ZOOM = 1.6
+const SOURCE_ID = 'photo-groups'
+const CLUSTER_LAYER_ID = 'photo-group-clusters'
+const CLUSTER_COUNT_LAYER_ID = 'photo-group-cluster-count'
+const GROUP_LAYER_ID = 'photo-group-points'
+const SELECTED_LAYER_ID = 'photo-group-selected'
+
+function createMapStyle(): StyleSpecification {
+  return {
+    version: 8,
+    sources: {
+      osm: {
+        type: 'raster',
+        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: '© OpenStreetMap contributors'
+      }
+    },
+    layers: [
+      {
+        id: 'osm',
+        type: 'raster',
+        source: 'osm'
+      }
+    ]
+  }
+}
+
+function buildFeatureCollection(
+  groups: MapGroupRecord[]
+): GroupFeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: groups
+      .filter((group) => group.pinLocation)
+      .map(
+        (group): GroupFeature => ({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [
+              group.pinLocation!.longitude,
+              group.pinLocation!.latitude
+            ]
+          },
+          properties: {
+            groupId: group.group.id,
+            title: group.displayTitle,
+            photoCount: group.group.photoCount,
+            score: group.score,
+            regionLabel: group.regionLabel
+          }
+        })
+      )
+  }
+}
+
+function toViewportBounds(map: maplibregl.Map): MapViewportBounds {
+  const bounds = map.getBounds()
+
+  return {
+    west: bounds.getWest(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    north: bounds.getNorth()
+  }
+}
+
+function setSelectedFilter(map: maplibregl.Map, selectedGroupId?: string): void {
+  if (!map.getLayer(SELECTED_LAYER_ID)) {
+    return
+  }
+
+  map.setFilter(
+    SELECTED_LAYER_ID,
+    selectedGroupId ? ['==', ['get', 'groupId'], selectedGroupId] : ['==', ['get', 'groupId'], '']
+  )
+}
+
+function fitToGroups(map: maplibregl.Map, groups: MapGroupRecord[]): void {
+  const mappedGroups = groups.filter((group) => group.pinLocation)
+
+  if (mappedGroups.length === 0) {
+    map.easeTo({
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      duration: 500
+    })
+    return
+  }
+
+  if (mappedGroups.length === 1) {
+    const pinLocation = mappedGroups[0]?.pinLocation
+
+    if (!pinLocation) {
+      return
+    }
+
+    map.easeTo({
+      center: [pinLocation.longitude, pinLocation.latitude],
+      zoom: 6.5,
+      duration: 600
+    })
+    return
+  }
+
+  const bounds = new maplibregl.LngLatBounds()
+
+  for (const group of mappedGroups) {
+    bounds.extend([group.pinLocation!.longitude, group.pinLocation!.latitude])
+  }
+
+  map.fitBounds(bounds, {
+    padding: 80,
+    duration: 700,
+    maxZoom: 6
+  })
+}
+
+export function PhotoGroupMap({
+  groups,
+  selectedGroupId,
+  unclusteredMinZoom,
+  onSelectGroup,
+  onViewportChange
+}: PhotoGroupMapProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const mapRef = useRef<maplibregl.Map | null>(null)
+  const moveDebounceRef = useRef<number | null>(null)
+  const hasInitialFitRef = useRef(false)
+  const onSelectGroupRef = useRef(onSelectGroup)
+  const onViewportChangeRef = useRef(onViewportChange)
+  const featureCollection = useMemo(() => buildFeatureCollection(groups), [groups])
+  const groupsRef = useRef<MapGroupRecord[]>(groups)
+  const featureCollectionRef = useRef(featureCollection)
+  const lastSelectedGroupIdRef = useRef<string | undefined>(undefined)
+  const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null)
+
+  groupsRef.current = groups
+  featureCollectionRef.current = featureCollection
+  onSelectGroupRef.current = onSelectGroup
+  onViewportChangeRef.current = onViewportChange
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) {
+      return
+    }
+
+    try {
+      const map = new maplibregl.Map({
+        container: containerRef.current,
+        style: createMapStyle(),
+        center: DEFAULT_CENTER,
+        zoom: DEFAULT_ZOOM,
+        attributionControl: false
+      })
+
+      map.addControl(new maplibregl.NavigationControl(), 'top-right')
+
+      map.on('load', () => {
+        map.addSource(SOURCE_ID, {
+          type: 'geojson',
+          data: featureCollectionRef.current,
+          cluster: true,
+          clusterRadius: 54,
+          clusterMaxZoom: 13
+        })
+
+        map.addLayer({
+          id: CLUSTER_LAYER_ID,
+          type: 'circle',
+          source: SOURCE_ID,
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': '#0f172a',
+            'circle-radius': [
+              'step',
+              ['get', 'point_count'],
+              18,
+              10,
+              24,
+              30,
+              30
+            ],
+            'circle-opacity': 0.88
+          }
+        })
+
+        map.addLayer({
+          id: CLUSTER_COUNT_LAYER_ID,
+          type: 'symbol',
+          source: SOURCE_ID,
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': ['get', 'point_count_abbreviated'],
+            'text-size': 12
+          },
+          paint: {
+            'text-color': '#ffffff'
+          }
+        })
+
+        map.addLayer({
+          id: GROUP_LAYER_ID,
+          type: 'circle',
+          source: SOURCE_ID,
+          filter: ['!', ['has', 'point_count']],
+          minzoom: unclusteredMinZoom,
+          paint: {
+            'circle-color': '#2563eb',
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              4,
+              6,
+              10,
+              10,
+              14,
+              13
+            ],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
+          }
+        })
+
+        map.addLayer({
+          id: SELECTED_LAYER_ID,
+          type: 'circle',
+          source: SOURCE_ID,
+          filter: ['==', ['get', 'groupId'], ''],
+          minzoom: unclusteredMinZoom,
+          paint: {
+            'circle-color': '#1d4ed8',
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              4,
+              10,
+              10,
+              14,
+              14,
+              18
+            ],
+            'circle-stroke-width': 4,
+            'circle-stroke-color': '#bfdbfe',
+            'circle-opacity': 0.45
+          }
+        })
+
+        map.on('click', CLUSTER_LAYER_ID, async (event) => {
+          const feature = event.features?.[0]
+          const clusterId = feature?.properties?.cluster_id
+
+          if (!feature || clusterId === undefined) {
+            return
+          }
+
+          const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined
+
+          if (!source) {
+            return
+          }
+
+          const expansionZoom = await source.getClusterExpansionZoom(clusterId)
+          const coordinates = (feature.geometry as PointGeometry).coordinates
+
+          map.easeTo({
+            center: [coordinates[0], coordinates[1]],
+            zoom: Math.max(expansionZoom, map.getZoom() + 1),
+            duration: 500
+          })
+        })
+
+        map.on('click', GROUP_LAYER_ID, (event) => {
+          const feature = event.features?.[0]
+          const groupId = feature?.properties?.groupId
+
+          if (typeof groupId === 'string') {
+              onSelectGroupRef.current(groupId)
+          }
+        })
+
+        const setPointerCursor = () => {
+          map.getCanvas().style.cursor = 'pointer'
+        }
+        const clearPointerCursor = () => {
+          map.getCanvas().style.cursor = ''
+        }
+
+        map.on('mouseenter', CLUSTER_LAYER_ID, setPointerCursor)
+        map.on('mouseleave', CLUSTER_LAYER_ID, clearPointerCursor)
+        map.on('mouseenter', GROUP_LAYER_ID, setPointerCursor)
+        map.on('mouseleave', GROUP_LAYER_ID, clearPointerCursor)
+
+        map.on('move', () => {
+          if (moveDebounceRef.current !== null) {
+            window.clearTimeout(moveDebounceRef.current)
+          }
+
+          moveDebounceRef.current = window.setTimeout(() => {
+            onViewportChangeRef.current({
+              bounds: toViewportBounds(map),
+              zoomLevel: map.getZoom()
+            })
+          }, 120)
+        })
+
+        onViewportChangeRef.current({
+          bounds: toViewportBounds(map),
+          zoomLevel: map.getZoom()
+        })
+
+        if (!hasInitialFitRef.current) {
+          fitToGroups(map, groupsRef.current)
+          hasInitialFitRef.current = true
+        }
+      })
+
+      map.on('error', (event) => {
+        const nextMessage =
+          event.error instanceof Error
+            ? event.error.message
+            : '지도를 불러오는 중 오류가 발생했습니다.'
+
+        setMapErrorMessage(nextMessage)
+      })
+
+      mapRef.current = map
+    } catch (error) {
+      setMapErrorMessage(
+        error instanceof Error ? error.message : '지도를 초기화하지 못했습니다.'
+      )
+    }
+
+    return () => {
+      if (moveDebounceRef.current !== null) {
+        window.clearTimeout(moveDebounceRef.current)
+      }
+
+      mapRef.current?.remove()
+      mapRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || !map.isStyleLoaded() || !map.getSource(SOURCE_ID)) {
+      return
+    }
+
+    const source = map.getSource(SOURCE_ID) as GeoJSONSource
+    source.setData(featureCollection)
+
+    if (!hasInitialFitRef.current) {
+      fitToGroups(map, groups)
+      hasInitialFitRef.current = true
+      return
+    }
+
+    if (groups.length === 1) {
+      fitToGroups(map, groups)
+    }
+  }, [featureCollection, groups])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || !map.isStyleLoaded()) {
+      return
+    }
+
+    if (map.getLayer(GROUP_LAYER_ID)) {
+      map.setLayerZoomRange(GROUP_LAYER_ID, unclusteredMinZoom, 24)
+    }
+
+    if (map.getLayer(SELECTED_LAYER_ID)) {
+      map.setLayerZoomRange(SELECTED_LAYER_ID, unclusteredMinZoom, 24)
+    }
+  }, [unclusteredMinZoom])
+
+  const selectedGroup = useMemo(
+    () => groups.find((group) => group.group.id === selectedGroupId),
+    [groups, selectedGroupId]
+  )
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || !map.isStyleLoaded()) {
+      return
+    }
+
+    setSelectedFilter(map, selectedGroupId)
+
+    if (!selectedGroup?.pinLocation) {
+      lastSelectedGroupIdRef.current = selectedGroupId
+      return
+    }
+
+    if (lastSelectedGroupIdRef.current === selectedGroupId) {
+      return
+    }
+
+    lastSelectedGroupIdRef.current = selectedGroupId
+
+    map.easeTo({
+      center: [
+        selectedGroup.pinLocation.longitude,
+        selectedGroup.pinLocation.latitude
+      ],
+      zoom: Math.max(map.getZoom(), 7),
+      duration: 500
+    })
+  }, [
+    selectedGroup?.pinLocation?.latitude,
+    selectedGroup?.pinLocation?.longitude,
+    selectedGroupId
+  ])
+
+  return (
+    <div className="relative h-full overflow-hidden rounded-[28px] border border-slate-200 bg-slate-100">
+      <div ref={containerRef} className="h-full w-full" />
+
+      <div className="pointer-events-none absolute left-4 top-4 rounded-2xl bg-slate-950/80 px-4 py-3 text-xs text-white shadow-lg">
+        <p className="font-semibold">Map-based Photo Group Explorer</p>
+        <p className="mt-1 text-slate-200">
+          그룹 핀, 클러스터, bounds 기반 샘플링으로 탐색합니다.
+        </p>
+      </div>
+
+      {mapErrorMessage ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/95">
+          <div className="max-w-sm rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-center">
+            <p className="text-sm font-semibold text-amber-900">
+              지도를 불러오지 못했습니다.
+            </p>
+            <p className="mt-1 text-sm text-amber-700">
+              검색 결과와 그룹 정보는 계속 볼 수 있습니다.
+            </p>
+            <p className="mt-2 text-xs break-all text-amber-700">{mapErrorMessage}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {groups.length === 0 ? (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/10">
+          <div className="rounded-2xl bg-white/95 px-6 py-5 text-center shadow-sm">
+            <p className="text-sm font-semibold text-slate-900">
+              현재 지도에 표시할 그룹이 없습니다.
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              검색을 바꾸거나 날짜 필터를 조정해 보세요.
+            </p>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
