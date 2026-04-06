@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 
-import { MapBottomSheet } from '@presentation/renderer/components/map/MapBottomSheet'
 import { MapFilterBar } from '@presentation/renderer/components/map/MapFilterBar'
+import { MapPhotoSidebar } from '@presentation/renderer/components/map/MapPhotoSidebar'
 import { MapSearchBar } from '@presentation/renderer/components/map/MapSearchBar'
 import { PhotoGroupMap } from '@presentation/renderer/components/map/PhotoGroupMap'
 import { useDebouncedValue } from '@presentation/renderer/hooks/useDebouncedValue'
@@ -33,16 +33,12 @@ export function BrowsePage() {
   const mapBounds = useBrowseMapStore((state) => state.mapBounds)
   const zoomLevel = useBrowseMapStore((state) => state.zoomLevel)
   const selectedGroupId = useBrowseMapStore((state) => state.selectedGroupId)
-  const bottomSheetState = useBrowseMapStore((state) => state.bottomSheetState)
   const setSearchQuery = useBrowseMapStore((state) => state.setSearchQuery)
   const setQuickFilter = useBrowseMapStore((state) => state.setQuickFilter)
   const setDateRange = useBrowseMapStore((state) => state.setDateRange)
   const setMapBounds = useBrowseMapStore((state) => state.setMapBounds)
   const setZoomLevel = useBrowseMapStore((state) => state.setZoomLevel)
   const setSelectedGroupId = useBrowseMapStore((state) => state.setSelectedGroupId)
-  const setBottomSheetState = useBrowseMapStore(
-    (state) => state.setBottomSheetState
-  )
   const resetFilters = useBrowseMapStore((state) => state.resetFilters)
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 220)
 
@@ -113,17 +109,8 @@ export function BrowsePage() {
   useEffect(() => {
     if (derivedState.filteredGroups.length === 1) {
       setSelectedGroupId(derivedState.filteredGroups[0]?.group.id)
-
-      if (bottomSheetState === 'collapsed') {
-        setBottomSheetState('half')
-      }
     }
-  }, [
-    bottomSheetState,
-    derivedState.filteredGroups,
-    setBottomSheetState,
-    setSelectedGroupId
-  ])
+  }, [derivedState.filteredGroups, setSelectedGroupId])
 
   const handleQuickFilterChange = useCallback((nextFilter: typeof quickFilter): void => {
     setQuickFilter(nextFilter)
@@ -147,8 +134,7 @@ export function BrowsePage() {
 
   const handleSelectGroup = useCallback((groupId: string): void => {
     setSelectedGroupId(groupId)
-    setBottomSheetState('half')
-  }, [setBottomSheetState, setSelectedGroupId])
+  }, [setSelectedGroupId])
 
   const handleViewportChange = useCallback(
     ({ bounds, zoomLevel: nextZoomLevel }: { bounds: typeof mapBounds; zoomLevel: number }) => {
@@ -253,46 +239,46 @@ export function BrowsePage() {
             ) : null}
           </div>
 
-          <div className="relative h-[78vh] min-h-[720px]">
-            <PhotoGroupMap
-              groups={effectiveVisibleGroups}
-              selectedGroupId={selectedGroupId}
-              unclusteredMinZoom={mapZoomPolicy.unclusteredMinZoom}
-              onSelectGroup={handleSelectGroup}
-              onViewportChange={handleViewportChange}
-            />
+          <div className="grid gap-4 xl:grid-cols-2">
+            <div className="relative h-[78vh] min-h-[720px]">
+              <PhotoGroupMap
+                groups={effectiveVisibleGroups}
+                selectedGroupId={selectedGroupId}
+                unclusteredMinZoom={mapZoomPolicy.unclusteredMinZoom}
+                onSelectGroup={handleSelectGroup}
+                onViewportChange={handleViewportChange}
+              />
 
-            <div className="pointer-events-none absolute inset-x-3 top-3 z-10 space-y-3">
-              <div className="pointer-events-auto">
-                <MapSearchBar
-                  value={searchQuery}
-                  resultCount={derivedState.filteredGroups.length}
-                  onChange={setSearchQuery}
-                  onClear={() => setSearchQuery('')}
-                />
-              </div>
+              <div className="pointer-events-none absolute inset-x-3 top-3 z-10 space-y-3">
+                <div className="pointer-events-auto">
+                  <MapSearchBar
+                    value={searchQuery}
+                    resultCount={derivedState.filteredGroups.length}
+                    onChange={setSearchQuery}
+                    onClear={() => setSearchQuery('')}
+                  />
+                </div>
 
-              <div className="pointer-events-auto">
-                <MapFilterBar
-                  quickFilter={quickFilter}
-                  dateRange={dateRange}
-                  onQuickFilterChange={handleQuickFilterChange}
-                  onDateRangeChange={handleCustomDateRangeChange}
-                  onReset={() => {
-                    resetFilters()
-                  }}
-                />
+                <div className="pointer-events-auto">
+                  <MapFilterBar
+                    quickFilter={quickFilter}
+                    dateRange={dateRange}
+                    onQuickFilterChange={handleQuickFilterChange}
+                    onDateRangeChange={handleCustomDateRangeChange}
+                    onReset={() => {
+                      resetFilters()
+                    }}
+                  />
+                </div>
               </div>
             </div>
 
-            <MapBottomSheet
-              state={bottomSheetState}
+            <MapPhotoSidebar
               outputRoot={libraryIndex?.outputRoot ?? outputRoot}
               selectedGroup={derivedState.selectedGroup}
               filteredGroups={derivedState.filteredGroups}
               unmappedGroups={derivedState.unmappedGroups}
               onSelectGroup={handleSelectGroup}
-              onStateChange={setBottomSheetState}
             />
           </div>
         </section>

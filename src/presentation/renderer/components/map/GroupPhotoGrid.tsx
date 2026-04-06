@@ -1,7 +1,7 @@
 import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 import type { GroupDetail } from '@shared/types/preload'
 
-function getGpsBadge(photo: GroupDetail['photos'][number]): string {
+export function getGpsBadge(photo: GroupDetail['photos'][number]): string {
   if (photo.originalGps) {
     return 'Exact GPS'
   }
@@ -21,12 +21,16 @@ interface GroupPhotoGridProps {
   group: GroupDetail
   outputRoot?: string
   compact?: boolean
+  selectedPhotoId?: string
+  onPhotoClick?: (photoId: string) => void
 }
 
 export function GroupPhotoGrid({
   group,
   outputRoot,
-  compact = false
+  compact = false,
+  selectedPhotoId,
+  onPhotoClick
 }: GroupPhotoGridProps) {
   const photos = compact ? group.photos.slice(0, 8) : group.photos
 
@@ -34,8 +38,8 @@ export function GroupPhotoGrid({
     <div
       className={`grid gap-3 ${
         compact
-          ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
-          : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+          ? 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5'
+          : 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
       }`}
     >
       {photos.map((photo) => {
@@ -47,9 +51,15 @@ export function GroupPhotoGrid({
           )
 
         return (
-          <article
+          <button
+            type="button"
             key={photo.id}
-            className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            className={`overflow-hidden rounded-2xl border bg-white text-left transition ${
+              selectedPhotoId === photo.id
+                ? 'border-blue-400 ring-2 ring-blue-200'
+                : 'border-slate-200 hover:border-slate-300'
+            }`}
+            onClick={() => onPhotoClick?.(photo.id)}
           >
             <div className="aspect-square bg-slate-100">
               {thumbnailUrl ? (
@@ -65,8 +75,8 @@ export function GroupPhotoGrid({
                 </div>
               )}
             </div>
-            <div className="space-y-2 p-3">
-              <p className="truncate text-sm font-medium text-slate-900">
+            <div className="space-y-2 p-2.5">
+              <p className="truncate text-xs font-medium text-slate-900">
                 {photo.sourceFileName}
               </p>
               <div className="flex flex-wrap gap-2 text-xs">
@@ -80,7 +90,7 @@ export function GroupPhotoGrid({
                 ) : null}
               </div>
             </div>
-          </article>
+          </button>
         )
       })}
     </div>
