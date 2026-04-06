@@ -3,10 +3,14 @@ import { useEffect, useState } from 'react'
 import { GroupPhotoGrid } from '@presentation/renderer/components/map/GroupPhotoGrid'
 import { GroupPreviewCard } from '@presentation/renderer/components/map/GroupPreviewCard'
 import type { MapGroupRecord } from '@presentation/renderer/view-models/map/mapPageSelectors'
+import type { GroupDetail } from '@shared/types/preload'
 
 interface MapPhotoSidebarProps {
   outputRoot?: string
   selectedGroup: MapGroupRecord | null
+  selectedGroupDetail: GroupDetail | null
+  isLoadingGroupDetail?: boolean
+  groupDetailErrorMessage?: string | null
   filteredGroups: MapGroupRecord[]
   unmappedGroups: MapGroupRecord[]
   onSelectGroup: (groupId: string) => void
@@ -16,6 +20,9 @@ interface MapPhotoSidebarProps {
 export function MapPhotoSidebar({
   outputRoot,
   selectedGroup,
+  selectedGroupDetail,
+  isLoadingGroupDetail = false,
+  groupDetailErrorMessage = null,
   filteredGroups,
   unmappedGroups,
   onSelectGroup,
@@ -26,10 +33,14 @@ export function MapPhotoSidebar({
 
   useEffect(() => {
     const nextDefaultPhotoId =
-      selectedGroup?.group.representativePhotoId ?? selectedGroup?.group.photos[0]?.id
+      selectedGroupDetail?.representativePhotoId ?? selectedGroupDetail?.photos[0]?.id
 
     setSelectedPhotoId(nextDefaultPhotoId)
-  }, [selectedGroup?.group.id, selectedGroup?.group.photos, selectedGroup?.group.representativePhotoId])
+  }, [
+    selectedGroup?.group.id,
+    selectedGroupDetail?.photos,
+    selectedGroupDetail?.representativePhotoId
+  ])
 
   return (
     <aside className="flex h-[min(68vh,720px)] min-h-[560px] min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 xl:min-w-[420px]">
@@ -109,16 +120,30 @@ export function MapPhotoSidebar({
                   </span>
                 </div>
 
-                <GroupPhotoGrid
-                  group={selectedGroup.group}
-                  outputRoot={outputRoot}
-                  compact={false}
-                  selectedPhotoId={selectedPhotoId}
-                  onPhotoClick={(photoId) => {
-                    setSelectedPhotoId(photoId)
-                    onPreviewPhoto(photoId)
-                  }}
-                />
+                {groupDetailErrorMessage ? (
+                  <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700">
+                    {groupDetailErrorMessage}
+                  </p>
+                ) : isLoadingGroupDetail ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
+                    그룹 사진을 불러오는 중입니다…
+                  </div>
+                ) : selectedGroupDetail ? (
+                  <GroupPhotoGrid
+                    group={selectedGroupDetail}
+                    outputRoot={outputRoot}
+                    compact={false}
+                    selectedPhotoId={selectedPhotoId}
+                    onPhotoClick={(photoId) => {
+                      setSelectedPhotoId(photoId)
+                      onPreviewPhoto(photoId)
+                    }}
+                  />
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-white px-3 py-6 text-center text-sm text-slate-500">
+                    이 그룹의 사진을 아직 불러오지 못했습니다.
+                  </div>
+                )}
               </div>
             </section>
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { GroupDetail, GroupPhotoSummary } from '@shared/types/preload'
+import type { GroupSummary } from '@shared/types/preload'
 
 import {
   buildMapGroupRecord,
@@ -12,72 +12,51 @@ import {
   resolveGroupPinLocation
 } from './mapPageSelectors'
 
-function createPhoto(
-  overrides: Partial<GroupPhotoSummary> & Pick<GroupPhotoSummary, 'id' | 'sourceFileName'>
-): GroupPhotoSummary {
-  return {
-    id: overrides.id,
-    sourceFileName: overrides.sourceFileName,
-    capturedAtIso: overrides.capturedAtIso,
-    capturedAtSource: overrides.capturedAtSource,
-    originalGps: overrides.originalGps,
-    gps: overrides.gps,
-    locationSource: overrides.locationSource,
-    regionName: overrides.regionName,
-    thumbnailRelativePath: overrides.thumbnailRelativePath,
-    outputRelativePath: overrides.outputRelativePath,
-    hasGps: overrides.hasGps ?? Boolean(overrides.gps),
-    missingGpsCategory: overrides.missingGpsCategory
-  }
+const emptyGps = {
+  exactGpsCount: 0,
+  inferredGpsCount: 0,
+  missingGpsCount: 0
 }
 
-function createGroup(
-  overrides: Partial<GroupDetail> & Pick<GroupDetail, 'id' | 'title'>
-): GroupDetail {
+function createSummary(
+  overrides: Partial<GroupSummary> & Pick<GroupSummary, 'id' | 'title'>
+): GroupSummary {
   return {
     id: overrides.id,
-    title: overrides.title,
     groupKey: overrides.groupKey ?? overrides.id,
+    pathSegments: overrides.pathSegments ?? ['2026', '04', 'region'],
+    title: overrides.title,
     displayTitle: overrides.displayTitle ?? overrides.title,
-    photoCount: overrides.photoCount ?? overrides.photos?.length ?? 0,
-    photoIds:
-      overrides.photoIds ?? overrides.photos?.map((photo) => photo.id) ?? [],
+    photoCount: overrides.photoCount ?? 0,
     representativePhotoId: overrides.representativePhotoId,
-    representativeThumbnailRelativePath:
-      overrides.representativeThumbnailRelativePath,
+    representativeThumbnailRelativePath: overrides.representativeThumbnailRelativePath,
+    representativeOutputRelativePath: overrides.representativeOutputRelativePath,
     representativeGps: overrides.representativeGps,
     companions: overrides.companions ?? [],
     notes: overrides.notes,
-    photos: overrides.photos ?? []
+    regionLabel: overrides.regionLabel ?? 'Seoul',
+    earliestCapturedAtIso: overrides.earliestCapturedAtIso,
+    latestCapturedAtIso: overrides.latestCapturedAtIso,
+    searchText: overrides.searchText ?? 'test',
+    gpsBreakdown: overrides.gpsBreakdown ?? emptyGps,
+    pinLocation: overrides.pinLocation ?? null,
+    isUnknownLocation: overrides.isUnknownLocation ?? false
   }
 }
 
 describe('mapPageSelectors', () => {
-  it('prefers the most recent originalGps photo for pin location', () => {
-    const group = createGroup({
+  it('uses summary pinLocation (original GPS preferred in index pipeline)', () => {
+    const group = createSummary({
       id: 'group-1',
       title: 'Trip',
       displayTitle: '2026-04-02_양재천',
       representativeGps: { latitude: 10, longitude: 10 },
-      photos: [
-        createPhoto({
-          id: 'p1',
-          sourceFileName: 'old.jpg',
-          capturedAtIso: '2026-04-01T09:00:00.000Z',
-          originalGps: { latitude: 37.5, longitude: 127.0 },
-          gps: { latitude: 37.5, longitude: 127.0 },
-          locationSource: 'exif',
-          regionName: 'Seoul'
-        }),
-        createPhoto({
-          id: 'p2',
-          sourceFileName: 'newer-inferred.jpg',
-          capturedAtIso: '2026-04-03T09:00:00.000Z',
-          gps: { latitude: 35.0, longitude: 129.0 },
-          locationSource: 'assigned-from-group',
-          regionName: 'Busan'
-        })
-      ]
+      pinLocation: {
+        latitude: 37.5,
+        longitude: 127.0,
+        source: 'photo-original-gps'
+      },
+      gpsBreakdown: { exactGpsCount: 2, inferredGpsCount: 0, missingGpsCount: 0 }
     })
 
     expect(resolveGroupPinLocation(group)).toEqual({
@@ -87,13 +66,18 @@ describe('mapPageSelectors', () => {
     })
   })
 
-  it('falls back to representativeGps when no photo gps exists', () => {
-    const group = createGroup({
+  it('falls back to representativeGps when pinLocation is representative source', () => {
+    const group = createSummary({
       id: 'group-2',
       title: '',
       displayTitle: '',
       representativeGps: { latitude: 48.8, longitude: 2.3 },
-      photos: [createPhoto({ id: 'p1', sourceFileName: 'a.jpg', hasGps: false })]
+      pinLocation: {
+        latitude: 48.8,
+        longitude: 2.3,
+        source: 'representative-gps'
+      },
+      gpsBreakdown: { exactGpsCount: 0, inferredGpsCount: 0, missingGpsCount: 1 }
     })
 
     expect(resolveGroupPinLocation(group)).toEqual({
@@ -106,22 +90,23 @@ describe('mapPageSelectors', () => {
   it('resolves display title with cleaned title and unknown fallback', () => {
     expect(
       resolveGroupDisplayTitle(
-        createGroup({
+        createSummary({
           id: 'group-3',
           title: '',
           displayTitle: '2026-04-02_양재천',
-          photos: []
+          regionLabel: 'Seoul'
         })
       )
     ).toBe('양재천')
 
     expect(
       resolveGroupDisplayTitle(
-        createGroup({
+        createSummary({
           id: 'group-4',
           title: '',
           displayTitle: 'location-unknown',
-          photos: []
+          regionLabel: 'Unknown Location',
+          isUnknownLocation: true
         })
       )
     ).toBe('Unknown Location')
@@ -130,39 +115,37 @@ describe('mapPageSelectors', () => {
   it('filters groups by search query and date range', () => {
     const records = [
       buildMapGroupRecord(
-        createGroup({
+        createSummary({
           id: 'seoul',
           title: 'Seoul Walk',
           displayTitle: '2026-04-02 Seoul Walk',
-          photos: [
-            createPhoto({
-              id: 'p1',
-              sourceFileName: 'han.jpg',
-              capturedAtIso: '2026-04-02T11:00:00.000Z',
-              gps: { latitude: 37.5, longitude: 127.0 },
-              originalGps: { latitude: 37.5, longitude: 127.0 },
-              locationSource: 'exif',
-              regionName: 'Seoul'
-            })
-          ]
+          regionLabel: 'Seoul',
+          latestCapturedAtIso: '2026-04-02T11:00:00.000Z',
+          earliestCapturedAtIso: '2026-04-02T11:00:00.000Z',
+          searchText: 'seoul walk han.jpg',
+          pinLocation: {
+            latitude: 37.5,
+            longitude: 127.0,
+            source: 'photo-original-gps'
+          },
+          gpsBreakdown: { exactGpsCount: 1, inferredGpsCount: 0, missingGpsCount: 0 }
         })
       ),
       buildMapGroupRecord(
-        createGroup({
+        createSummary({
           id: 'busan',
           title: 'Busan',
           displayTitle: 'Busan',
-          photos: [
-            createPhoto({
-              id: 'p2',
-              sourceFileName: 'beach.jpg',
-              capturedAtIso: '2025-01-01T11:00:00.000Z',
-              gps: { latitude: 35.1, longitude: 129.0 },
-              originalGps: { latitude: 35.1, longitude: 129.0 },
-              locationSource: 'exif',
-              regionName: 'Busan'
-            })
-          ]
+          regionLabel: 'Busan',
+          latestCapturedAtIso: '2025-01-01T11:00:00.000Z',
+          earliestCapturedAtIso: '2025-01-01T11:00:00.000Z',
+          searchText: 'busan beach.jpg',
+          pinLocation: {
+            latitude: 35.1,
+            longitude: 129.0,
+            source: 'photo-original-gps'
+          },
+          gpsBreakdown: { exactGpsCount: 1, inferredGpsCount: 0, missingGpsCount: 0 }
         })
       )
     ]
@@ -179,60 +162,51 @@ describe('mapPageSelectors', () => {
     const visibleGroups = buildVisibleMapGroups(
       [
         buildMapGroupRecord(
-          createGroup({
+          createSummary({
             id: 'seoul-high',
             title: 'Seoul High',
             displayTitle: 'Seoul High',
             photoCount: 20,
-            photos: [
-              createPhoto({
-                id: 'p1',
-                sourceFileName: 'a.jpg',
-                capturedAtIso: '2026-04-03T10:00:00.000Z',
-                gps: { latitude: 37.5, longitude: 127.0 },
-                originalGps: { latitude: 37.5, longitude: 127.0 },
-                locationSource: 'exif',
-                regionName: 'Seoul'
-              })
-            ]
+            regionLabel: 'Seoul',
+            latestCapturedAtIso: '2026-04-03T10:00:00.000Z',
+            pinLocation: {
+              latitude: 37.5,
+              longitude: 127.0,
+              source: 'photo-original-gps'
+            },
+            gpsBreakdown: { exactGpsCount: 1, inferredGpsCount: 0, missingGpsCount: 0 }
           })
         ),
         buildMapGroupRecord(
-          createGroup({
+          createSummary({
             id: 'seoul-low',
             title: 'Seoul Low',
             displayTitle: 'Seoul Low',
             photoCount: 2,
-            photos: [
-              createPhoto({
-                id: 'p2',
-                sourceFileName: 'b.jpg',
-                capturedAtIso: '2024-04-03T10:00:00.000Z',
-                gps: { latitude: 37.6, longitude: 127.1 },
-                originalGps: { latitude: 37.6, longitude: 127.1 },
-                locationSource: 'exif',
-                regionName: 'Seoul'
-              })
-            ]
+            regionLabel: 'Seoul',
+            latestCapturedAtIso: '2024-04-03T10:00:00.000Z',
+            pinLocation: {
+              latitude: 37.6,
+              longitude: 127.1,
+              source: 'photo-original-gps'
+            },
+            gpsBreakdown: { exactGpsCount: 1, inferredGpsCount: 0, missingGpsCount: 0 }
           })
         ),
         buildMapGroupRecord(
-          createGroup({
+          createSummary({
             id: 'busan-high',
             title: 'Busan High',
             displayTitle: 'Busan High',
             photoCount: 15,
-            photos: [
-              createPhoto({
-                id: 'p3',
-                sourceFileName: 'c.jpg',
-                capturedAtIso: '2026-04-01T10:00:00.000Z',
-                gps: { latitude: 35.1, longitude: 129.0 },
-                originalGps: { latitude: 35.1, longitude: 129.0 },
-                locationSource: 'exif',
-                regionName: 'Busan'
-              })
-            ]
+            regionLabel: 'Busan',
+            latestCapturedAtIso: '2026-04-01T10:00:00.000Z',
+            pinLocation: {
+              latitude: 35.1,
+              longitude: 129.0,
+              source: 'photo-original-gps'
+            },
+            gpsBreakdown: { exactGpsCount: 1, inferredGpsCount: 0, missingGpsCount: 0 }
           })
         )
       ],
@@ -251,27 +225,29 @@ describe('mapPageSelectors', () => {
   it('derives mapped and unmapped groups together for page state', () => {
     const state = deriveMapPageState(
       [
-        createGroup({
+        createSummary({
           id: 'mapped',
           title: 'Mapped',
           displayTitle: 'Mapped',
-          photos: [
-            createPhoto({
-              id: 'p1',
-              sourceFileName: 'mapped.jpg',
-              capturedAtIso: '2026-04-01T10:00:00.000Z',
-              gps: { latitude: 37.5, longitude: 127.0 },
-              originalGps: { latitude: 37.5, longitude: 127.0 },
-              locationSource: 'exif',
-              regionName: 'Seoul'
-            })
-          ]
+          regionLabel: 'Seoul',
+          latestCapturedAtIso: '2026-04-01T10:00:00.000Z',
+          searchText: 'mapped seoul',
+          pinLocation: {
+            latitude: 37.5,
+            longitude: 127.0,
+            source: 'photo-original-gps'
+          },
+          gpsBreakdown: { exactGpsCount: 1, inferredGpsCount: 0, missingGpsCount: 0 }
         }),
-        createGroup({
+        createSummary({
           id: 'unmapped',
           title: 'No GPS',
           displayTitle: 'No GPS',
-          photos: [createPhoto({ id: 'p2', sourceFileName: 'nogps.jpg' })]
+          regionLabel: 'Unknown Location',
+          searchText: 'nogps',
+          pinLocation: null,
+          isUnknownLocation: true,
+          gpsBreakdown: { exactGpsCount: 0, inferredGpsCount: 0, missingGpsCount: 1 }
         })
       ],
       {

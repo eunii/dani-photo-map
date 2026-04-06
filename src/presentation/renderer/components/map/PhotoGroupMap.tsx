@@ -238,8 +238,7 @@ export function PhotoGroupMap({
       ? toOutputFileUrl(
           outputRoot,
           group.group.representativeThumbnailRelativePath ??
-            group.group.photos[0]?.thumbnailRelativePath ??
-            group.group.photos[0]?.outputRelativePath
+            group.group.representativeOutputRelativePath
         )
       : undefined
 

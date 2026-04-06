@@ -1,6 +1,16 @@
 import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 import type { GroupDetail } from '@shared/types/preload'
 
+export function getGpsBadge(photo: GroupDetail['photos'][number]): string {
+  if (photo.originalGps) {
+    return '정확 GPS'
+  }
+  if (photo.gps) {
+    return photo.locationSource === 'assigned-from-group' ? '추론 위치' : 'GPS'
+  }
+  return '위치 없음'
+}
+
 interface GroupPhotoGridProps {
   group: GroupDetail
   outputRoot?: string

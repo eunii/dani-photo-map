@@ -44,7 +44,7 @@ function createLibraryIndex(): LibraryIndex {
         id: 'photo-2',
         sourcePath: 'C:/photos/source/IMG_0002.JPG',
         sourceFileName: 'IMG_0002.JPG',
-        outputRelativePath: '2026/04/base/IMG_0002.JPG',
+        outputRelativePath: '2026/04/seoul/IMG_0002.JPG',
         isDuplicate: false,
         metadataIssues: []
       }
@@ -78,33 +78,10 @@ describe('toLibraryIndexView', () => {
       id: 'group-1',
       photoCount: 2,
       representativePhotoId: 'photo-1',
-      photos: [
-        {
-          id: 'photo-1',
-          capturedAtSource: 'exif-date-time-original',
-          hasGps: true,
-          locationSource: 'exif',
-          regionName: 'seoul',
-          gps: {
-            latitude: 37.5665,
-            longitude: 126.978
-          },
-          originalGps: {
-            latitude: 37.5665,
-            longitude: 126.978
-          }
-        },
-        {
-          id: 'photo-2',
-          hasGps: false
-        }
-      ]
+      representativeThumbnailRelativePath: '.photo-organizer/thumbnails/photo-1.webp',
+      pathSegments: ['2026', '04', 'seoul']
     })
-    expect(view.mapGroups[0]).toMatchObject({
-      id: 'group-1',
-      latitude: 37.5665,
-      longitude: 126.978,
-      representativeThumbnailRelativePath: '.photo-organizer/thumbnails/photo-1.webp'
-    })
+    expect(view.groups[0]?.searchText.length).toBeGreaterThan(0)
+    expect(view.groups[0]?.gpsBreakdown).toBeDefined()
   })
 })

@@ -16,11 +16,7 @@ export function getLoadSourceBadge(
   source: LibraryIndexLoadSource | null
 ): { label: string; tone: string; description: string } | null {
   if (source === 'merged') {
-    return {
-      label: '병합 기반',
-      tone: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-      description: '출력 폴더와 index 메타데이터를 함께 반영해 표시 중입니다.'
-    }
+    return null
   }
 
   if (source === 'fallback') {

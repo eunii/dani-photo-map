@@ -20,8 +20,7 @@ export function GroupPreviewCard({
     ? toOutputFileUrl(
         outputRoot,
         record.group.representativeThumbnailRelativePath ??
-          record.group.photos[0]?.thumbnailRelativePath ??
-          record.group.photos[0]?.outputRelativePath
+          record.group.representativeOutputRelativePath
       )
     : undefined
 

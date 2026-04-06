@@ -8,6 +8,7 @@ import type { PreloadBridge } from '@shared/types/preload'
 const IPC_CHANNELS = {
   selectDirectory: 'photo-app/select-directory',
   loadLibraryIndex: 'photo-app/load-library-index',
+  loadLibraryGroupDetail: 'photo-app/load-library-group-detail',
   previewPendingOrganization: 'photo-app/preview-pending-organization',
   scanPhotoLibrary: 'photo-app/scan-photo-library',
   scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress',
@@ -41,6 +42,9 @@ export const preloadBridge: PreloadBridge = {
   },
   async loadLibraryIndex(request) {
     return ipcRenderer.invoke(IPC_CHANNELS.loadLibraryIndex, request)
+  },
+  async loadLibraryGroupDetail(request) {
+    return ipcRenderer.invoke(IPC_CHANNELS.loadLibraryGroupDetail, request)
   },
   async previewPendingOrganization(request) {
     return ipcRenderer.invoke(IPC_CHANNELS.previewPendingOrganization, request)

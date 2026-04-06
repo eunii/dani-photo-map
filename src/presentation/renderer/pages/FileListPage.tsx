@@ -11,6 +11,7 @@ import {
   getLoadSourceBadge,
   useOutputLibraryIndexPanel
 } from '@presentation/renderer/hooks/useOutputLibraryIndexPanel'
+import { useLibraryGroupDetail } from '@presentation/renderer/hooks/useLibraryGroupDetail'
 import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 import {
   deleteOutputFolderSubtreeIpc,
@@ -23,15 +24,13 @@ import {
 } from '@presentation/renderer/view-models/flattenLibraryPhotos'
 import { stripLeadingDateFromAutoGroupDisplayTitle } from '@domain/services/PhotoNamingService'
 import {
-  buildOutputFolderTree,
-  countPhotosInSubtree,
-  filterRowsAtPath,
-  findFirstGroupIdUnderSubfolder,
-  formatPathSegmentLabel,
-  listSubfoldersAtPath,
-  NO_OUTPUT_PATH_SEGMENT,
-  ROOT_LEVEL_FILES_SEGMENT
-} from '@presentation/renderer/view-models/outputPathNavigation'
+  buildGroupFolderTree,
+  countPhotosInGroupSubtree,
+  findFirstGroupIdUnderSubfolder as findFirstGroupIdUnderSummaryPath,
+  findGroupByPath,
+  listSubfoldersAtPath as listGroupSubfoldersAtPath
+} from '@presentation/renderer/view-models/groupFolderNavigation'
+import { formatPathSegmentLabel } from '@presentation/renderer/view-models/outputPathNavigation'
 
 const LIST_CHUNK = 150
 
@@ -112,9 +111,25 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
 
   const sourceBadge = getLoadSourceBadge(loadSource)
 
+  const groups = libraryIndex?.groups ?? []
+
+  const groupAtPath = useMemo(
+    () => findGroupByPath(groups, pathSegments),
+    [groups, pathSegments]
+  )
+
+  const {
+    groupDetail,
+    isLoading: isLoadingGroupDetail,
+    errorMessage: groupDetailErrorMessage
+  } = useLibraryGroupDetail({
+    outputRoot: libraryIndex?.outputRoot ?? outputRoot,
+    group: groupAtPath ?? null
+  })
+
   const flatRows = useMemo(
-    () => flattenLibraryGroupsToPhotos(libraryIndex?.groups ?? []),
-    [libraryIndex?.groups]
+    () => (groupDetail ? flattenLibraryGroupsToPhotos([groupDetail]) : []),
+    [groupDetail]
   )
 
   const sortedRows = useMemo(
@@ -122,15 +137,10 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     [flatRows, sortOption]
   )
 
-  const folderTree = useMemo(
-    () => buildOutputFolderTree(sortedRows),
-    [sortedRows]
-  )
+  const folderTree = useMemo(() => buildGroupFolderTree(groups), [groups])
 
-  const rowsInFolder = useMemo(
-    () => filterRowsAtPath(sortedRows, pathSegments),
-    [sortedRows, pathSegments]
-  )
+  /** 그룹 폴더(년/월/지역)를 선택했을 때만 상세 로드된 사진이 여기에 채워집니다. */
+  const rowsInFolder = sortedRows
 
   /** 인덱스가 다시 불러와져도 현재 트리 위치는 유지 (출력 폴더를 바꿀 때만 초기화) */
   useEffect(() => {
@@ -208,11 +218,14 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     )
   }, [outputRootForUrls, selectedRow])
 
-  const totalCount = sortedRows.length
+  const totalCount = useMemo(
+    () => countPhotosInGroupSubtree(groups, []),
+    [groups]
+  )
   const folderCount = rowsInFolder.length
   const subtreeCount = useMemo(
-    () => countPhotosInSubtree(sortedRows, pathSegments),
-    [sortedRows, pathSegments]
+    () => countPhotosInGroupSubtree(groups, pathSegments),
+    [groups, pathSegments]
   )
 
   const breadcrumbPathLabel = useMemo(() => {
@@ -256,7 +269,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
       : pathSegments.length > 0
         ? pathSegments.slice(0, -1)
         : ([] as string[])
-    const entries = listSubfoldersAtPath(sortedRows, listBasePath)
+    const entries = listGroupSubfoldersAtPath(groups, listBasePath)
     const out: {
       groupId: string
       segment: string
@@ -264,14 +277,8 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
       photoCount: number
     }[] = []
     for (const entry of entries) {
-      if (
-        entry.segment === NO_OUTPUT_PATH_SEGMENT ||
-        entry.segment === ROOT_LEVEL_FILES_SEGMENT
-      ) {
-        continue
-      }
-      const groupId = findFirstGroupIdUnderSubfolder(
-        sortedRows,
+      const groupId = findFirstGroupIdUnderSummaryPath(
+        groups,
         listBasePath,
         entry.segment
       )
@@ -285,21 +292,24 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
       }
     }
     return out
-  }, [sortedRows, pathSegments, moveDestinationUsesChildFolders])
+  }, [groups, pathSegments, moveDestinationUsesChildFolders])
 
-  /** 현재 목록에 나타난 그룹(폴더) — 이름 변경 대상 선택용 (표시는 년·월 접두 없음) */
+  /** 현재 경로가 그룹 폴더일 때 이름 변경 대상 (표시는 년·월 접두 없음) */
   const groupsInCurrentFolder = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const row of rowsInFolder) {
-      if (!map.has(row.groupId)) {
-        map.set(
-          row.groupId,
-          folderRenameLabelWithoutDate(row.groupDisplayTitle)
+    if (!groupAtPath) {
+      return []
+    }
+    return [
+      {
+        id: groupAtPath.id,
+        title: folderRenameLabelWithoutDate(
+          groupAtPath.title.trim().length > 0
+            ? groupAtPath.title
+            : stripLeadingDateFromAutoGroupDisplayTitle(groupAtPath.displayTitle)
         )
       }
-    }
-    return [...map.entries()].map(([id, title]) => ({ id, title }))
-  }, [rowsInFolder])
+    ]
+  }, [groupAtPath])
 
   const toggleMoveSelection = useCallback((photoId: string) => {
     setSelectedForMove((previous) => {
@@ -560,6 +570,12 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
         </div>
       ) : null}
 
+      {groupDetailErrorMessage ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {groupDetailErrorMessage}
+        </div>
+      ) : null}
+
       <section className="space-y-3">
         {outputRoot ? (
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -677,13 +693,17 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                   ) : null}
                 </div>
 
-                {folderCount > 0 && libraryIndex ? (
+                {libraryIndex && groupAtPath ? (
                   <div className="flex flex-col gap-1.5 border-t border-slate-50 px-2 py-1.5 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between lg:gap-3">
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                         <button
                           type="button"
                           className="inline-flex items-center justify-center rounded-md bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                          disabled={selectedForMove.size === 0 || isMovingPhotos}
+                          disabled={
+                            selectedForMove.size === 0 ||
+                            isMovingPhotos ||
+                            folderCount === 0
+                          }
                           onClick={() => {
                             const first = moveDestinationFolderOptions[0]
                             if (first) {
@@ -705,9 +725,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                             type="button"
                             className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={
-                              folderCount === 0 ||
-                              groupsInCurrentFolder.length === 0 ||
-                              isRenaming
+                              groupsInCurrentFolder.length === 0 || isRenaming
                             }
                             onClick={() => {
                               const first = groupsInCurrentFolder[0]
@@ -746,7 +764,8 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                           disabled={
                             selectedForMove.size === 0 ||
                             isDeletingPhotos ||
-                            isDeletingFolder
+                            isDeletingFolder ||
+                            folderCount === 0
                           }
                           onClick={() => setDeletePhotosConfirmOpen(true)}
                         >
@@ -765,10 +784,20 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                     </h3>
                   </div>
                   <div className="max-h-[min(55vh,720px)] overflow-y-auto">
-                  {folderCount === 0 ? (
+                  {!groupAtPath && pathSegments.length > 0 ? (
                     <p className="px-4 py-8 text-center text-sm text-slate-500">
-                      이 경로에 직접 있는 사진이 없습니다. 왼쪽 트리에서 다른
-                      폴더를 선택하세요.
+                      년·월·그룹(지역) 폴더까지 들어가면 그 안의 사진 목록을
+                      불러옵니다.
+                    </p>
+                  ) : groupAtPath && isLoadingGroupDetail ? (
+                    <p className="px-4 py-8 text-center text-sm text-slate-500">
+                      이 그룹의 사진을 불러오는 중입니다…
+                    </p>
+                  ) : folderCount === 0 ? (
+                    <p className="px-4 py-8 text-center text-sm text-slate-500">
+                      {groupAtPath
+                        ? '이 그룹에 표시할 사진이 없습니다.'
+                        : '왼쪽 트리에서 폴더를 선택하세요.'}
                     </p>
                   ) : (
                     <>

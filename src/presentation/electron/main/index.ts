@@ -3,6 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 
 import { DeleteOutputFolderSubtreeUseCase } from '@application/usecases/DeleteOutputFolderSubtreeUseCase'
 import { DeletePhotosFromLibraryUseCase } from '@application/usecases/DeletePhotosFromLibraryUseCase'
+import { LoadLibraryGroupDetailUseCase } from '@application/usecases/LoadLibraryGroupDetailUseCase'
 import { LoadLibraryIndexUseCase } from '@application/usecases/LoadLibraryIndexUseCase'
 import { MovePhotosToGroupUseCase } from '@application/usecases/MovePhotosToGroupUseCase'
 import { PreviewPendingOrganizationUseCase } from '@application/usecases/PreviewPendingOrganizationUseCase'
@@ -19,11 +20,17 @@ import { NodePhotoHasher } from '@infrastructure/hashing/NodePhotoHasher'
 import { JsonLibraryIndexStore } from '@infrastructure/storage/JsonLibraryIndexStore'
 import { SharpPhotoPreviewGenerator } from '@infrastructure/thumbnails/SharpPhotoPreviewGenerator'
 import { SharpThumbnailGenerator } from '@infrastructure/thumbnails/SharpThumbnailGenerator'
-import { toLibraryIndexView } from '@presentation/common/mappers/toLibraryIndexView'
+import {
+  toFallbackGroupDetailView,
+  toFallbackLibraryIndexView,
+  toGroupDetailView,
+  toLibraryIndexView
+} from '@presentation/common/mappers/toLibraryIndexView'
 import type {
   DeleteOutputFolderSubtreeRequest,
   DeletePhotosFromLibraryRequest,
   DirectorySelectionOptions,
+  LoadLibraryGroupDetailRequest,
   LoadLibraryIndexRequest,
   MovePhotosToGroupRequest,
   PreviewPendingOrganizationRequest,
@@ -34,6 +41,7 @@ import type {
 const IPC_CHANNELS = {
   selectDirectory: 'photo-app/select-directory',
   loadLibraryIndex: 'photo-app/load-library-index',
+  loadLibraryGroupDetail: 'photo-app/load-library-group-detail',
   previewPendingOrganization: 'photo-app/preview-pending-organization',
   scanPhotoLibrary: 'photo-app/scan-photo-library',
   scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress',
@@ -73,6 +81,13 @@ function createScanPhotoLibraryUseCase(command: ScanPhotoLibraryRequest) {
 
 function createLoadLibraryIndexUseCase(): LoadLibraryIndexUseCase {
   return new LoadLibraryIndexUseCase(
+    createLibraryIndexStore(),
+    new ExistingOutputLibraryScanner(defaultOrganizationRules)
+  )
+}
+
+function createLoadLibraryGroupDetailUseCase(): LoadLibraryGroupDetailUseCase {
+  return new LoadLibraryGroupDetailUseCase(
     createLibraryIndexStore(),
     new ExistingOutputLibraryScanner(defaultOrganizationRules)
   )
@@ -155,7 +170,44 @@ function registerIpcHandlers(): void {
 
       return {
         source: result.source,
-        index: result.index ? toLibraryIndexView(result.index) : null
+        index: result.index
+          ? toLibraryIndexView(result.index)
+          : result.fallbackGroups
+            ? toFallbackLibraryIndexView(
+                command.outputRoot,
+                new Date().toISOString(),
+                result.fallbackGroups
+              )
+            : null
+      }
+    }
+  )
+
+  ipcMain.removeHandler(IPC_CHANNELS.loadLibraryGroupDetail)
+  ipcMain.handle(
+    IPC_CHANNELS.loadLibraryGroupDetail,
+    async (_event, command: LoadLibraryGroupDetailRequest) => {
+      const useCase = createLoadLibraryGroupDetailUseCase()
+      const result = await useCase.execute(command)
+
+      if (result.storedIndex && result.group) {
+        const photosById = new Map(
+          result.storedIndex.photos.map((photo) => [photo.id, photo] as const)
+        )
+
+        return {
+          group: toGroupDetailView(result.group, photosById)
+        }
+      }
+
+      return {
+        group: result.fallbackPhotos
+          ? toFallbackGroupDetailView(
+              command.groupId,
+              result.pathSegments,
+              result.fallbackPhotos
+            )
+          : null
       }
     }
   )

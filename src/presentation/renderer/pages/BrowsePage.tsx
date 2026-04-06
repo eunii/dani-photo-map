@@ -6,6 +6,7 @@ import { MapPhotoPreviewOverlay } from '@presentation/renderer/components/map/Ma
 import { MapSearchBar } from '@presentation/renderer/components/map/MapSearchBar'
 import { PhotoGroupMap } from '@presentation/renderer/components/map/PhotoGroupMap'
 import { useDebouncedValue } from '@presentation/renderer/hooks/useDebouncedValue'
+import { useLibraryGroupDetail } from '@presentation/renderer/hooks/useLibraryGroupDetail'
 import { useOutputLibraryIndexPanel } from '@presentation/renderer/hooks/useOutputLibraryIndexPanel'
 import { useBrowseMapStore } from '@presentation/renderer/store/useBrowseMapStore'
 import {
@@ -67,6 +68,14 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
     () => filteredRecords.find((record) => record.group.id === selectedGroupId) ?? null,
     [filteredRecords, selectedGroupId]
   )
+  const {
+    groupDetail: selectedGroupDetail,
+    isLoading: isLoadingGroupDetail,
+    errorMessage: groupDetailErrorMessage
+  } = useLibraryGroupDetail({
+    outputRoot: libraryIndex?.outputRoot ?? outputRoot,
+    group: selectedGroup?.group ?? null
+  })
 
   const mapCanvasGroups = useMemo(
     () => mappedRecords,
@@ -173,6 +182,11 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
           {errorMessage}
         </div>
       ) : null}
+      {groupDetailErrorMessage ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {groupDetailErrorMessage}
+        </div>
+      ) : null}
 
       {!outputRoot ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
@@ -252,7 +266,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
 
               <MapPhotoPreviewOverlay
                 outputRoot={libraryIndex?.outputRoot ?? outputRoot}
-                group={selectedGroup?.group}
+                group={selectedGroupDetail ?? undefined}
                 photoId={previewPhotoId}
                 onChangePhoto={setPreviewPhotoId}
                 onClose={() => setPreviewPhotoId(undefined)}
@@ -262,6 +276,9 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
             <MapPhotoSidebar
               outputRoot={libraryIndex?.outputRoot ?? outputRoot}
               selectedGroup={selectedGroup}
+              selectedGroupDetail={selectedGroupDetail}
+              isLoadingGroupDetail={isLoadingGroupDetail}
+              groupDetailErrorMessage={groupDetailErrorMessage}
               filteredGroups={filteredRecords}
               unmappedGroups={unmappedRecords}
               onSelectGroup={handleSelectGroup}

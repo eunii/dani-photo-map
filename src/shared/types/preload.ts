@@ -51,6 +51,12 @@ export interface LoadLibraryIndexRequest {
   outputRoot: string
 }
 
+export interface LoadLibraryGroupDetailRequest {
+  outputRoot: string
+  groupId: string
+  pathSegments?: string[]
+}
+
 export interface PreviewPendingOrganizationRequest {
   sourceRoot: string
   outputRoot: string
@@ -124,6 +130,7 @@ export interface GroupPhotoSummary {
 export interface GroupDetail {
   id: string
   groupKey: string
+  pathSegments: string[]
   title: string
   displayTitle: string
   photoCount: number
@@ -139,16 +146,56 @@ export interface GroupDetail {
   photos: GroupPhotoSummary[]
 }
 
+export interface GroupGpsBreakdownSummary {
+  exactGpsCount: number
+  inferredGpsCount: number
+  missingGpsCount: number
+}
+
+export interface GroupPinLocationSummary {
+  latitude: number
+  longitude: number
+  source: 'photo-original-gps' | 'photo-gps' | 'representative-gps'
+}
+
+export interface GroupSummary {
+  id: string
+  groupKey: string
+  pathSegments: string[]
+  title: string
+  displayTitle: string
+  photoCount: number
+  representativePhotoId?: string
+  representativeThumbnailRelativePath?: string
+  representativeOutputRelativePath?: string
+  representativeGps?: {
+    latitude: number
+    longitude: number
+  }
+  companions: string[]
+  notes?: string
+  regionLabel: string
+  earliestCapturedAtIso?: string
+  latestCapturedAtIso?: string
+  searchText: string
+  gpsBreakdown: GroupGpsBreakdownSummary
+  pinLocation: GroupPinLocationSummary | null
+  isUnknownLocation: boolean
+}
+
 export interface LibraryIndexView {
   generatedAt: string
   outputRoot: string
-  groups: GroupDetail[]
-  mapGroups: MapGroupSummary[]
+  groups: GroupSummary[]
 }
 
 export interface LoadLibraryIndexResult {
   index: LibraryIndexView | null
   source: LibraryIndexLoadSource | null
+}
+
+export interface LoadLibraryGroupDetailResult {
+  group: GroupDetail | null
 }
 
 export type ScanPhotoLibraryIssueSeverity = 'warning' | 'error'
@@ -247,6 +294,9 @@ export interface PreloadBridge {
   loadLibraryIndex: (
     request: LoadLibraryIndexRequest
   ) => Promise<LoadLibraryIndexResult>
+  loadLibraryGroupDetail: (
+    request: LoadLibraryGroupDetailRequest
+  ) => Promise<LoadLibraryGroupDetailResult>
   previewPendingOrganization: (
     request: PreviewPendingOrganizationRequest
   ) => Promise<PreviewPendingOrganizationResult>

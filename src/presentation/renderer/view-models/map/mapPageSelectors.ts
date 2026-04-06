@@ -1,5 +1,5 @@
 import { stripLeadingDateFromAutoGroupDisplayTitle } from '@domain/services/PhotoNamingService'
-import type { GroupDetail, GroupPhotoSummary } from '@shared/types/preload'
+import type { GroupSummary } from '@shared/types/preload'
 
 export type BottomSheetState = 'collapsed' | 'half' | 'full'
 export type DateQuickFilter = 'all' | 'today' | 'this-week' | 'this-month' | 'custom'
@@ -29,7 +29,7 @@ export interface GroupGpsBreakdown {
 }
 
 export interface MapGroupRecord {
-  group: GroupDetail
+  group: GroupSummary
   displayTitle: string
   cleanedTitle: string
   regionLabel: string
@@ -96,7 +96,6 @@ function toTimestamp(iso?: string): number {
   }
 
   const parsed = Date.parse(iso)
-
   return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
 }
 
@@ -106,6 +105,7 @@ function isValidCoordinate(
         latitude: number
         longitude: number
       }
+    | null
     | undefined
 ): point is { latitude: number; longitude: number } {
   if (!point) {
@@ -118,28 +118,6 @@ function isValidCoordinate(
     Math.abs(point.latitude) <= 90 &&
     Math.abs(point.longitude) <= 180
   )
-}
-
-function hasExactPhotoGps(photo: GroupPhotoSummary): boolean {
-  return isValidCoordinate(photo.originalGps)
-}
-
-function hasAnyPhotoGps(photo: GroupPhotoSummary): boolean {
-  return isValidCoordinate(photo.gps)
-}
-
-function comparePhotosByGpsPriority(
-  left: GroupPhotoSummary,
-  right: GroupPhotoSummary
-): number {
-  const leftRealGps = left.locationSource !== 'assigned-from-group'
-  const rightRealGps = right.locationSource !== 'assigned-from-group'
-
-  if (leftRealGps !== rightRealGps) {
-    return leftRealGps ? -1 : 1
-  }
-
-  return toTimestamp(right.capturedAtIso) - toTimestamp(left.capturedAtIso)
 }
 
 function formatDateLabel(iso?: string): string {
@@ -160,63 +138,11 @@ function formatDateLabel(iso?: string): string {
   return `${year}.${month}.${day}`
 }
 
-function getGroupRegionLabel(group: GroupDetail): string {
-  const counts = new Map<string, number>()
-
-  for (const photo of group.photos) {
-    const label = normalizeTitleCandidate(photo.regionName)
-
-    if (!label) {
-      continue
-    }
-
-    counts.set(label, (counts.get(label) ?? 0) + 1)
-  }
-
-  const sorted = [...counts.entries()].sort((left, right) => {
-    if (left[1] !== right[1]) {
-      return right[1] - left[1]
-    }
-
-    return left[0].localeCompare(right[0])
-  })
-
-  return sorted[0]?.[0] ?? UNKNOWN_LOCATION_LABEL
-}
-
-function getLatestCapturedAtIso(group: GroupDetail): string | undefined {
-  const sorted = [...group.photos]
-    .map((photo) => photo.capturedAtIso)
-    .filter((value): value is string => Boolean(value))
-    .sort((left, right) => toTimestamp(right) - toTimestamp(left))
-
-  return sorted[0]
-}
-
-function buildSearchText(group: GroupDetail, displayTitle: string, regionLabel: string): string {
-  const parts = [
-    group.title,
-    group.displayTitle,
-    displayTitle,
-    regionLabel,
-    ...group.photos.map((photo) => photo.sourceFileName),
-    ...group.photos.map((photo) => photo.regionName ?? ''),
-    ...group.photos.map((photo) => formatDateLabel(photo.capturedAtIso)),
-    formatDateLabel(getLatestCapturedAtIso(group))
-  ]
-
-  return parts
-    .join(' ')
-    .toLocaleLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function getDateFallbackLabel(group: GroupDetail, latestCapturedAtIso?: string): string {
+function getDateFallbackLabel(group: GroupSummary, latestCapturedAtIso?: string): string {
   return `${formatDateLabel(latestCapturedAtIso)} Photo Group`
 }
 
-export function resolveGroupDisplayTitle(group: GroupDetail): string {
+export function resolveGroupDisplayTitle(group: GroupSummary): string {
   const normalizedDisplayTitle = normalizeTitleCandidate(group.displayTitle)
 
   if (normalizedDisplayTitle) {
@@ -229,83 +155,25 @@ export function resolveGroupDisplayTitle(group: GroupDetail): string {
     return normalizedTitle
   }
 
-  const regionLabel = getGroupRegionLabel(group)
+  const regionLabel = normalizeTitleCandidate(group.regionLabel)
 
   if (regionLabel && regionLabel !== UNKNOWN_LOCATION_LABEL) {
     return regionLabel
   }
 
-  return getDateFallbackLabel(group, getLatestCapturedAtIso(group))
+  return getDateFallbackLabel(group, group.latestCapturedAtIso)
 }
 
-export function resolveGroupGpsBreakdown(group: GroupDetail): GroupGpsBreakdown {
-  let exactGpsCount = 0
-  let inferredGpsCount = 0
-  let missingGpsCount = 0
-
-  for (const photo of group.photos) {
-    if (hasExactPhotoGps(photo)) {
-      exactGpsCount += 1
-      continue
-    }
-
-    if (hasAnyPhotoGps(photo)) {
-      if (photo.locationSource === 'assigned-from-group') {
-        inferredGpsCount += 1
-      } else {
-        exactGpsCount += 1
-      }
-      continue
-    }
-
-    missingGpsCount += 1
-  }
-
-  return {
-    exactGpsCount,
-    inferredGpsCount,
-    missingGpsCount
-  }
+export function resolveGroupGpsBreakdown(group: GroupSummary): GroupGpsBreakdown {
+  return group.gpsBreakdown
 }
 
-export function resolveGroupPinLocation(group: GroupDetail): GroupPinLocation | null {
-  const originalGpsPhoto = [...group.photos]
-    .filter((photo) => hasExactPhotoGps(photo))
-    .sort((left, right) => toTimestamp(right.capturedAtIso) - toTimestamp(left.capturedAtIso))[0]
-
-  if (originalGpsPhoto?.originalGps) {
-    return {
-      latitude: originalGpsPhoto.originalGps.latitude,
-      longitude: originalGpsPhoto.originalGps.longitude,
-      source: 'photo-original-gps'
-    }
-  }
-
-  const gpsPhoto = [...group.photos]
-    .filter((photo) => hasAnyPhotoGps(photo))
-    .sort(comparePhotosByGpsPriority)[0]
-
-  if (gpsPhoto?.gps) {
-    return {
-      latitude: gpsPhoto.gps.latitude,
-      longitude: gpsPhoto.gps.longitude,
-      source: 'photo-gps'
-    }
-  }
-
-  if (isValidCoordinate(group.representativeGps)) {
-    return {
-      latitude: group.representativeGps.latitude,
-      longitude: group.representativeGps.longitude,
-      source: 'representative-gps'
-    }
-  }
-
-  return null
+export function resolveGroupPinLocation(group: GroupSummary): GroupPinLocation | null {
+  return isValidCoordinate(group.pinLocation) ? group.pinLocation : null
 }
 
-export function resolveGroupScore(group: GroupDetail, pinLocation: GroupPinLocation | null): number {
-  const latestCapturedAt = toTimestamp(getLatestCapturedAtIso(group))
+export function resolveGroupScore(group: GroupSummary, pinLocation: GroupPinLocation | null): number {
+  const latestCapturedAt = toTimestamp(group.latestCapturedAtIso)
   const recencyScore = Number.isFinite(latestCapturedAt)
     ? Math.max(0, Math.round((latestCapturedAt - Date.UTC(2020, 0, 1)) / DAY_MS))
     : 0
@@ -313,8 +181,7 @@ export function resolveGroupScore(group: GroupDetail, pinLocation: GroupPinLocat
   const representativeGpsScore = group.representativeGps ? 120 : 0
   const titleScore = normalizeTitleCandidate(group.displayTitle || group.title) ? 100 : 0
   const thumbnailScore = group.representativeThumbnailRelativePath ? 80 : 0
-  const unknownLocationPenalty =
-    getGroupRegionLabel(group) === UNKNOWN_LOCATION_LABEL ? 120 : 0
+  const unknownLocationPenalty = group.isUnknownLocation ? 120 : 0
   const mappedBonus = pinLocation ? 160 : -200
 
   return (
@@ -328,11 +195,12 @@ export function resolveGroupScore(group: GroupDetail, pinLocation: GroupPinLocat
   )
 }
 
-export function buildMapGroupRecord(group: GroupDetail): MapGroupRecord {
-  const latestCapturedAtIso = getLatestCapturedAtIso(group)
+export function buildMapGroupRecord(group: GroupSummary): MapGroupRecord {
+  const latestCapturedAtIso = group.latestCapturedAtIso
   const displayTitle = resolveGroupDisplayTitle(group)
   const pinLocation = resolveGroupPinLocation(group)
-  const regionLabel = getGroupRegionLabel(group)
+  const regionLabel =
+    normalizeTitleCandidate(group.regionLabel) || UNKNOWN_LOCATION_LABEL
 
   return {
     group,
@@ -343,13 +211,17 @@ export function buildMapGroupRecord(group: GroupDetail): MapGroupRecord {
     dateLabel: formatDateLabel(latestCapturedAtIso),
     pinLocation,
     gpsBreakdown: resolveGroupGpsBreakdown(group),
-    searchText: buildSearchText(group, displayTitle, regionLabel),
+    searchText: [group.searchText, displayTitle, regionLabel]
+      .join(' ')
+      .toLocaleLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim(),
     score: resolveGroupScore(group, pinLocation),
-    isUnknownLocation: regionLabel === UNKNOWN_LOCATION_LABEL
+    isUnknownLocation: group.isUnknownLocation
   }
 }
 
-export function buildMapGroupRecords(groups: GroupDetail[]): MapGroupRecord[] {
+export function buildMapGroupRecords(groups: GroupSummary[]): MapGroupRecord[] {
   return groups.map((group) => buildMapGroupRecord(group))
 }
 
@@ -381,7 +253,9 @@ export function getQuickFilterDateRange(
 
   if (quickFilter === 'this-month') {
     return {
-      start: isoDate(new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), 1, 12))),
+      start: isoDate(
+        new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), 1, 12))
+      ),
       end: isoDate(utcNow)
     }
   }
@@ -401,7 +275,7 @@ function normalizeDateBoundary(value?: string, isEnd = false): number | undefine
 }
 
 function matchesDateRange(
-  group: GroupDetail,
+  group: GroupSummary,
   dateRange: DateRangeFilter | null | undefined
 ): boolean {
   const start = normalizeDateBoundary(dateRange?.start)
@@ -411,25 +285,25 @@ function matchesDateRange(
     return true
   }
 
-  const groupTimestamps = group.photos
-    .map((photo) => toTimestamp(photo.capturedAtIso))
-    .filter((value) => Number.isFinite(value))
+  const earliest = toTimestamp(group.earliestCapturedAtIso)
+  const latest = toTimestamp(group.latestCapturedAtIso)
 
-  if (groupTimestamps.length === 0) {
+  if (!Number.isFinite(earliest) && !Number.isFinite(latest)) {
     return false
   }
 
-  return groupTimestamps.some((timestamp) => {
-    if (start !== undefined && timestamp < start) {
-      return false
-    }
+  const rangeStart = Number.isFinite(earliest) ? earliest : latest
+  const rangeEnd = Number.isFinite(latest) ? latest : earliest
 
-    if (end !== undefined && timestamp > end) {
-      return false
-    }
+  if (start !== undefined && rangeEnd < start) {
+    return false
+  }
 
-    return true
-  })
+  if (end !== undefined && rangeStart > end) {
+    return false
+  }
+
+  return true
 }
 
 export function filterMapGroupRecords(
@@ -603,7 +477,7 @@ export function buildRepresentativeMarkerGroups(
 }
 
 export function deriveMapPageState(
-  groups: GroupDetail[],
+  groups: GroupSummary[],
   options: {
     searchQuery?: string
     dateRange?: DateRangeFilter | null

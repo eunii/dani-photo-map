@@ -4,6 +4,7 @@ import { readdir } from 'node:fs/promises'
 import { extname } from 'node:path'
 
 import type {
+  ExistingOutputGroupSummarySnapshot,
   ExistingOutputLibrarySnapshot,
   ExistingOutputPhotoSnapshot,
   ExistingOutputScannerPort
@@ -44,6 +45,12 @@ function isFileNotFoundError(error: unknown): boolean {
 function createRecoveredPhotoId(outputRelativePath: string): string {
   return `fallback-photo-${createHash('sha1')
     .update(outputRelativePath)
+    .digest('hex')}`
+}
+
+function createRecoveredGroupId(pathSegments: string[]): string {
+  return `fallback-group-${createHash('sha1')
+    .update(pathSegments.join('/'))
     .digest('hex')}`
 }
 
@@ -89,51 +96,113 @@ export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
   ) {}
 
   async scan(outputRoot: string): Promise<ExistingOutputLibrarySnapshot> {
-    const normalizedOutputRoot = normalizePathSeparators(outputRoot)
-    const photoRelativePaths: string[] = []
-
-    await this.collectPhotoRelativePaths(
-      normalizedOutputRoot,
-      '',
-      photoRelativePaths
+    const groupSummaries = await this.scanGroupSummaries(outputRoot)
+    const groups = await Promise.all(
+      groupSummaries.map((group) =>
+        this.scanGroupPhotos(outputRoot, group.pathSegments)
+      )
     )
 
     return {
-      outputRoot: normalizedOutputRoot,
-      photos: photoRelativePaths
-        .sort()
-        .map((outputRelativePath) =>
-          this.toPhotoSnapshot(normalizedOutputRoot, outputRelativePath)
-        )
+      outputRoot: normalizePathSeparators(outputRoot),
+      photos: groups.flat().sort((left, right) =>
+        left.outputRelativePath.localeCompare(right.outputRelativePath)
+      )
     }
   }
 
-  private async collectPhotoRelativePaths(
+  async scanGroupSummaries(
+    outputRoot: string
+  ): Promise<ExistingOutputGroupSummarySnapshot[]> {
+    const normalizedOutputRoot = normalizePathSeparators(outputRoot)
+    const groups: ExistingOutputGroupSummarySnapshot[] = []
+
+    await this.collectGroupSummaries(normalizedOutputRoot, '', groups)
+
+    return groups.sort((left, right) =>
+      left.pathSegments.join('/').localeCompare(right.pathSegments.join('/'))
+    )
+  }
+
+  async scanGroupPhotos(
+    outputRoot: string,
+    pathSegments: string[]
+  ): Promise<ExistingOutputPhotoSnapshot[]> {
+    const normalizedOutputRoot = normalizePathSeparators(outputRoot)
+    const currentRelativePath = normalizePathSeparators(pathSegments.join('/'))
+    const directoryEntries = await this.readDirectoryEntries(
+      normalizedOutputRoot,
+      currentRelativePath
+    )
+    const fileEntries = directoryEntries.filter(
+      (entry) =>
+        entry.isFile() &&
+        PHOTO_EXTENSIONS.has(extname(entry.name).toLowerCase())
+    )
+
+    return fileEntries
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((entry) => {
+        const outputRelativePath = currentRelativePath
+          ? joinPathSegments(currentRelativePath, entry.name)
+          : entry.name
+
+        return this.toPhotoSnapshot(normalizedOutputRoot, outputRelativePath)
+      })
+  }
+
+  private async collectGroupSummaries(
     outputRoot: string,
     currentRelativePath: string,
-    photoRelativePaths: string[]
+    groups: ExistingOutputGroupSummarySnapshot[]
   ): Promise<void> {
-    const directoryPath = currentRelativePath
-      ? joinPathSegments(outputRoot, currentRelativePath)
-      : outputRoot
-
-    let entries: Dirent[]
-
-    try {
-      entries = await readdir(directoryPath, {
-        withFileTypes: true,
-        encoding: 'utf8'
-      })
-    } catch (error) {
-      if (isFileNotFoundError(error)) {
-        return
-      }
-
-      throw new Error(
-        `Failed to scan existing output under ${outputRoot}: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`
+    const entries = await this.readDirectoryEntries(outputRoot, currentRelativePath)
+    const photoFiles = entries
+      .filter(
+        (entry) =>
+          entry.isFile() &&
+          PHOTO_EXTENSIONS.has(extname(entry.name).toLowerCase())
       )
+      .sort((left, right) => left.name.localeCompare(right.name))
+    const pathSegments = currentRelativePath
+      ? currentRelativePath.split('/').filter((segment) => segment.length > 0)
+      : []
+
+    if (photoFiles.length > 0 && pathSegments.length > 0) {
+      const representativeFile = photoFiles[0]
+      const representativeOutputRelativePath = currentRelativePath
+        ? joinPathSegments(currentRelativePath, representativeFile.name)
+        : representativeFile.name
+      const timestamps = photoFiles
+        .map((entry) => parseCapturedAtFromFileName(entry.name))
+        .filter((value): value is NonNullable<typeof value> => Boolean(value))
+        .sort((left, right) => left.iso.localeCompare(right.iso))
+      const regionLabel = decodeURIComponent(
+        pathSegments[pathSegments.length - 1] ?? this.rules.unknownRegionLabel
+      )
+
+      groups.push({
+        id: createRecoveredGroupId(pathSegments),
+        groupKey: createRecoveredGroupId(pathSegments),
+        pathSegments,
+        title: regionLabel,
+        displayTitle: regionLabel,
+        photoCount: photoFiles.length,
+        representativeOutputRelativePath,
+        representativeSourceFileName: representativeFile.name,
+        regionLabel,
+        earliestCapturedAt: timestamps[0],
+        latestCapturedAt: timestamps[timestamps.length - 1],
+        searchText: [
+          regionLabel,
+          representativeFile.name,
+          timestamps[0]?.iso ?? '',
+          timestamps[timestamps.length - 1]?.iso ?? ''
+        ]
+          .join(' ')
+          .toLocaleLowerCase()
+          .trim()
+      })
     }
 
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
@@ -146,20 +215,38 @@ export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
           continue
         }
 
-        await this.collectPhotoRelativePaths(
+        await this.collectGroupSummaries(
           outputRoot,
           nextRelativePath,
-          photoRelativePaths
+          groups
         )
-        continue
+      }
+    }
+  }
+
+  private async readDirectoryEntries(
+    outputRoot: string,
+    currentRelativePath: string
+  ): Promise<Dirent[]> {
+    const directoryPath = currentRelativePath
+      ? joinPathSegments(outputRoot, currentRelativePath)
+      : outputRoot
+
+    try {
+      return await readdir(directoryPath, {
+        withFileTypes: true,
+        encoding: 'utf8'
+      })
+    } catch (error) {
+      if (isFileNotFoundError(error)) {
+        return []
       }
 
-      if (
-        entry.isFile() &&
-        PHOTO_EXTENSIONS.has(extname(entry.name).toLowerCase())
-      ) {
-        photoRelativePaths.push(nextRelativePath)
-      }
+      throw new Error(
+        `Failed to scan existing output under ${outputRoot}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      )
     }
   }
 
