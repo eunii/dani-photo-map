@@ -115,4 +115,18 @@ describe('CuratedRegionResolver finer regions', () => {
       })
     ).resolves.toBe('new-york-city')
   })
+
+  it('resolves Hainan before the broader Vietnam country box', async () => {
+    const fallbackResolver: RegionResolverPort = {
+      resolveName: vi.fn().mockResolvedValue('base')
+    }
+    const resolver = new CuratedRegionResolver(fallbackResolver)
+
+    await expect(
+      resolver.resolveName({
+        latitude: 18.2528,
+        longitude: 109.5119
+      })
+    ).resolves.toBe('hainan')
+  })
 })

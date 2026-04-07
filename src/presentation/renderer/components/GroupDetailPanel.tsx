@@ -333,7 +333,7 @@ export function GroupDetailPanel({
                 <p className="mr-auto text-xs text-slate-500">
                   {loadSource === 'fallback' ||
                   loadSource === 'folder-structure'
-                    ? '폴더 구조 기반 상태에서 저장하면 index.json을 새로 만들고 그룹 메타데이터를 함께 반영합니다.'
+                    ? '폴더 구조 기반 상태에서 저장하면 GPS/대표 정보는 유지한 채 index.json을 새로 만들고 그룹 메타데이터를 함께 반영합니다.'
                     : '저장하면 그룹 메타데이터와 함께 출력 파일명이 그룹 제목 기준으로 재정리됩니다.'}
                 </p>
                 <button

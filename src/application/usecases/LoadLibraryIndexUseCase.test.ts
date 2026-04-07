@@ -57,7 +57,8 @@ describe('LoadLibraryIndexUseCase', () => {
     }
     const existingOutputScanner = {
       scan: vi.fn(),
-      scanGroupSummaries: vi.fn()
+      scanGroupSummaries: vi.fn(),
+      scanGroupPhotos: vi.fn()
     }
     const useCase = new LoadLibraryIndexUseCase(
       libraryIndexStore,
@@ -65,7 +66,8 @@ describe('LoadLibraryIndexUseCase', () => {
     )
 
     const result = await useCase.execute({
-      outputRoot: 'C:\\photos\\output'
+      outputRoot: 'C:\\photos\\output',
+      mode: 'default'
     })
 
     expect(libraryIndexStore.load).toHaveBeenCalledWith('C:/photos/output')
@@ -92,6 +94,7 @@ describe('LoadLibraryIndexUseCase', () => {
     }
     const existingOutputScanner = {
       scan: vi.fn(),
+      scanGroupPhotos: vi.fn(),
       scanGroupSummaries: vi.fn().mockResolvedValue([
         {
           id: 'fallback-group-1',
@@ -128,7 +131,8 @@ describe('LoadLibraryIndexUseCase', () => {
     )
 
     const result = await useCase.execute({
-      outputRoot: 'C:\\photos\\output'
+      outputRoot: 'C:\\photos\\output',
+      mode: 'default'
     })
 
     expect(existingOutputScanner.scanGroupSummaries).toHaveBeenCalledWith(
@@ -147,42 +151,82 @@ describe('LoadLibraryIndexUseCase', () => {
         generatedAt: '2026-04-03T10:11:12.000Z',
         sourceRoot: 'C:/photos/source',
         outputRoot: 'C:/photos/output',
-        photos: [],
-        groups: []
+        photos: [
+          {
+            id: 'stored-photo-1',
+            sourcePath:
+              'C:/photos/source/2026-04-03_080000_IMG_0001.JPG',
+            sourceFileName: '2026-04-03_080000_IMG_0001.JPG',
+            capturedAt: {
+              iso: '2026-04-03T08:00:00.000Z',
+              year: '2026',
+              month: '04',
+              day: '03',
+              time: '080000'
+            },
+            gps: {
+              latitude: 36.5786,
+              longitude: -118.2923
+            },
+            originalGps: {
+              latitude: 36.5786,
+              longitude: -118.2923
+            },
+            regionName: 'california',
+            outputRelativePath:
+              '2026/04/요세미티_국립공원그룹/2026-04-03_080000_IMG_0001.JPG',
+            thumbnailRelativePath: '.photo-organizer/thumbnails/stored-photo-1.webp',
+            isDuplicate: false,
+            metadataIssues: []
+          }
+        ],
+        groups: [
+          {
+            id: 'group|region=%EC%9A%94%EC%84%B8%EB%AF%B8%ED%8B%B0_%EA%B5%AD%EB%A6%BD%EA%B3%B5%EC%9B%90%EA%B7%B8%EB%A3%B9|year=2026|month=04|basis=month|day=00|slot=1',
+            groupKey:
+              'group|region=%EC%9A%94%EC%84%B8%EB%AF%B8%ED%8B%B0_%EA%B5%AD%EB%A6%BD%EA%B3%B5%EC%9B%90%EA%B7%B8%EB%A3%B9|year=2026|month=04|basis=month|day=00|slot=1',
+            title: '요세미티_국립공원그룹',
+            displayTitle: '요세미티_국립공원그룹',
+            photoIds: ['stored-photo-1'],
+            representativePhotoId: 'stored-photo-1',
+            representativeGps: {
+              latitude: 36.5786,
+              longitude: -118.2923
+            },
+            representativeThumbnailRelativePath:
+              '.photo-organizer/thumbnails/stored-photo-1.webp',
+            companions: [],
+            notes: 'saved'
+          }
+        ]
       }),
       save: vi.fn()
     }
     const existingOutputScanner = {
-      scan: vi.fn(),
-      scanGroupSummaries: vi.fn().mockResolvedValue([
-        {
-          id: 'folder-structure-group-1',
-          groupKey: 'folder-structure-group-1',
-          pathSegments: ['2026', '04', '요세미티_국립공원그룹'],
-          title: '요세미티_국립공원그룹',
-          displayTitle: '요세미티_국립공원그룹',
-          photoCount: 2,
-          representativeOutputRelativePath:
-            '2026/04/요세미티_국립공원그룹/2026-04-03_080000_IMG_0001.JPG',
-          representativeSourceFileName: '2026-04-03_080000_IMG_0001.JPG',
-          regionLabel: '요세미티_국립공원그룹',
-          earliestCapturedAt: {
-            iso: '2026-04-03T08:00:00.000Z',
-            year: '2026',
-            month: '04',
-            day: '03',
-            time: '080000'
-          },
-          latestCapturedAt: {
-            iso: '2026-04-03T09:00:00.000Z',
-            year: '2026',
-            month: '04',
-            day: '03',
-            time: '090000'
-          },
-          searchText: '요세미티 국립공원그룹'
-        }
-      ])
+      scan: vi.fn().mockResolvedValue({
+        outputRoot: 'C:/photos/output',
+        photos: [
+          {
+            id: 'recovered-photo-1',
+            sourcePath:
+              'C:/photos/output/2026/04/요세미티_국립공원그룹/2026-04-03_080000_IMG_0001.JPG',
+            sourceFileName: '2026-04-03_080000_IMG_0001.JPG',
+            capturedAt: {
+              iso: '2026-04-03T08:00:00.000Z',
+              year: '2026',
+              month: '04',
+              day: '03',
+              time: '080000'
+            },
+            regionName: '요세미티_국립공원그룹',
+            folderGroupingLabel: '요세미티_국립공원그룹',
+            outputRelativePath:
+              '2026/04/요세미티_국립공원그룹/2026-04-03_080000_IMG_0001.JPG'
+          }
+        ]
+      }),
+      scanGroupSummaries: vi.fn(),
+      scanGroupPhotos: vi.fn()
     }
     const useCase = new LoadLibraryIndexUseCase(
       libraryIndexStore,
@@ -194,12 +238,26 @@ describe('LoadLibraryIndexUseCase', () => {
       mode: 'folder-structure-only'
     })
 
-    expect(libraryIndexStore.load).not.toHaveBeenCalled()
-    expect(existingOutputScanner.scanGroupSummaries).toHaveBeenCalledWith(
+    expect(libraryIndexStore.load).toHaveBeenCalledWith(
       'C:/photos/output'
     )
+    expect(existingOutputScanner.scan).toHaveBeenCalledWith('C:/photos/output')
+    expect(existingOutputScanner.scanGroupSummaries).not.toHaveBeenCalled()
     expect(result.source).toBe('folder-structure')
-    expect(result.index).toBeNull()
-    expect(result.fallbackGroups?.[0]?.displayTitle).toBe('요세미티_국립공원그룹')
+    expect(result.fallbackGroups).toBeNull()
+    expect(result.index?.groups[0]).toMatchObject({
+      title: '요세미티_국립공원그룹',
+      representativeGps: {
+        latitude: 36.5786,
+        longitude: -118.2923
+      }
+    })
+    expect(result.index?.photos[0]).toMatchObject({
+      gps: {
+        latitude: 36.5786,
+        longitude: -118.2923
+      },
+      thumbnailRelativePath: '.photo-organizer/thumbnails/stored-photo-1.webp'
+    })
   })
 })

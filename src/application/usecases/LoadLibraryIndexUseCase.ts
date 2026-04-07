@@ -5,6 +5,8 @@ import {
 import type { ExistingOutputGroupSummarySnapshot } from '@application/ports/ExistingOutputScannerPort'
 import type { ExistingOutputScannerPort } from '@application/ports/ExistingOutputScannerPort'
 import type { LibraryIndexStorePort } from '@application/ports/LibraryIndexStorePort'
+import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
+import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import { normalizePathSeparators } from '@shared/utils/path'
 
@@ -61,10 +63,20 @@ export class LoadLibraryIndexUseCase {
   private async loadFolderStructureOnly(
     outputRoot: string
   ): Promise<LoadLibraryIndexResult> {
-    const fallbackGroups =
-      await this.existingOutputScanner.scanGroupSummaries(outputRoot)
+    const storedIndex = await this.loadStoredLibraryIndexSafely(outputRoot)
+    const snapshot = await this.existingOutputScanner.scan(outputRoot)
 
-    if (fallbackGroups.length === 0) {
+    if (snapshot.photos.length === 0) {
+      return {
+        index: null,
+        fallbackGroups: null,
+        source: null
+      }
+    }
+
+    const rebuiltIndex = rebuildLibraryIndexFromExistingOutput(snapshot, storedIndex)
+
+    if (!rebuiltIndex) {
       return {
         index: null,
         fallbackGroups: null,
@@ -73,8 +85,8 @@ export class LoadLibraryIndexUseCase {
     }
 
     return {
-      index: null,
-      fallbackGroups,
+      index: mergeStoredLibraryMetadata(rebuiltIndex, storedIndex),
+      fallbackGroups: null,
       source: 'folder-structure'
     }
   }

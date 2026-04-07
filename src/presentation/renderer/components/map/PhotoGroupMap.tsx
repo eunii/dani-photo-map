@@ -3,6 +3,7 @@ import maplibregl, { type GeoJSONSource, type StyleSpecification } from 'maplibr
 
 import type {
   MapGroupRecord,
+  MapPhotoPinRecord,
   MapViewportBounds
 } from '@presentation/renderer/view-models/map/mapPageSelectors'
 import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
@@ -10,10 +11,14 @@ import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 interface PhotoGroupMapProps {
   sourceGroups: MapGroupRecord[]
   markerGroups: MapGroupRecord[]
+  selectedPhotoPins: MapPhotoPinRecord[]
   outputRoot?: string
   selectedGroupId?: string
+  selectedPhotoId?: string
   unclusteredMinZoom: number
+  photoMarkerMinZoom: number
   onSelectGroup: (groupId: string) => void
+  onSelectPhoto: (photoId: string) => void
   onViewportChange: (state: {
     bounds: MapViewportBounds
     zoomLevel: number
@@ -44,6 +49,24 @@ interface GroupFeatureCollection {
   features: GroupFeature[]
 }
 
+interface PhotoFeatureProperties {
+  photoId: string
+  sourceFileName: string
+  isRepresentative: boolean
+  gpsSource: 'original-gps' | 'gps'
+}
+
+interface PhotoFeature {
+  type: 'Feature'
+  geometry: PointGeometry
+  properties: PhotoFeatureProperties
+}
+
+interface PhotoFeatureCollection {
+  type: 'FeatureCollection'
+  features: PhotoFeature[]
+}
+
 const DEFAULT_CENTER: [number, number] = [127.0, 30.0]
 const DEFAULT_ZOOM = 1.6
 const SOURCE_ID = 'photo-groups'
@@ -51,6 +74,9 @@ const CLUSTER_LAYER_ID = 'photo-group-clusters'
 const CLUSTER_COUNT_LAYER_ID = 'photo-group-cluster-count'
 const GROUP_LAYER_ID = 'photo-group-points'
 const SELECTED_LAYER_ID = 'photo-group-selected'
+const PHOTO_SOURCE_ID = 'selected-group-photos'
+const PHOTO_LAYER_ID = 'selected-group-photo-points'
+const PHOTO_SELECTED_LAYER_ID = 'selected-group-photo-selected'
 
 interface GroupMarkerBinding {
   groupId: string
@@ -108,6 +134,29 @@ function buildFeatureCollection(
   }
 }
 
+function buildPhotoFeatureCollection(
+  photos: MapPhotoPinRecord[]
+): PhotoFeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: photos.map(
+      (photo): PhotoFeature => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [photo.longitude, photo.latitude]
+        },
+        properties: {
+          photoId: photo.photoId,
+          sourceFileName: photo.sourceFileName,
+          isRepresentative: photo.isRepresentative,
+          gpsSource: photo.gpsSource
+        }
+      })
+    )
+  }
+}
+
 function toViewportBounds(map: maplibregl.Map): MapViewportBounds {
   const bounds = map.getBounds()
 
@@ -127,6 +176,20 @@ function setSelectedFilter(map: maplibregl.Map, selectedGroupId?: string): void 
   map.setFilter(
     SELECTED_LAYER_ID,
     selectedGroupId ? ['==', ['get', 'groupId'], selectedGroupId] : ['==', ['get', 'groupId'], '']
+  )
+}
+
+function setSelectedPhotoFilter(
+  map: maplibregl.Map,
+  selectedPhotoId?: string
+): void {
+  if (!map.getLayer(PHOTO_SELECTED_LAYER_ID)) {
+    return
+  }
+
+  map.setFilter(
+    PHOTO_SELECTED_LAYER_ID,
+    selectedPhotoId ? ['==', ['get', 'photoId'], selectedPhotoId] : ['==', ['get', 'photoId'], '']
   )
 }
 
@@ -173,10 +236,14 @@ function fitToGroups(map: maplibregl.Map, groups: MapGroupRecord[]): void {
 export function PhotoGroupMap({
   sourceGroups,
   markerGroups,
+  selectedPhotoPins,
   outputRoot,
   selectedGroupId,
+  selectedPhotoId,
   unclusteredMinZoom,
+  photoMarkerMinZoom,
   onSelectGroup,
+  onSelectPhoto,
   onViewportChange
 }: PhotoGroupMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -185,22 +252,32 @@ export function PhotoGroupMap({
   const moveDebounceRef = useRef<number | null>(null)
   const hasInitialFitRef = useRef(false)
   const onSelectGroupRef = useRef(onSelectGroup)
+  const onSelectPhotoRef = useRef(onSelectPhoto)
   const onViewportChangeRef = useRef(onViewportChange)
   const featureCollection = useMemo(
     () => buildFeatureCollection(sourceGroups),
     [sourceGroups]
   )
+  const photoFeatureCollection = useMemo(
+    () => buildPhotoFeatureCollection(selectedPhotoPins),
+    [selectedPhotoPins]
+  )
   const groupsRef = useRef<MapGroupRecord[]>(sourceGroups)
   const featureCollectionRef = useRef(featureCollection)
+  const photoFeatureCollectionRef = useRef(photoFeatureCollection)
   const lastSelectedGroupIdRef = useRef<string | undefined>(undefined)
   const unclusteredMinZoomRef = useRef(unclusteredMinZoom)
+  const photoMarkerMinZoomRef = useRef(photoMarkerMinZoom)
   const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null)
 
   groupsRef.current = sourceGroups
   featureCollectionRef.current = featureCollection
+  photoFeatureCollectionRef.current = photoFeatureCollection
   onSelectGroupRef.current = onSelectGroup
+  onSelectPhotoRef.current = onSelectPhoto
   onViewportChangeRef.current = onViewportChange
   unclusteredMinZoomRef.current = unclusteredMinZoom
+  photoMarkerMinZoomRef.current = photoMarkerMinZoom
 
   function clearMarkers(): void {
     for (const binding of markersRef.current) {
@@ -313,6 +390,10 @@ export function PhotoGroupMap({
           clusterRadius: 54,
           clusterMaxZoom: 13
         })
+        map.addSource(PHOTO_SOURCE_ID, {
+          type: 'geojson',
+          data: photoFeatureCollectionRef.current
+        })
 
         map.addLayer({
           id: CLUSTER_LAYER_ID,
@@ -377,6 +458,45 @@ export function PhotoGroupMap({
           }
         })
 
+        map.addLayer({
+          id: PHOTO_LAYER_ID,
+          type: 'circle',
+          source: PHOTO_SOURCE_ID,
+          minzoom: photoMarkerMinZoomRef.current,
+          paint: {
+            'circle-color': [
+              'case',
+              ['boolean', ['get', 'isRepresentative'], false],
+              '#f59e0b',
+              '#0ea5e9'
+            ],
+            'circle-radius': [
+              'case',
+              ['boolean', ['get', 'isRepresentative'], false],
+              6,
+              4.5
+            ],
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': '#ffffff',
+            'circle-opacity': 0.92
+          }
+        })
+
+        map.addLayer({
+          id: PHOTO_SELECTED_LAYER_ID,
+          type: 'circle',
+          source: PHOTO_SOURCE_ID,
+          filter: ['==', ['get', 'photoId'], ''],
+          minzoom: photoMarkerMinZoomRef.current,
+          paint: {
+            'circle-color': '#1d4ed8',
+            'circle-radius': 9,
+            'circle-stroke-width': 2.5,
+            'circle-stroke-color': '#bfdbfe',
+            'circle-opacity': 0.34
+          }
+        })
+
         map.on('click', CLUSTER_LAYER_ID, async (event) => {
           const feature = event.features?.[0]
           const clusterId = feature?.properties?.cluster_id
@@ -410,6 +530,30 @@ export function PhotoGroupMap({
           }
         })
 
+        map.on('click', PHOTO_LAYER_ID, (event) => {
+          const feature = event.features?.[0]
+          const photoId = feature?.properties?.photoId
+          const coordinates = (feature?.geometry as PointGeometry | undefined)?.coordinates
+
+          if (typeof photoId !== 'string') {
+            return
+          }
+
+          onSelectPhotoRef.current(photoId)
+
+          if (!coordinates) {
+            return
+          }
+
+          map.stop()
+          map.easeTo({
+            center: [coordinates[0], coordinates[1]],
+            zoom: Math.max(map.getZoom(), photoMarkerMinZoomRef.current + 0.5),
+            duration: 350,
+            essential: true
+          })
+        })
+
         const setPointerCursor = () => {
           map.getCanvas().style.cursor = 'pointer'
         }
@@ -421,6 +565,8 @@ export function PhotoGroupMap({
         map.on('mouseleave', CLUSTER_LAYER_ID, clearPointerCursor)
         map.on('mouseenter', GROUP_LAYER_ID, setPointerCursor)
         map.on('mouseleave', GROUP_LAYER_ID, clearPointerCursor)
+        map.on('mouseenter', PHOTO_LAYER_ID, setPointerCursor)
+        map.on('mouseleave', PHOTO_LAYER_ID, clearPointerCursor)
 
         map.on('move', () => {
           updateMarkerPresentation()
@@ -441,6 +587,8 @@ export function PhotoGroupMap({
           updateMarkerPresentation()
         })
 
+        setSelectedFilter(map, selectedGroupId)
+        setSelectedPhotoFilter(map, selectedPhotoId)
         updateMarkerPresentation()
 
         onViewportChangeRef.current({
@@ -490,6 +638,8 @@ export function PhotoGroupMap({
 
     const source = map.getSource(SOURCE_ID) as GeoJSONSource
     source.setData(featureCollection)
+    const photoSource = map.getSource(PHOTO_SOURCE_ID) as GeoJSONSource | undefined
+    photoSource?.setData(photoFeatureCollection)
     clearMarkers()
 
     for (const group of markerGroups) {
@@ -522,7 +672,13 @@ export function PhotoGroupMap({
       fitToGroups(map, sourceGroups)
       hasInitialFitRef.current = true
     }
-  }, [featureCollection, markerGroups, outputRoot, sourceGroups])
+  }, [
+    featureCollection,
+    markerGroups,
+    outputRoot,
+    photoFeatureCollection,
+    sourceGroups
+  ])
 
   useEffect(() => {
     const map = mapRef.current
@@ -539,12 +695,30 @@ export function PhotoGroupMap({
       map.setLayerZoomRange(SELECTED_LAYER_ID, unclusteredMinZoom, 24)
     }
 
+    if (map.getLayer(PHOTO_LAYER_ID)) {
+      map.setLayerZoomRange(PHOTO_LAYER_ID, photoMarkerMinZoom, 24)
+    }
+
+    if (map.getLayer(PHOTO_SELECTED_LAYER_ID)) {
+      map.setLayerZoomRange(PHOTO_SELECTED_LAYER_ID, photoMarkerMinZoom, 24)
+    }
+
     updateMarkerPresentation()
-  }, [unclusteredMinZoom])
+  }, [photoMarkerMinZoom, unclusteredMinZoom])
 
   useEffect(() => {
     updateMarkerPresentation()
   }, [selectedGroupId])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || !map.isStyleLoaded()) {
+      return
+    }
+
+    setSelectedPhotoFilter(map, selectedPhotoId)
+  }, [selectedPhotoId])
 
   const selectedGroup = useMemo(
     () => sourceGroups.find((group) => group.group.id === selectedGroupId),
@@ -559,6 +733,7 @@ export function PhotoGroupMap({
     }
 
     setSelectedFilter(map, selectedGroupId)
+    setSelectedPhotoFilter(map, selectedPhotoId)
 
     if (!selectedGroup?.pinLocation) {
       lastSelectedGroupIdRef.current = selectedGroupId
@@ -589,7 +764,8 @@ export function PhotoGroupMap({
   }, [
     selectedGroup?.pinLocation?.latitude,
     selectedGroup?.pinLocation?.longitude,
-    selectedGroupId
+    selectedGroupId,
+    selectedPhotoId
   ])
 
   return (

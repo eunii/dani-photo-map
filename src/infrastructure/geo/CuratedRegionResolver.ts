@@ -90,6 +90,7 @@ const SPECIFIC_REGIONS: GeoBoundingRegion[] = [
   { name: 'taipei', minLatitude: 24.94, maxLatitude: 25.22, minLongitude: 121.42, maxLongitude: 121.68 },
   { name: 'bangkok', minLatitude: 13.55, maxLatitude: 13.95, minLongitude: 100.3, maxLongitude: 100.9 },
   { name: 'singapore', minLatitude: 1.2, maxLatitude: 1.47, minLongitude: 103.6, maxLongitude: 104.05 },
+  { name: 'hainan', minLatitude: 18.0, maxLatitude: 20.4, minLongitude: 108.4, maxLongitude: 111.2 },
   { name: 'hong-kong', minLatitude: 22.15, maxLatitude: 22.58, minLongitude: 113.82, maxLongitude: 114.45 }
 ]
 

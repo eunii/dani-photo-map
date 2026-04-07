@@ -31,7 +31,8 @@ export function getLoadSourceBadge(
     return {
       label: '폴더 구조 기반',
       tone: 'border-sky-200 bg-sky-50 text-sky-800',
-      description: 'index.json 대신 현재 출력 폴더 구조만 다시 읽어 임시 반영했습니다.'
+      description:
+        '현재 출력 폴더 구조를 다시 읽고, 저장된 메타데이터를 병합해 GPS와 대표 정보를 유지했습니다.'
     }
   }
 

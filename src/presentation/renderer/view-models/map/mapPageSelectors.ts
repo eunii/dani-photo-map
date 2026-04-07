@@ -1,5 +1,5 @@
 import { stripLeadingDateFromAutoGroupDisplayTitle } from '@domain/services/PhotoNamingService'
-import type { GroupSummary } from '@shared/types/preload'
+import type { GroupDetail, GroupSummary } from '@shared/types/preload'
 
 export type BottomSheetState = 'collapsed' | 'half' | 'full'
 export type DateQuickFilter = 'all' | 'today' | 'this-week' | 'this-month' | 'custom'
@@ -54,6 +54,21 @@ export interface MapPageDerivedState {
   unmappedGroups: MapGroupRecord[]
   visibleGroups: MapGroupRecord[]
   selectedGroup: MapGroupRecord | null
+}
+
+export interface MapPhotoPinRecord {
+  id: string
+  photoId: string
+  sourceFileName: string
+  latitude: number
+  longitude: number
+  capturedAtIso?: string
+  regionName?: string
+  thumbnailRelativePath?: string
+  outputRelativePath?: string
+  isRepresentative: boolean
+  gpsSource: 'original-gps' | 'gps'
+  score: number
 }
 
 const UNKNOWN_LOCATION_LABEL = 'Unknown Location'
@@ -172,6 +187,45 @@ export function resolveGroupPinLocation(group: GroupSummary): GroupPinLocation |
   return isValidCoordinate(group.pinLocation) ? group.pinLocation : null
 }
 
+function resolvePhotoPinLocation(
+  photo: GroupDetail['photos'][number]
+): {
+  latitude: number
+  longitude: number
+  gpsSource: 'original-gps' | 'gps'
+} | null {
+  if (isValidCoordinate(photo.originalGps)) {
+    return {
+      latitude: photo.originalGps.latitude,
+      longitude: photo.originalGps.longitude,
+      gpsSource: 'original-gps'
+    }
+  }
+
+  if (isValidCoordinate(photo.gps)) {
+    return {
+      latitude: photo.gps.latitude,
+      longitude: photo.gps.longitude,
+      gpsSource: 'gps'
+    }
+  }
+
+  return null
+}
+
+function resolvePhotoPinScore(
+  photo: GroupDetail['photos'][number],
+  isRepresentative: boolean,
+  pinLocation: { gpsSource: 'original-gps' | 'gps' }
+): number {
+  const representativeScore = isRepresentative ? 1_000_000 : 0
+  const timestampScore = Math.max(0, toTimestamp(photo.capturedAtIso))
+  const thumbnailScore = photo.thumbnailRelativePath ? 10_000 : 0
+  const exactGpsScore = pinLocation.gpsSource === 'original-gps' ? 1_000 : 0
+
+  return representativeScore + timestampScore + thumbnailScore + exactGpsScore
+}
+
 export function resolveGroupScore(group: GroupSummary, pinLocation: GroupPinLocation | null): number {
   const latestCapturedAt = toTimestamp(group.latestCapturedAtIso)
   const recencyScore = Number.isFinite(latestCapturedAt)
@@ -219,6 +273,56 @@ export function buildMapGroupRecord(group: GroupSummary): MapGroupRecord {
     score: resolveGroupScore(group, pinLocation),
     isUnknownLocation: group.isUnknownLocation
   }
+}
+
+export function buildSelectedGroupPhotoPins(
+  group: GroupDetail | null | undefined,
+  options: {
+    maxPins: number
+  }
+): MapPhotoPinRecord[] {
+  if (!group) {
+    return []
+  }
+
+  return group.photos
+    .map((photo) => {
+      const pinLocation = resolvePhotoPinLocation(photo)
+
+      if (!pinLocation) {
+        return null
+      }
+
+      const isRepresentative = group.representativePhotoId === photo.id
+
+      return {
+        id: `photo-pin:${photo.id}`,
+        photoId: photo.id,
+        sourceFileName: photo.sourceFileName,
+        latitude: pinLocation.latitude,
+        longitude: pinLocation.longitude,
+        capturedAtIso: photo.capturedAtIso,
+        regionName: photo.regionName,
+        thumbnailRelativePath: photo.thumbnailRelativePath,
+        outputRelativePath: photo.outputRelativePath,
+        isRepresentative,
+        gpsSource: pinLocation.gpsSource,
+        score: resolvePhotoPinScore(photo, isRepresentative, pinLocation)
+      }
+    })
+    .filter((photo): photo is MapPhotoPinRecord => Boolean(photo))
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return right.score - left.score
+      }
+
+      if ((left.capturedAtIso ?? '') !== (right.capturedAtIso ?? '')) {
+        return (right.capturedAtIso ?? '').localeCompare(left.capturedAtIso ?? '')
+      }
+
+      return left.sourceFileName.localeCompare(right.sourceFileName)
+    })
+    .slice(0, Math.max(0, options.maxPins))
 }
 
 export function buildMapGroupRecords(groups: GroupSummary[]): MapGroupRecord[] {

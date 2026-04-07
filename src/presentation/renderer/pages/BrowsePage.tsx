@@ -10,6 +10,7 @@ import { useLibraryGroupDetail } from '@presentation/renderer/hooks/useLibraryGr
 import { useOutputLibraryIndexPanel } from '@presentation/renderer/hooks/useOutputLibraryIndexPanel'
 import { useBrowseMapStore } from '@presentation/renderer/store/useBrowseMapStore'
 import {
+  buildSelectedGroupPhotoPins,
   buildMapGroupRecords,
   buildRepresentativeMarkerGroups,
   filterMapGroupRecords,
@@ -20,6 +21,9 @@ import {
 interface BrowsePageProps {
   onNavigateToSettings?: () => void
 }
+
+const SELECTED_GROUP_PHOTO_PIN_MAX_COUNT = 24
+const SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM = 12.5
 
 export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
   const {
@@ -88,6 +92,13 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
         zoomLevel
       }),
     [filteredRecords, mapBounds, zoomLevel]
+  )
+  const selectedPhotoPins = useMemo(
+    () =>
+      buildSelectedGroupPhotoPins(selectedGroupDetail, {
+        maxPins: SELECTED_GROUP_PHOTO_PIN_MAX_COUNT
+      }),
+    [selectedGroupDetail]
   )
 
   const mapZoomPolicy = useMemo(() => getMapZoomPolicy(zoomLevel), [zoomLevel])
@@ -257,10 +268,18 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
               <PhotoGroupMap
                 sourceGroups={mapCanvasGroups}
                 markerGroups={markerGroups}
+                selectedPhotoPins={selectedPhotoPins}
                 outputRoot={libraryIndex?.outputRoot ?? outputRoot}
                 selectedGroupId={selectedGroupId}
+                selectedPhotoId={
+                  previewPhotoId ??
+                  selectedGroupDetail?.representativePhotoId ??
+                  selectedPhotoPins[0]?.photoId
+                }
                 unclusteredMinZoom={mapZoomPolicy.unclusteredMinZoom}
+                photoMarkerMinZoom={SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM}
                 onSelectGroup={handleSelectGroup}
+                onSelectPhoto={setPreviewPhotoId}
                 onViewportChange={handleViewportChange}
               />
 
@@ -277,6 +296,9 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
               outputRoot={libraryIndex?.outputRoot ?? outputRoot}
               selectedGroup={selectedGroup}
               selectedGroupDetail={selectedGroupDetail}
+              selectedPhotoPinCount={selectedPhotoPins.length}
+              selectedPhotoPinMaxCount={SELECTED_GROUP_PHOTO_PIN_MAX_COUNT}
+              photoPinMinZoom={SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM}
               isLoadingGroupDetail={isLoadingGroupDetail}
               groupDetailErrorMessage={groupDetailErrorMessage}
               filteredGroups={filteredRecords}

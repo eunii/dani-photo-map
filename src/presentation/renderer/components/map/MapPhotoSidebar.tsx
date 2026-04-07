@@ -9,6 +9,9 @@ interface MapPhotoSidebarProps {
   outputRoot?: string
   selectedGroup: MapGroupRecord | null
   selectedGroupDetail: GroupDetail | null
+  selectedPhotoPinCount: number
+  selectedPhotoPinMaxCount: number
+  photoPinMinZoom: number
   isLoadingGroupDetail?: boolean
   groupDetailErrorMessage?: string | null
   filteredGroups: MapGroupRecord[]
@@ -21,6 +24,9 @@ export function MapPhotoSidebar({
   outputRoot,
   selectedGroup,
   selectedGroupDetail,
+  selectedPhotoPinCount,
+  selectedPhotoPinMaxCount,
+  photoPinMinZoom,
   isLoadingGroupDetail = false,
   groupDetailErrorMessage = null,
   filteredGroups,
@@ -118,6 +124,14 @@ export function MapPhotoSidebar({
                   <span className="rounded-full bg-slate-100 px-2.5 py-1.5">
                     누락 {selectedGroup.gpsBreakdown.missingGpsCount}
                   </span>
+                  {selectedPhotoPinCount > 0 ? (
+                    <span className="rounded-full bg-sky-50 px-2.5 py-1.5 text-sky-700">
+                      GPS 사진 {selectedPhotoPinCount}장 · 확대 {photoPinMinZoom.toFixed(1)}+ 에서 개별 핀
+                      {selectedPhotoPinCount >= selectedPhotoPinMaxCount
+                        ? ` (최대 ${selectedPhotoPinMaxCount}장)`
+                        : ''}
+                    </span>
+                  ) : null}
                 </div>
 
                 {groupDetailErrorMessage ? (

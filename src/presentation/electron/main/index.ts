@@ -9,6 +9,7 @@ import { MovePhotosToGroupUseCase } from '@application/usecases/MovePhotosToGrou
 import { PreviewPendingOrganizationUseCase } from '@application/usecases/PreviewPendingOrganizationUseCase'
 import { ScanPhotoLibraryUseCase } from '@application/usecases/ScanPhotoLibraryUseCase'
 import { UpdatePhotoGroupUseCase } from '@application/usecases/UpdatePhotoGroupUseCase'
+import { defaultMissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import { ExistingOutputLibraryScanner } from '@infrastructure/filesystem/ExistingOutputLibraryScanner'
 import { ExifrPhotoMetadataReader } from '@infrastructure/exif/ExifrPhotoMetadataReader'
@@ -166,7 +167,10 @@ function registerIpcHandlers(): void {
     IPC_CHANNELS.loadLibraryIndex,
     async (_event, command: LoadLibraryIndexRequest) => {
       const useCase = createLoadLibraryIndexUseCase()
-      const result = await useCase.execute(command)
+      const result = await useCase.execute({
+        ...command,
+        mode: command.mode ?? 'default'
+      })
 
       return {
         source: result.source,
@@ -190,9 +194,9 @@ function registerIpcHandlers(): void {
       const useCase = createLoadLibraryGroupDetailUseCase()
       const result = await useCase.execute(command)
 
-      if (result.storedIndex && result.group) {
+      if (result.index && result.group) {
         const photosById = new Map(
-          result.storedIndex.photos.map((photo) => [photo.id, photo] as const)
+          result.index.photos.map((photo) => [photo.id, photo] as const)
         )
 
         return {
@@ -218,7 +222,11 @@ function registerIpcHandlers(): void {
     async (_event, command: PreviewPendingOrganizationRequest) => {
       const useCase = createPreviewPendingOrganizationUseCase()
 
-      return useCase.execute(command)
+      return useCase.execute({
+        ...command,
+        missingGpsGroupingBasis:
+          command.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
+      })
     }
   )
 
@@ -228,7 +236,11 @@ function registerIpcHandlers(): void {
     async (event, command: ScanPhotoLibraryRequest) => {
       const useCase = createScanPhotoLibraryUseCase(command)
 
-      return useCase.execute(command, {
+      return useCase.execute({
+        ...command,
+        missingGpsGroupingBasis:
+          command.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
+      }, {
         onScanProgress: (payload) => {
           event.sender.send(IPC_CHANNELS.scanPhotoLibraryProgress, payload)
         }
