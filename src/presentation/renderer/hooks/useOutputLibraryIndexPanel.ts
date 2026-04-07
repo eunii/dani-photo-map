@@ -27,6 +27,14 @@ export function getLoadSourceBadge(
     }
   }
 
+  if (source === 'folder-structure') {
+    return {
+      label: '폴더 구조 기반',
+      tone: 'border-sky-200 bg-sky-50 text-sky-800',
+      description: 'index.json 대신 현재 출력 폴더 구조만 다시 읽어 임시 반영했습니다.'
+    }
+  }
+
   return null
 }
 
@@ -41,6 +49,7 @@ export interface UseOutputLibraryIndexPanelResult {
   setErrorMessage: (value: string | null) => void
   selectOutputRoot: () => Promise<void>
   reloadLibraryIndex: () => Promise<void>
+  reloadFolderStructureOnly: () => Promise<void>
 }
 
 export function useOutputLibraryIndexPanel(): UseOutputLibraryIndexPanelResult {
@@ -138,6 +147,35 @@ export function useOutputLibraryIndexPanel(): UseOutputLibraryIndexPanelResult {
     }
   }, [outputRoot, setLastLoadedIndex])
 
+  const reloadFolderStructureOnly = useCallback(async () => {
+    if (!outputRoot) {
+      setErrorMessage('출력 폴더를 먼저 선택하세요.')
+      return
+    }
+
+    lastFetchedOutputRootRef.current = null
+    setIsLoadingIndex(true)
+    setErrorMessage(null)
+
+    try {
+      const result = await window.photoApp.loadLibraryIndex({
+        outputRoot,
+        mode: 'folder-structure-only'
+      })
+      setLastLoadedIndex(result)
+      lastFetchedOutputRootRef.current = outputRoot
+    } catch (error) {
+      lastFetchedOutputRootRef.current = outputRoot
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : '출력 폴더 구조를 다시 읽지 못했습니다.'
+      )
+    } finally {
+      setIsLoadingIndex(false)
+    }
+  }, [outputRoot, setLastLoadedIndex])
+
   return {
     outputRoot,
     setOutputRoot,
@@ -148,6 +186,7 @@ export function useOutputLibraryIndexPanel(): UseOutputLibraryIndexPanelResult {
     errorMessage,
     setErrorMessage,
     selectOutputRoot,
-    reloadLibraryIndex
+    reloadLibraryIndex,
+    reloadFolderStructureOnly
   }
 }

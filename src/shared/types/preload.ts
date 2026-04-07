@@ -49,6 +49,7 @@ export interface ScanPhotoLibraryRequest {
 
 export interface LoadLibraryIndexRequest {
   outputRoot: string
+  mode?: 'default' | 'folder-structure-only'
 }
 
 export interface LoadLibraryGroupDetailRequest {
@@ -63,7 +64,10 @@ export interface PreviewPendingOrganizationRequest {
   missingGpsGroupingBasis?: MissingGpsGroupingBasis
 }
 
-export type LibraryIndexLoadSource = 'merged' | 'fallback'
+export type LibraryIndexLoadSource =
+  | 'merged'
+  | 'fallback'
+  | 'folder-structure'
 
 export interface UpdatePhotoGroupRequest {
   outputRoot: string

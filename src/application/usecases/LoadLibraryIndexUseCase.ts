@@ -11,7 +11,7 @@ import { normalizePathSeparators } from '@shared/utils/path'
 export interface LoadLibraryIndexResult {
   index: LibraryIndex | null
   fallbackGroups: ExistingOutputGroupSummarySnapshot[] | null
-  source: 'merged' | 'fallback' | null
+  source: 'merged' | 'fallback' | 'folder-structure' | null
 }
 
 export class LoadLibraryIndexUseCase {
@@ -25,6 +25,11 @@ export class LoadLibraryIndexUseCase {
   ): Promise<LoadLibraryIndexResult> {
     const validatedCommand = loadLibraryIndexCommandSchema.parse(command)
     const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
+
+    if (validatedCommand.mode === 'folder-structure-only') {
+      return this.loadFolderStructureOnly(outputRoot)
+    }
+
     const storedIndex = await this.loadStoredLibraryIndexSafely(outputRoot)
 
     if (storedIndex) {
@@ -50,6 +55,27 @@ export class LoadLibraryIndexUseCase {
       index: null,
       fallbackGroups,
       source: 'fallback'
+    }
+  }
+
+  private async loadFolderStructureOnly(
+    outputRoot: string
+  ): Promise<LoadLibraryIndexResult> {
+    const fallbackGroups =
+      await this.existingOutputScanner.scanGroupSummaries(outputRoot)
+
+    if (fallbackGroups.length === 0) {
+      return {
+        index: null,
+        fallbackGroups: null,
+        source: null
+      }
+    }
+
+    return {
+      index: null,
+      fallbackGroups,
+      source: 'folder-structure'
     }
   }
 

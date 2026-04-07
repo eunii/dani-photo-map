@@ -62,6 +62,7 @@ describe('ExistingOutputLibraryScanner', () => {
     expect(snapshot.photos[0]).toMatchObject({
       sourceFileName: '2026-04-03_080000_IMG_0001.JPG',
       regionName: 'seoul',
+      folderGroupingLabel: 'seoul',
       outputRelativePath: '2026/04/seoul/2026-04-03_080000_IMG_0001.JPG',
       capturedAt: {
         year: '2026',
@@ -69,6 +70,33 @@ describe('ExistingOutputLibraryScanner', () => {
         day: '03',
         time: '080000'
       }
+    })
+  })
+
+  it('extracts custom folder labels from organized output paths', async () => {
+    const outputRoot = await createTempDirectory()
+    const scanner = new ExistingOutputLibraryScanner()
+
+    await mkdir(join(outputRoot, '2026', '04', '요세미티_국립공원그룹'), {
+      recursive: true
+    })
+    await writeFile(
+      join(
+        outputRoot,
+        '2026',
+        '04',
+        '요세미티_국립공원그룹',
+        '2026-04-03_080000_IMG_0001.JPG'
+      ),
+      'photo-1',
+      'utf-8'
+    )
+
+    const snapshot = await scanner.scan(outputRoot)
+
+    expect(snapshot.photos[0]).toMatchObject({
+      regionName: '요세미티_국립공원그룹',
+      folderGroupingLabel: '요세미티_국립공원그룹'
     })
   })
 })

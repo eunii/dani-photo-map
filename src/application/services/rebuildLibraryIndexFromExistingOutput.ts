@@ -31,6 +31,9 @@ export function rebuildLibraryIndexFromExistingOutput(
     regionName:
       storedPhotosByOutputRelativePath.get(photo.outputRelativePath)?.regionName ??
       photo.regionName,
+    folderGroupingLabel:
+      storedPhotosByOutputRelativePath.get(photo.outputRelativePath)
+        ?.folderGroupingLabel ?? photo.folderGroupingLabel,
     outputRelativePath: photo.outputRelativePath,
     isDuplicate: false,
     metadataIssues:

@@ -33,11 +33,25 @@ export interface GroupingPolicyOptions {
   missingGpsGroupingBasis?: MissingGpsGroupingBasis
 }
 
+function getPhotoGroupingLabel(photo: Photo): string | undefined {
+  return photo.folderGroupingLabel?.trim() || undefined
+}
+
 function getPhotoRegionName(photo: Photo): string {
-  return photo.regionName ?? defaultOrganizationRules.unknownRegionLabel
+  return (
+    getPhotoGroupingLabel(photo) ??
+    photo.regionName ??
+    defaultOrganizationRules.unknownRegionLabel
+  )
 }
 
 function getAutoGroupDisplayRegionLabel(photo: Photo): string {
+  const folderGroupingLabel = getPhotoGroupingLabel(photo)
+
+  if (folderGroupingLabel) {
+    return folderGroupingLabel
+  }
+
   if (!photo.gps) {
     return ''
   }
@@ -160,7 +174,9 @@ function finalizeGroupSeed(
   }
 
   const earliest = pickEarliestUsableCapturedAtFromPhotos(photos)
-  const photoForRegionDisplay = photos.find((photo) => photo.gps)
+  const photoForRegionDisplay =
+    photos.find((photo) => getPhotoGroupingLabel(photo)) ??
+    photos.find((photo) => photo.gps)
   const displayRegionLabel = photoForRegionDisplay
     ? getAutoGroupDisplayRegionLabel(photoForRegionDisplay)
     : ''

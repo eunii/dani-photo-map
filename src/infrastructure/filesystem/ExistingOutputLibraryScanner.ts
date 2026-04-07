@@ -54,6 +54,18 @@ function createRecoveredGroupId(pathSegments: string[]): string {
     .digest('hex')}`
 }
 
+function extractFolderGroupingLabel(pathSegments: string[]): string | undefined {
+  if (pathSegments.length < 2) {
+    return undefined
+  }
+
+  if (pathSegments.length === 2) {
+    return undefined
+  }
+
+  return decodeURIComponent(pathSegments[pathSegments.length - 1] ?? '')
+}
+
 function parseCapturedAtFromFileName(
   sourceFileName: string
 ): PhotoTimestamp | undefined {
@@ -266,7 +278,9 @@ export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
   ): ExistingOutputPhotoSnapshot {
     const normalizedOutputRelativePath = normalizePathSeparators(outputRelativePath)
     const sourceFileName = getPathBaseName(normalizedOutputRelativePath)
-    const [year, month, regionName] = normalizedOutputRelativePath.split('/')
+    const pathSegments = normalizedOutputRelativePath.split('/').filter(Boolean)
+    const [year, month, regionName] = pathSegments
+    const folderGroupingLabel = extractFolderGroupingLabel(pathSegments.slice(0, -1))
 
     return {
       id: createRecoveredPhotoId(normalizedOutputRelativePath),
@@ -277,6 +291,7 @@ export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
         year && month && regionName
           ? decodeURIComponent(regionName)
           : this.rules.unknownRegionLabel,
+      folderGroupingLabel,
       outputRelativePath: normalizedOutputRelativePath
     }
   }

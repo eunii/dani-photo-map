@@ -39,6 +39,7 @@ export interface Photo {
   locationSource?: PhotoLocationSource
   missingGpsCategory?: MissingGpsCategory
   missingGpsGroupingBasis?: MissingGpsGroupingBasis
+  folderGroupingLabel?: string
   manualGroupId?: string
   manualGroupTitle?: string
   regionName?: string

@@ -6,6 +6,7 @@ export interface ExistingOutputPhotoSnapshot {
   sourceFileName: string
   capturedAt?: PhotoTimestamp
   regionName?: string
+  folderGroupingLabel?: string
   outputRelativePath: string
 }
 

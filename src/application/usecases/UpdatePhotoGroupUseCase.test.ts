@@ -228,6 +228,75 @@ describe('UpdatePhotoGroupUseCase', () => {
     expect(savedIndexes).toHaveLength(1)
   })
 
+  it('keeps custom folder names as separate groups when rebuilding without index.json', async () => {
+    const savedIndexes: LibraryIndex[] = []
+    const fileSystem = createFileSystem()
+    const store = {
+      load: vi.fn().mockResolvedValue(null),
+      save: vi.fn(async (index: LibraryIndex) => {
+        savedIndexes.push(index)
+      })
+    }
+    const existingOutputScanner = {
+      scan: vi.fn().mockResolvedValue({
+        outputRoot: 'C:/photos/output',
+        photos: [
+          {
+            id: 'fallback-photo-yosemite',
+            sourcePath:
+              'C:/photos/output/2026/04/요세미티_국립공원그룹/2026-04-03_080000_IMG_0001.JPG',
+            sourceFileName: '2026-04-03_080000_IMG_0001.JPG',
+            capturedAt: {
+              iso: '2026-04-03T08:00:00.000Z',
+              year: '2026',
+              month: '04',
+              day: '03',
+              time: '080000'
+            },
+            regionName: 'california',
+            folderGroupingLabel: '요세미티_국립공원그룹',
+            outputRelativePath:
+              '2026/04/요세미티_국립공원그룹/2026-04-03_080000_IMG_0001.JPG'
+          },
+          {
+            id: 'fallback-photo-la',
+            sourcePath:
+              'C:/photos/output/2026/04/la/2026-04-03_090000_IMG_0002.JPG',
+            sourceFileName: '2026-04-03_090000_IMG_0002.JPG',
+            capturedAt: {
+              iso: '2026-04-03T09:00:00.000Z',
+              year: '2026',
+              month: '04',
+              day: '03',
+              time: '090000'
+            },
+            regionName: 'california',
+            folderGroupingLabel: 'la',
+            outputRelativePath: '2026/04/la/2026-04-03_090000_IMG_0002.JPG'
+          }
+        ]
+      })
+    }
+    const useCase = new UpdatePhotoGroupUseCase(
+      store,
+      fileSystem,
+      existingOutputScanner
+    )
+
+    const updatedIndex = await useCase.execute({
+      outputRoot: 'C:/photos/output',
+      groupId: 'group|region=la|year=2026|month=04|basis=month|day=00|slot=1',
+      title: 'LA 폴더',
+      companions: []
+    })
+
+    expect(updatedIndex.groups).toHaveLength(2)
+    expect(updatedIndex.groups.map((group) => group.displayTitle).sort()).toEqual(
+      ['LA 폴더', '요세미티_국립공원그룹'].sort()
+    )
+    expect(savedIndexes).toHaveLength(1)
+  })
+
   it('merges another group into the gps-backed group when titles match after save', async () => {
     const savedIndexes: LibraryIndex[] = []
     const fileSystem = createFileSystem()
