@@ -12,11 +12,14 @@ interface PhotoGroupMapProps {
   sourceGroups: MapGroupRecord[]
   markerGroups: MapGroupRecord[]
   selectedPhotoPins: MapPhotoPinRecord[]
+  focusedPhotoPin?: MapPhotoPinRecord
   outputRoot?: string
   selectedGroupId?: string
   selectedPhotoId?: string
+  zoomLevel: number
   unclusteredMinZoom: number
   photoMarkerMinZoom: number
+  focusedPhotoContextMinZoom: number
   onSelectGroup: (groupId: string) => void
   onSelectPhoto: (photoId: string) => void
   onViewportChange: (state: {
@@ -82,6 +85,11 @@ interface GroupMarkerBinding {
   groupId: string
   marker: maplibregl.Marker
   element: HTMLButtonElement
+}
+
+interface FocusedPhotoMarkerBinding {
+  photoId: string
+  marker: maplibregl.Marker
 }
 
 function createMapStyle(): StyleSpecification {
@@ -237,11 +245,14 @@ export function PhotoGroupMap({
   sourceGroups,
   markerGroups,
   selectedPhotoPins,
+  focusedPhotoPin,
   outputRoot,
   selectedGroupId,
   selectedPhotoId,
+  zoomLevel,
   unclusteredMinZoom,
   photoMarkerMinZoom,
+  focusedPhotoContextMinZoom,
   onSelectGroup,
   onSelectPhoto,
   onViewportChange
@@ -249,6 +260,7 @@ export function PhotoGroupMap({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const markersRef = useRef<GroupMarkerBinding[]>([])
+  const focusedPhotoMarkerRef = useRef<FocusedPhotoMarkerBinding | null>(null)
   const moveDebounceRef = useRef<number | null>(null)
   const hasInitialFitRef = useRef(false)
   const onSelectGroupRef = useRef(onSelectGroup)
@@ -266,6 +278,7 @@ export function PhotoGroupMap({
   const featureCollectionRef = useRef(featureCollection)
   const photoFeatureCollectionRef = useRef(photoFeatureCollection)
   const lastSelectedGroupIdRef = useRef<string | undefined>(undefined)
+  const lastFocusedPhotoIdRef = useRef<string | undefined>(undefined)
   const unclusteredMinZoomRef = useRef(unclusteredMinZoom)
   const photoMarkerMinZoomRef = useRef(photoMarkerMinZoom)
   const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null)
@@ -285,6 +298,11 @@ export function PhotoGroupMap({
     }
 
     markersRef.current = []
+  }
+
+  function clearFocusedPhotoMarker(): void {
+    focusedPhotoMarkerRef.current?.marker.remove()
+    focusedPhotoMarkerRef.current = null
   }
 
   function updateMarkerPresentation(): void {
@@ -361,6 +379,58 @@ export function PhotoGroupMap({
         duration: 450,
         essential: true
       })
+    })
+
+    return button
+  }
+
+  function buildFocusedPhotoMarkerElement(photo: MapPhotoPinRecord): HTMLButtonElement {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.setAttribute('aria-label', photo.sourceFileName)
+    button.style.width = '74px'
+    button.style.height = '74px'
+    button.style.transformOrigin = 'center center'
+    button.className =
+      'relative overflow-hidden rounded-2xl border-4 border-sky-500 bg-white shadow-2xl ring-4 ring-sky-200'
+
+    const thumbnailUrl = outputRoot
+      ? toOutputFileUrl(
+          outputRoot,
+          photo.thumbnailRelativePath ?? photo.outputRelativePath
+        )
+      : undefined
+
+    const placeholder = document.createElement('div')
+    placeholder.className =
+      'flex h-full w-full items-center justify-center bg-slate-200 text-[10px] font-semibold tracking-wide text-slate-700'
+    placeholder.textContent = 'PHOTO'
+    button.appendChild(placeholder)
+
+    if (thumbnailUrl) {
+      const image = document.createElement('img')
+      image.src = thumbnailUrl
+      image.alt = photo.sourceFileName
+      image.className = 'absolute inset-0 h-full w-full object-cover'
+      image.loading = 'lazy'
+      image.addEventListener('load', () => {
+        placeholder.style.display = 'none'
+      })
+      image.addEventListener('error', () => {
+        image.remove()
+        placeholder.style.display = 'flex'
+      })
+      button.appendChild(image)
+    }
+
+    const badge = document.createElement('div')
+    badge.className =
+      'pointer-events-none absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-slate-950 px-2 py-0.5 text-[9px] font-semibold text-white'
+    badge.textContent = photo.isRepresentative ? 'REP' : 'PHOTO'
+    button.appendChild(badge)
+
+    button.addEventListener('click', () => {
+      onSelectPhotoRef.current(photo.photoId)
     })
 
     return button
@@ -624,6 +694,7 @@ export function PhotoGroupMap({
       }
 
       clearMarkers()
+      clearFocusedPhotoMarker()
       mapRef.current?.remove()
       mapRef.current = null
     }
@@ -717,8 +788,112 @@ export function PhotoGroupMap({
       return
     }
 
+    if (!focusedPhotoPin || zoomLevel < focusedPhotoContextMinZoom) {
+      clearFocusedPhotoMarker()
+      return
+    }
+
+    if (focusedPhotoMarkerRef.current?.photoId === focusedPhotoPin.photoId) {
+      focusedPhotoMarkerRef.current.marker.setLngLat([
+        focusedPhotoPin.longitude,
+        focusedPhotoPin.latitude
+      ])
+      return
+    }
+
+    clearFocusedPhotoMarker()
+
+    const markerElement = buildFocusedPhotoMarkerElement(focusedPhotoPin)
+    const marker = new maplibregl.Marker({
+      element: markerElement,
+      anchor: 'bottom'
+    })
+      .setLngLat([focusedPhotoPin.longitude, focusedPhotoPin.latitude])
+      .addTo(map)
+
+    focusedPhotoMarkerRef.current = {
+      photoId: focusedPhotoPin.photoId,
+      marker
+    }
+  }, [
+    focusedPhotoPin?.latitude,
+    focusedPhotoPin?.longitude,
+    focusedPhotoPin?.outputRelativePath,
+    focusedPhotoPin?.photoId,
+    focusedPhotoPin?.thumbnailRelativePath,
+    focusedPhotoContextMinZoom,
+    outputRoot,
+    zoomLevel
+  ])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || !map.isStyleLoaded()) {
+      return
+    }
+
     setSelectedPhotoFilter(map, selectedPhotoId)
   }, [selectedPhotoId])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || !map.isStyleLoaded()) {
+      return
+    }
+
+    if (!focusedPhotoPin) {
+      lastFocusedPhotoIdRef.current = undefined
+      return
+    }
+
+    if (lastFocusedPhotoIdRef.current === focusedPhotoPin.photoId) {
+      return
+    }
+
+    lastFocusedPhotoIdRef.current = focusedPhotoPin.photoId
+    map.stop()
+    map.easeTo({
+      center: [focusedPhotoPin.longitude, focusedPhotoPin.latitude],
+      zoom: Math.max(map.getZoom(), photoMarkerMinZoom + 0.75),
+      bearing: 0,
+      pitch: 0,
+      duration: 420,
+      essential: true
+    })
+  }, [
+    focusedPhotoPin?.latitude,
+    focusedPhotoPin?.longitude,
+    focusedPhotoPin?.photoId,
+    photoMarkerMinZoom
+  ])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || !map.isStyleLoaded() || !focusedPhotoPin) {
+      return
+    }
+
+    if (zoomLevel < focusedPhotoContextMinZoom) {
+      return
+    }
+
+    map.stop()
+    map.easeTo({
+      center: [focusedPhotoPin.longitude, focusedPhotoPin.latitude],
+      zoom: map.getZoom(),
+      duration: 180,
+      essential: true
+    })
+  }, [
+    focusedPhotoContextMinZoom,
+    focusedPhotoPin?.latitude,
+    focusedPhotoPin?.longitude,
+    focusedPhotoPin?.photoId,
+    zoomLevel
+  ])
 
   const selectedGroup = useMemo(
     () => sourceGroups.find((group) => group.group.id === selectedGroupId),

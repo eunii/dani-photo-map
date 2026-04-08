@@ -8,6 +8,7 @@ import {
   buildVisibleMapGroups,
   deriveMapPageState,
   filterMapGroupRecords,
+  findSelectedGroupPhotoPin,
   getMapZoomPolicy,
   resolveGroupDisplayTitle,
   resolveGroupPinLocation
@@ -344,6 +345,47 @@ describe('mapPageSelectors', () => {
     expect(pins[0]).toMatchObject({
       isRepresentative: true,
       gpsSource: 'original-gps'
+    })
+  })
+
+  it('finds the focused preview photo pin even when it is outside the limited overlay set', () => {
+    const pin = findSelectedGroupPhotoPin(
+      {
+        id: 'group-1',
+        groupKey: 'group-1',
+        pathSegments: ['2026', '04', 'yosemite'],
+        title: 'Yosemite',
+        displayTitle: 'Yosemite',
+        photoCount: 2,
+        photoIds: ['photo-1', 'photo-2'],
+        representativePhotoId: 'photo-1',
+        companions: [],
+        photos: [
+          {
+            id: 'photo-1',
+            sourceFileName: 'IMG_0001.JPG',
+            hasGps: true
+          },
+          {
+            id: 'photo-2',
+            sourceFileName: 'IMG_0002.JPG',
+            gps: {
+              latitude: 36.58,
+              longitude: -118.28
+            },
+            capturedAtIso: '2026-04-06T08:00:00.000Z',
+            hasGps: true
+          }
+        ]
+      },
+      'photo-2'
+    )
+
+    expect(pin).toMatchObject({
+      photoId: 'photo-2',
+      latitude: 36.58,
+      longitude: -118.28,
+      gpsSource: 'gps'
     })
   })
 })

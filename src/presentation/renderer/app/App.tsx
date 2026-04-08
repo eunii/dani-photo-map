@@ -4,6 +4,7 @@ import { BrowsePage } from '@presentation/renderer/pages/BrowsePage'
 import { FileListPage } from '@presentation/renderer/pages/FileListPage'
 import { OrganizePage } from '@presentation/renderer/pages/OrganizePage'
 import { SettingsPage } from '@presentation/renderer/pages/SettingsPage'
+import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
 
 type AppRoute = 'organize' | 'files' | 'browse' | 'settings'
 
@@ -27,9 +28,18 @@ function getRouteFromHash(hash: string): AppRoute {
   return 'organize'
 }
 
+function getInitialRoute(hash: string, outputRoot: string): AppRoute {
+  if (hash) {
+    return getRouteFromHash(hash)
+  }
+
+  return outputRoot ? 'browse' : 'settings'
+}
+
 export function App() {
+  const outputRoot = useLibraryWorkspaceStore((state) => state.outputRoot)
   const [route, setRoute] = useState<AppRoute>(() =>
-    getRouteFromHash(window.location.hash)
+    getInitialRoute(window.location.hash, outputRoot)
   )
 
   useEffect(() => {
@@ -40,13 +50,15 @@ export function App() {
     window.addEventListener('hashchange', handleHashChange)
 
     if (!window.location.hash) {
-      window.location.hash = ROUTE_HASHES.organize
+      window.location.hash = outputRoot
+        ? ROUTE_HASHES.browse
+        : ROUTE_HASHES.settings
     }
 
     return () => {
       window.removeEventListener('hashchange', handleHashChange)
     }
-  }, [])
+  }, [outputRoot])
 
   useEffect(() => {
     window.scrollTo({ top: 0 })

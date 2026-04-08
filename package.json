@@ -2,6 +2,7 @@
   "name": "dani-photo-map",
   "version": "0.1.0",
   "private": true,
+  "author": "dani",
   "description": "Dani Photo Map — local photo library organizer with map and groups.",
   "type": "module",
   "main": "dist/main/index.js",
@@ -18,6 +19,20 @@
   "build": {
     "appId": "com.dani.photomap",
     "productName": "Dani Photo Map",
+    "icon": "build/dani_photo_map_camera_icon.ico",
+    "asarUnpack": [
+      "**/node_modules/sharp/**/*",
+      "**/node_modules/@img/**/*"
+    ],
+    "win": {
+      "executableName": "dani-photo-map",
+      "icon": "build/dani_photo_map_camera_icon.ico"
+    },
+    "nsis": {
+      "installerIcon": "build/dani_photo_map_camera_icon.ico",
+      "uninstallerIcon": "build/dani_photo_map_camera_icon.ico",
+      "installerHeaderIcon": "build/dani_photo_map_camera_icon.ico"
+    },
     "files": [
       "dist/**/*",
       "package.json"
@@ -47,5 +62,8 @@
     "vite": "8.0.3",
     "vitest": "4.1.2"
   },
-  "packageManager": "pnpm@10.33.0"
+  "packageManager": "pnpm@10.33.0",
+  "optionalDependencies": {
+    "@img/sharp-win32-x64": "0.34.5"
+  }
 }

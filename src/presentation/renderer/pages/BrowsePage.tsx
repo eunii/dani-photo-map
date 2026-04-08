@@ -14,6 +14,7 @@ import {
   buildMapGroupRecords,
   buildRepresentativeMarkerGroups,
   filterMapGroupRecords,
+  findSelectedGroupPhotoPin,
   getMapZoomPolicy,
   getQuickFilterDateRange
 } from '@presentation/renderer/view-models/map/mapPageSelectors'
@@ -24,6 +25,7 @@ interface BrowsePageProps {
 
 const SELECTED_GROUP_PHOTO_PIN_MAX_COUNT = 24
 const SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM = 12.5
+const FOCUSED_PHOTO_CONTEXT_MIN_ZOOM = 8.5
 
 export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
   const {
@@ -99,6 +101,10 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
         maxPins: SELECTED_GROUP_PHOTO_PIN_MAX_COUNT
       }),
     [selectedGroupDetail]
+  )
+  const focusedPhotoPin = useMemo(
+    () => findSelectedGroupPhotoPin(selectedGroupDetail, previewPhotoId),
+    [previewPhotoId, selectedGroupDetail]
   )
 
   const mapZoomPolicy = useMemo(() => getMapZoomPolicy(zoomLevel), [zoomLevel])
@@ -269,6 +275,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
                 sourceGroups={mapCanvasGroups}
                 markerGroups={markerGroups}
                 selectedPhotoPins={selectedPhotoPins}
+                focusedPhotoPin={focusedPhotoPin ?? undefined}
                 outputRoot={libraryIndex?.outputRoot ?? outputRoot}
                 selectedGroupId={selectedGroupId}
                 selectedPhotoId={
@@ -276,8 +283,10 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
                   selectedGroupDetail?.representativePhotoId ??
                   selectedPhotoPins[0]?.photoId
                 }
+                zoomLevel={zoomLevel}
                 unclusteredMinZoom={mapZoomPolicy.unclusteredMinZoom}
                 photoMarkerMinZoom={SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM}
+                focusedPhotoContextMinZoom={FOCUSED_PHOTO_CONTEXT_MIN_ZOOM}
                 onSelectGroup={handleSelectGroup}
                 onSelectPhoto={setPreviewPhotoId}
                 onViewportChange={handleViewportChange}

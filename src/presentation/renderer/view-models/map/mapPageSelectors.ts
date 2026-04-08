@@ -325,6 +325,44 @@ export function buildSelectedGroupPhotoPins(
     .slice(0, Math.max(0, options.maxPins))
 }
 
+export function findSelectedGroupPhotoPin(
+  group: GroupDetail | null | undefined,
+  photoId: string | undefined
+): MapPhotoPinRecord | null {
+  if (!group || !photoId) {
+    return null
+  }
+
+  const photo = group.photos.find((candidate) => candidate.id === photoId)
+
+  if (!photo) {
+    return null
+  }
+
+  const pinLocation = resolvePhotoPinLocation(photo)
+
+  if (!pinLocation) {
+    return null
+  }
+
+  const isRepresentative = group.representativePhotoId === photo.id
+
+  return {
+    id: `photo-pin:${photo.id}`,
+    photoId: photo.id,
+    sourceFileName: photo.sourceFileName,
+    latitude: pinLocation.latitude,
+    longitude: pinLocation.longitude,
+    capturedAtIso: photo.capturedAtIso,
+    regionName: photo.regionName,
+    thumbnailRelativePath: photo.thumbnailRelativePath,
+    outputRelativePath: photo.outputRelativePath,
+    isRepresentative,
+    gpsSource: pinLocation.gpsSource,
+    score: resolvePhotoPinScore(photo, isRepresentative, pinLocation)
+  }
+}
+
 export function buildMapGroupRecords(groups: GroupSummary[]): MapGroupRecord[] {
   return groups.map((group) => buildMapGroupRecord(group))
 }
