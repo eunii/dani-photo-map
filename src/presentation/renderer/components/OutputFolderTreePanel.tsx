@@ -37,13 +37,13 @@ function TreeBranch({
   return (
     <li className="select-none">
       <div
-        className="flex min-h-8 items-center gap-0.5 rounded-md pr-1 hover:bg-slate-50"
+        className="flex min-h-8 items-center gap-0.5 rounded-xl pr-1 hover:bg-[var(--app-surface-strong)]"
         style={{ paddingLeft }}
       >
         {hasChildren ? (
           <button
             type="button"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200/80 hover:text-slate-800"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-[var(--app-muted)] hover:bg-[var(--app-surface-strong)] hover:text-[var(--app-foreground)]"
             aria-expanded={isExpanded}
             title={isExpanded ? '접기' : '펼치기'}
             onClick={(event) => {
@@ -65,14 +65,14 @@ function TreeBranch({
           type="button"
           className={`min-w-0 flex-1 truncate rounded px-1.5 py-1 text-left text-sm ${
             isSelected
-              ? 'bg-sky-100 font-medium text-sky-900'
-              : 'text-slate-800'
+              ? 'bg-[var(--app-accent)] font-medium text-[var(--app-accent-foreground)]'
+              : 'text-[var(--app-foreground)]'
           }`}
           onClick={() => onSelectPath(node.pathSegments)}
         >
           {formatPathSegmentLabel(node.segmentKey || node.displayLabel)}
           <span
-            className="ml-1 shrink-0 text-xs font-normal text-slate-500"
+            className="ml-1 shrink-0 text-xs font-normal text-[var(--app-muted)]"
             title="가장 안쪽 폴더에 있는 파일까지 모두 더한 합계입니다."
           >
             ({node.totalPhotoCount}장)
@@ -80,7 +80,7 @@ function TreeBranch({
         </button>
       </div>
       {hasChildren && isExpanded ? (
-        <ul className="mt-0.5 space-y-0.5 border-l border-slate-100 pl-0">
+        <ul className="mt-0.5 space-y-0.5 border-l border-[var(--app-border)] pl-0">
           {node.children.map((child) => (
             <TreeBranch
               key={outputPathKey(child.pathSegments)}
@@ -134,12 +134,12 @@ export function OutputFolderTreePanel({
   }, [])
 
   return (
-    <div className="flex max-h-[min(70vh,800px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-3 py-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <div className="flex max-h-[min(70vh,800px)] flex-col overflow-hidden rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface)]">
+      <div className="border-b border-[var(--app-border)] bg-[var(--app-surface-strong)] px-3 py-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--app-muted)]">
           폴더 트리
         </h3>
-        <p className="mt-0.5 text-xs text-slate-500">
+        <p className="mt-0.5 text-xs text-[var(--app-muted)]">
           ▸로 펼치고 접을 수 있습니다. 폴더를 누르면 오른쪽에 그 안의 사진이
           표시됩니다.
         </p>
@@ -149,8 +149,8 @@ export function OutputFolderTreePanel({
           type="button"
           className={`mb-2 w-full rounded-lg border px-2 py-1.5 text-left text-sm ${
             selectedPathSegments.length === 0
-              ? 'border-sky-200 bg-sky-50 font-medium text-sky-900'
-              : 'border-transparent text-slate-700 hover:bg-slate-50'
+              ? 'border-[var(--app-accent)] bg-[var(--app-accent)] font-medium text-[var(--app-accent-foreground)]'
+              : 'border-transparent text-[var(--app-foreground)] hover:bg-[var(--app-surface-strong)]'
           }`}
           onClick={() => onSelectPath([])}
         >

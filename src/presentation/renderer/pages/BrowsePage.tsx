@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { Button } from '@heroui/react'
+
 import { MapFilterBar } from '@presentation/renderer/components/map/MapFilterBar'
 import { GroupDetailPanel } from '@presentation/renderer/components/GroupDetailPanel'
 import { MapPhotoSidebar } from '@presentation/renderer/components/map/MapPhotoSidebar'
@@ -289,15 +291,6 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold tracking-tight text-slate-900">
-          지도
-        </h2>
-        <p className="text-sm text-slate-600">
-          그룹 단위로 사진을 탐색합니다.
-        </p>
-      </div>
-
       {errorMessage ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
@@ -315,21 +308,21 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
       ) : null}
 
       {!outputRoot ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <p className="text-base font-semibold text-slate-900">
+        <div className="rounded-[28px] border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] p-10 text-center">
+          <p className="text-base font-semibold text-[var(--app-foreground)]">
             출력 폴더를 먼저 설정하세요.
           </p>
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="mt-2 text-sm text-[var(--app-muted)]">
             설정 탭에서 정리 결과 폴더를 지정하면 바로 탐색할 수 있습니다.
           </p>
           {onNavigateToSettings ? (
-            <button
-              type="button"
-              className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-              onClick={onNavigateToSettings}
+            <Button
+              variant="primary"
+              className="mt-4 rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
+              onPress={onNavigateToSettings}
             >
               설정으로 이동
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : (

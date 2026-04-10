@@ -1,9 +1,85 @@
+@import "@heroui/react/styles";
 @import "tailwindcss";
 
 :root {
-  color: #0f172a;
-  background-color: #f8fafc;
+  color: #4f5f4b;
+  background-color: #f1f3e0;
   font-family: Inter, "Segoe UI", sans-serif;
+  --accent: #a1bc98;
+  --accent-foreground: #ffffff;
+  --background: #f1f3e0;
+  --border: #d2dcb6;
+  --foreground: #778873;
+  --muted: #778873;
+  --surface: #ffffff;
+  --surface-secondary: #f1f3e0;
+  --surface-tertiary: #d2dcb6;
+  --overlay: #ffffff;
+  --radius: 0.75rem;
+  --field-radius: 1rem;
+  --app-background: var(--background);
+  --app-panel: color-mix(in srgb, var(--surface) 92%, white 8%);
+  --app-surface: var(--surface);
+  --app-surface-strong: color-mix(in srgb, var(--surface-secondary) 68%, white 32%);
+  --app-sidebar: color-mix(in srgb, var(--surface) 82%, var(--surface-secondary) 18%);
+  --app-border: var(--border);
+  --app-foreground: var(--foreground);
+  --app-muted: color-mix(in srgb, var(--muted) 88%, white 12%);
+  --app-accent: var(--accent);
+  --app-accent-strong: color-mix(in srgb, var(--accent) 76%, black 24%);
+  --app-accent-foreground: var(--accent-foreground);
+}
+
+:root[data-theme='olive-mist'] {
+  --accent: #a1bc98;
+  --accent-foreground: #ffffff;
+  --background: #f1f3e0;
+  --border: #d2dcb6;
+  --foreground: #778873;
+  --muted: #778873;
+  --surface: #ffffff;
+  --surface-secondary: #f1f3e0;
+  --surface-tertiary: #d2dcb6;
+  --overlay: #ffffff;
+}
+
+:root[data-theme='violet-night'] {
+  --accent: #9400ff;
+  --accent-foreground: #ffffff;
+  --background: #e4f1ff;
+  --border: #bfd8f8;
+  --foreground: #2f2460;
+  --muted: #6d63a0;
+  --surface: #ffffff;
+  --surface-secondary: #eef5ff;
+  --surface-tertiary: #d9e8ff;
+  --overlay: #ffffff;
+}
+
+:root[data-theme='stone-coast'] {
+  --accent: #89a8b2;
+  --accent-foreground: #ffffff;
+  --background: #f1f0e8;
+  --border: #d2d8d8;
+  --foreground: #586d75;
+  --muted: #7a8b91;
+  --surface: #ffffff;
+  --surface-secondary: #edf1ef;
+  --surface-tertiary: #dfe7e4;
+  --overlay: #ffffff;
+}
+
+:root[data-theme='rose-powder'] {
+  --accent: #f2bed1;
+  --accent-foreground: #7d4d63;
+  --background: #f9f5f6;
+  --border: #f1d6df;
+  --foreground: #8f6172;
+  --muted: #af8391;
+  --surface: #ffffff;
+  --surface-secondary: #fdf2f5;
+  --surface-tertiary: #f8e8ee;
+  --overlay: #ffffff;
 }
 
 html,
@@ -15,4 +91,45 @@ body,
 
 body {
   min-width: 320px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--app-accent) 18%, transparent) 0, transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--app-background) 92%, white 8%) 0%, var(--app-background) 100%);
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: Inter, "Segoe UI", sans-serif;
+}
+
+.app-surface-card {
+  background: color-mix(in srgb, var(--app-surface) 90%, white 10%);
+  border: 1px solid var(--app-border);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.app-sidebar-surface {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--app-sidebar) 90%, white 10%) 0%,
+      color-mix(in srgb, var(--app-surface) 90%, var(--app-sidebar) 10%) 100%
+    );
+  border: 1px solid var(--app-border);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+}
+
+.app-page-section {
+  background: color-mix(in srgb, var(--app-surface) 92%, white 8%);
+  border: 1px solid var(--app-border);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+}
+
+.app-grid-dots {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--app-border) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--app-border) 45%, transparent) 1px, transparent 1px);
+  background-size: 18px 18px;
 }

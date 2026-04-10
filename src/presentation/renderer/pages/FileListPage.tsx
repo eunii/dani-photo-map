@@ -6,7 +6,10 @@ import {
   useState
 } from 'react'
 
+import { Button } from '@heroui/react'
+
 import { buildGroupAwarePhotoOutputRelativePath } from '@domain/services/GroupAwarePhotoNamingService'
+import { BreadcrumbDropdown } from '@presentation/renderer/components/files/BreadcrumbDropdown'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import { OutputFolderTreePanel } from '@presentation/renderer/components/OutputFolderTreePanel'
 import {
@@ -260,6 +263,17 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     }
     return pathSegments.map(formatPathSegmentLabel).join(' / ')
   }, [pathSegments])
+
+  const rootBreadcrumbOptions = useMemo(
+    () =>
+      listGroupSubfoldersAtPath(groups, []).map((entry) => ({
+        key: `root:${entry.segment}`,
+        label: entry.displayLabel,
+        pathSegments: [entry.segment],
+        photoCount: entry.photoCount
+      })),
+    [groups]
+  )
 
   /**
    * 년·월 바로 아래 등 경로 깊이가 2 이하일 때: 목적지 후보 = 현재 경로의 하위 폴더.
@@ -619,15 +633,6 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold tracking-tight text-slate-900">
-          파일 목록
-        </h2>
-        <p className="text-sm text-slate-600">
-          정리된 결과를 폴더별로 확인합니다.
-        </p>
-      </div>
-
       {sourceBadge ? (
         <section className={`rounded-2xl border px-4 py-3 text-sm ${sourceBadge.tone}`}>
           <div className="flex flex-wrap items-center gap-3">
@@ -653,13 +658,14 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
 
       <section className="space-y-3">
         {outputRoot ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
+          <div className="rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-full bg-[var(--app-surface)] px-3 py-1 text-xs font-medium text-[var(--app-foreground)]">
               전체 {totalCount}장
             </div>
             {pathSegments.length > 0 ? (
               <div
-                className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                className="rounded-full bg-[var(--app-surface)] px-3 py-1 text-xs font-medium text-[var(--app-foreground)]"
                 title="가장 안쪽 폴더에 있는 파일까지 모두 더한 수입니다."
               >
                 이 경로 합계 {subtreeCount}장
@@ -667,49 +673,50 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
             ) : null}
             {pathSegments.length > 0 && folderCount < subtreeCount ? (
               <div
-                className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600"
+                className="rounded-full bg-[var(--app-surface)] px-3 py-1 text-xs font-medium text-[var(--app-muted)]"
                 title="이 경로 폴더에 직접 들어 있는 파일만. 목록에도 이 기준으로만 나옵니다."
               >
                 이 폴더에만 {folderCount}장
               </div>
             ) : null}
             {hasMore ? (
-              <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500">
+              <div className="rounded-full bg-[var(--app-surface)] px-3 py-1 text-xs font-medium text-[var(--app-muted)]">
                 목록 표시 {visibleRows.length} / 직접 {folderCount}
               </div>
             ) : null}
-            <label className="ml-auto flex items-center gap-2 text-sm text-slate-600">
+            <label className="ml-auto flex items-center gap-2 text-sm text-[var(--app-muted)]">
               정렬
               <select
                 value={sortOption}
                 onChange={(event) =>
                   setSortOption(event.target.value as PhotoListSortOption)
                 }
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900"
+                className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-sm text-[var(--app-foreground)]"
               >
                 <option value="captured-desc">촬영일 최신순</option>
                 <option value="filename-asc">파일명 순</option>
               </select>
             </label>
+            </div>
           </div>
         ) : null}
 
         {!outputRoot ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-            <p className="text-sm font-semibold text-slate-900">
+          <div className="rounded-[28px] border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] p-8 text-center">
+            <p className="text-sm font-semibold text-[var(--app-foreground)]">
               출력 폴더를 먼저 설정하세요.
             </p>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-[var(--app-muted)]">
               설정 탭에서 정리 결과 폴더를 지정하면 목록이 표시됩니다.
             </p>
             {onNavigateToSettings ? (
-              <button
-                type="button"
-                className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-                onClick={onNavigateToSettings}
+              <Button
+                variant="primary"
+                className="mt-4 rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
+                onPress={onNavigateToSettings}
               >
                 설정으로 이동
-              </button>
+              </Button>
             ) : null}
           </div>
         ) : (
@@ -723,34 +730,42 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
             </div>
 
             <div className="flex min-w-0 flex-col gap-3">
-              <div className="w-full overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-2 py-1.5">
+              <div className="w-full overflow-hidden rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface)]">
+                <div className="flex flex-wrap items-center gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface-strong)] px-3 py-2">
                   <nav
-                    className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5 text-xs text-slate-700"
+                    className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-xs text-[var(--app-foreground)]"
                     aria-label="폴더 경로"
                   >
-                    <button
-                      type="button"
-                      className="rounded px-1.5 py-0.5 font-medium text-sky-700 hover:bg-sky-50"
-                      onClick={() => setPathSegments([])}
-                    >
-                      홈
-                    </button>
+                    <BreadcrumbDropdown
+                      label="홈"
+                      currentPathSegments={[]}
+                      options={rootBreadcrumbOptions}
+                      onNavigate={setPathSegments}
+                    />
                     {pathSegments.map((segment, index) => (
                       <span key={`${segment}-${index}`} className="flex items-center gap-1">
-                        <span className="text-slate-400" aria-hidden>
+                        <span className="text-[var(--app-muted)]" aria-hidden>
                           /
                         </span>
-                        <button
-                          type="button"
-                          className="max-w-[min(200px,28vw)] truncate rounded px-1.5 py-0.5 font-medium text-sky-700 hover:bg-sky-50"
-                          title={formatPathSegmentLabel(segment)}
-                          onClick={() =>
-                            setPathSegments(pathSegments.slice(0, index + 1))
-                          }
-                        >
-                          {formatPathSegmentLabel(segment)}
-                        </button>
+                        <BreadcrumbDropdown
+                          label={formatPathSegmentLabel(segment)}
+                          currentPathSegments={pathSegments.slice(0, index + 1)}
+                          options={listGroupSubfoldersAtPath(
+                            groups,
+                            pathSegments.slice(0, index + 1)
+                          ).map((entry) => ({
+                            key: `${pathSegments
+                              .slice(0, index + 1)
+                              .join('/')}:${entry.segment}`,
+                            label: entry.displayLabel,
+                            pathSegments: [
+                              ...pathSegments.slice(0, index + 1),
+                              entry.segment
+                            ],
+                            photoCount: entry.photoCount
+                          }))}
+                          onNavigate={setPathSegments}
+                        />
                       </span>
                     ))}
                   </nav>
