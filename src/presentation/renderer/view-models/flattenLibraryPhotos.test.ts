@@ -5,6 +5,7 @@ import {
   sortFlatPhotoRows
 } from '@presentation/renderer/view-models/flattenLibraryPhotos'
 import type { GroupDetail } from '@shared/types/preload'
+import { createGroupDetailFixture } from '@/test/factories/createGroupDetailFixture'
 
 function group(
   id: string,
@@ -15,21 +16,17 @@ function group(
     capturedAtIso?: string
   }>
 ): GroupDetail {
-  return {
+  return createGroupDetailFixture({
     id,
-    groupKey: id,
     title: displayTitle,
     displayTitle,
-    photoCount: photos.length,
-    photoIds: photos.map((p) => p.id),
-    companions: [],
     photos: photos.map((p) => ({
       id: p.id,
       sourceFileName: p.sourceFileName,
       capturedAtIso: p.capturedAtIso,
       hasGps: true
     }))
-  }
+  })
 }
 
 describe('flattenLibraryGroupsToPhotos', () => {
@@ -53,14 +50,10 @@ describe('flattenLibraryGroupsToPhotos', () => {
 
   it('uses title when set, otherwise strips leading date from displayTitle', () => {
     const rows = flattenLibraryGroupsToPhotos([
-      {
+      createGroupDetailFixture({
         id: 'g1',
-        groupKey: 'g1',
         title: '',
         displayTitle: '2026-04 seoul',
-        photoCount: 1,
-        photoIds: ['a'],
-        companions: [],
         photos: [
           {
             id: 'a',
@@ -68,7 +61,7 @@ describe('flattenLibraryGroupsToPhotos', () => {
             hasGps: true
           }
         ]
-      }
+      })
     ])
     expect(rows[0]?.groupDisplayTitle).toBe('seoul')
   })

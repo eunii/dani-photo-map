@@ -6,7 +6,7 @@ import { LIBRARY_INDEX_VERSION } from '@domain/entities/LibraryIndex'
 describe('mergeStoredLibraryMetadata', () => {
   it('preserves sha256 and duplicateOfPhotoId from stored photos by output path', () => {
     const rebuilt = {
-      version: LIBRARY_INDEX_VERSION as const,
+      version: LIBRARY_INDEX_VERSION,
       generatedAt: '2026-01-02T00:00:00.000Z',
       sourceRoot: 'C:/s',
       outputRoot: 'C:/o',
@@ -24,7 +24,7 @@ describe('mergeStoredLibraryMetadata', () => {
     }
 
     const stored = {
-      version: LIBRARY_INDEX_VERSION as const,
+      version: LIBRARY_INDEX_VERSION,
       generatedAt: '2026-01-01T00:00:00.000Z',
       sourceRoot: 'C:/s',
       outputRoot: 'C:/o',

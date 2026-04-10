@@ -4,6 +4,7 @@ import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import { PhotoFileConflictError } from '@application/ports/PhotoLibraryFileSystemPort'
 import { ScanPhotoLibraryUseCase } from '@application/usecases/ScanPhotoLibraryUseCase'
+import { createExistingOutputScannerPortMock } from '@/test/factories/createExistingOutputScannerPortMock'
 
 function createUseCaseDependencies() {
   let savedIndex: LibraryIndex | null = null
@@ -37,12 +38,7 @@ function createUseCaseDependencies() {
           savedIndex = index
         })
       },
-      existingOutputScanner: {
-        scan: vi.fn().mockResolvedValue({
-          outputRoot: 'C:/output',
-          photos: []
-        })
-      },
+      existingOutputScanner: createExistingOutputScannerPortMock(),
       rules: defaultOrganizationRules
     },
     getSavedIndex() {
@@ -349,7 +345,7 @@ describe('ScanPhotoLibraryUseCase', () => {
         longitude: 126.978
       }
     })
-    dependencies.existingOutputScanner.scan.mockResolvedValue({
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
       outputRoot: 'C:/output',
       photos: [
         {
@@ -423,7 +419,7 @@ describe('ScanPhotoLibraryUseCase', () => {
         time: '110000'
       }
     })
-    dependencies.existingOutputScanner.scan.mockResolvedValue({
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
       outputRoot: 'C:/output',
       photos: [
         {
@@ -951,7 +947,7 @@ describe('ScanPhotoLibraryUseCase', () => {
   it('returns existingOutputSkipDetails when hash already exists in output', async () => {
     const { dependencies } = createUseCaseDependencies()
 
-    dependencies.existingOutputScanner.scan.mockResolvedValue({
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
       outputRoot: 'C:/output',
       photos: [
         {

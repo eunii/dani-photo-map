@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { LIBRARY_INDEX_VERSION } from '@domain/entities/LibraryIndex'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import { PreviewPendingOrganizationUseCase } from '@application/usecases/PreviewPendingOrganizationUseCase'
+import { createExistingOutputScannerPortMock } from '@/test/factories/createExistingOutputScannerPortMock'
 
 function createDependencies() {
   return {
@@ -31,9 +32,7 @@ function createDependencies() {
       load: vi.fn(),
       save: vi.fn()
     },
-    existingOutputScanner: {
-      scan: vi.fn()
-    },
+    existingOutputScanner: createExistingOutputScannerPortMock(),
     rules: defaultOrganizationRules
   }
 }
@@ -68,7 +67,7 @@ describe('PreviewPendingOrganizationUseCase', () => {
     dependencies.photoPreview.createDataUrl.mockResolvedValue(
       'data:image/webp;base64,preview'
     )
-    dependencies.existingOutputScanner.scan.mockResolvedValue({
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
       outputRoot: 'C:/output',
       photos: [
         {
@@ -207,7 +206,7 @@ describe('PreviewPendingOrganizationUseCase', () => {
     dependencies.photoPreview.createDataUrl.mockResolvedValue(
       'data:image/webp;base64,preview'
     )
-    dependencies.existingOutputScanner.scan.mockResolvedValue({
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
       outputRoot: 'C:/output',
       photos: [
         {
@@ -331,7 +330,7 @@ describe('PreviewPendingOrganizationUseCase', () => {
     dependencies.photoPreview.createDataUrl.mockResolvedValue(
       'data:image/webp;base64,preview'
     )
-    dependencies.existingOutputScanner.scan.mockResolvedValue({
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
       outputRoot: 'C:/output',
       photos: [
         {
@@ -419,7 +418,7 @@ describe('PreviewPendingOrganizationUseCase', () => {
     dependencies.photoPreview.createDataUrl.mockResolvedValue(
       'data:image/webp;base64,preview'
     )
-    dependencies.existingOutputScanner.scan.mockResolvedValue({
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
       outputRoot: 'C:/output',
       photos: []
     })
@@ -461,7 +460,7 @@ describe('PreviewPendingOrganizationUseCase', () => {
     dependencies.photoPreview.createDataUrl.mockResolvedValue(
       'data:image/webp;base64,preview'
     )
-    dependencies.existingOutputScanner.scan.mockResolvedValue({
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
       outputRoot: 'C:/output',
       photos: []
     })

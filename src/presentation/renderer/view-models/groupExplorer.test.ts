@@ -1,35 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
-import type { GroupDetail } from '@shared/types/preload'
 import { buildGroupExplorerViewModel } from '@presentation/renderer/view-models/groupExplorer'
-
-function createGroupDetail(overrides: Partial<GroupDetail> & Pick<GroupDetail, 'id' | 'title'>): GroupDetail {
-  return {
-    id: overrides.id,
-    groupKey: overrides.groupKey ?? overrides.id,
-    title: overrides.title,
-    displayTitle: overrides.displayTitle ?? overrides.title,
-    photoCount: overrides.photoCount ?? 1,
-    photoIds: overrides.photoIds ?? ['photo-1'],
-    representativePhotoId: overrides.representativePhotoId,
-    representativeThumbnailRelativePath: overrides.representativeThumbnailRelativePath,
-    representativeGps: overrides.representativeGps,
-    companions: overrides.companions ?? [],
-    notes: overrides.notes,
-    photos: overrides.photos ?? []
-  }
-}
+import { createGroupDetailFixture } from '@/test/factories/createGroupDetailFixture'
 
 describe('groupExplorer view model', () => {
   it('partitions mapped and unmapped groups', () => {
     const viewModel = buildGroupExplorerViewModel(
       [
-        createGroupDetail({
+        createGroupDetailFixture({
           id: 'mapped',
           title: 'Mapped',
           representativeGps: { latitude: 37.5, longitude: 127.0 }
         }),
-        createGroupDetail({
+        createGroupDetailFixture({
           id: 'unmapped',
           title: 'Unmapped'
         })
@@ -44,13 +27,13 @@ describe('groupExplorer view model', () => {
   it('sorts by most recent captured photo when recent sort is selected', () => {
     const viewModel = buildGroupExplorerViewModel(
       [
-        createGroupDetail({
+        createGroupDetailFixture({
           id: 'older',
           title: 'Older',
           representativeGps: { latitude: 37.5, longitude: 127.0 },
           photos: [{ id: 'p1', sourceFileName: 'a.jpg', capturedAtIso: '2024-01-01T10:00:00.000Z', hasGps: true }]
         }),
-        createGroupDetail({
+        createGroupDetailFixture({
           id: 'newer',
           title: 'Newer',
           representativeGps: { latitude: 37.5, longitude: 127.0 },

@@ -5,4 +5,4 @@ export const loadLibraryIndexCommandSchema = z.object({
   mode: z.enum(['default', 'folder-structure-only']).default('default')
 })
 
-export type LoadLibraryIndexCommand = z.infer<typeof loadLibraryIndexCommandSchema>
+export type LoadLibraryIndexCommand = z.input<typeof loadLibraryIndexCommandSchema>

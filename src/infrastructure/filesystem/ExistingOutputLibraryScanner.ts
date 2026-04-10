@@ -182,6 +182,11 @@ export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
 
     if (photoFiles.length > 0 && pathSegments.length > 0) {
       const representativeFile = photoFiles[0]
+
+      if (!representativeFile) {
+        return
+      }
+
       const representativeOutputRelativePath = currentRelativePath
         ? joinPathSegments(currentRelativePath, representativeFile.name)
         : representativeFile.name

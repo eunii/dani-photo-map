@@ -51,6 +51,6 @@ export const scanPhotoLibraryCommandSchema = z.object({
   copyGroupKeysInThisRun: z.array(z.string().min(1)).optional()
 })
 
-export type ScanPhotoLibraryCommand = z.infer<
+export type ScanPhotoLibraryCommand = z.input<
   typeof scanPhotoLibraryCommandSchema
 >

@@ -5,6 +5,7 @@ import {
   type LibraryIndex
 } from '@domain/entities/LibraryIndex'
 import { UpdatePhotoGroupUseCase } from '@application/usecases/UpdatePhotoGroupUseCase'
+import { createExistingOutputScannerPortMock } from '@/test/factories/createExistingOutputScannerPortMock'
 
 function createFileSystem() {
   return {
@@ -185,28 +186,27 @@ describe('UpdatePhotoGroupUseCase', () => {
         savedIndexes.push(index)
       })
     }
-    const existingOutputScanner = {
-      scan: vi.fn().mockResolvedValue({
-        outputRoot: 'C:/photos/output',
-        photos: [
-          {
-            id: 'fallback-photo-1',
-            sourcePath:
-              'C:/photos/output/2026/04/seoul/2026-04-03_080000_IMG_0001.JPG',
-            sourceFileName: '2026-04-03_080000_IMG_0001.JPG',
-            capturedAt: {
-              iso: '2026-04-03T08:00:00.000Z',
-              year: '2026',
-              month: '04',
-              day: '03',
-              time: '080000'
-            },
-            regionName: 'seoul',
-            outputRelativePath: '2026/04/seoul/2026-04-03_080000_IMG_0001.JPG'
-          }
-        ]
-      })
-    }
+    const existingOutputScanner = createExistingOutputScannerPortMock()
+    vi.mocked(existingOutputScanner.scan).mockResolvedValue({
+      outputRoot: 'C:/photos/output',
+      photos: [
+        {
+          id: 'fallback-photo-1',
+          sourcePath:
+            'C:/photos/output/2026/04/seoul/2026-04-03_080000_IMG_0001.JPG',
+          sourceFileName: '2026-04-03_080000_IMG_0001.JPG',
+          capturedAt: {
+            iso: '2026-04-03T08:00:00.000Z',
+            year: '2026',
+            month: '04',
+            day: '03',
+            time: '080000'
+          },
+          regionName: 'seoul',
+          outputRelativePath: '2026/04/seoul/2026-04-03_080000_IMG_0001.JPG'
+        }
+      ]
+    })
     const useCase = new UpdatePhotoGroupUseCase(
       store,
       fileSystem,
@@ -237,46 +237,45 @@ describe('UpdatePhotoGroupUseCase', () => {
         savedIndexes.push(index)
       })
     }
-    const existingOutputScanner = {
-      scan: vi.fn().mockResolvedValue({
-        outputRoot: 'C:/photos/output',
-        photos: [
-          {
-            id: 'fallback-photo-yosemite',
-            sourcePath:
-              'C:/photos/output/2026/04/요세미티_국립공원그룹/2026-04-03_080000_IMG_0001.JPG',
-            sourceFileName: '2026-04-03_080000_IMG_0001.JPG',
-            capturedAt: {
-              iso: '2026-04-03T08:00:00.000Z',
-              year: '2026',
-              month: '04',
-              day: '03',
-              time: '080000'
-            },
-            regionName: 'california',
-            folderGroupingLabel: '요세미티_국립공원그룹',
-            outputRelativePath:
-              '2026/04/요세미티_국립공원그룹/2026-04-03_080000_IMG_0001.JPG'
+    const existingOutputScanner = createExistingOutputScannerPortMock()
+    vi.mocked(existingOutputScanner.scan).mockResolvedValue({
+      outputRoot: 'C:/photos/output',
+      photos: [
+        {
+          id: 'fallback-photo-yosemite',
+          sourcePath:
+            'C:/photos/output/2026/04/요세미티_국립공원그룹/2026-04-03_080000_IMG_0001.JPG',
+          sourceFileName: '2026-04-03_080000_IMG_0001.JPG',
+          capturedAt: {
+            iso: '2026-04-03T08:00:00.000Z',
+            year: '2026',
+            month: '04',
+            day: '03',
+            time: '080000'
           },
-          {
-            id: 'fallback-photo-la',
-            sourcePath:
-              'C:/photos/output/2026/04/la/2026-04-03_090000_IMG_0002.JPG',
-            sourceFileName: '2026-04-03_090000_IMG_0002.JPG',
-            capturedAt: {
-              iso: '2026-04-03T09:00:00.000Z',
-              year: '2026',
-              month: '04',
-              day: '03',
-              time: '090000'
-            },
-            regionName: 'california',
-            folderGroupingLabel: 'la',
-            outputRelativePath: '2026/04/la/2026-04-03_090000_IMG_0002.JPG'
-          }
-        ]
-      })
-    }
+          regionName: 'california',
+          folderGroupingLabel: '요세미티_국립공원그룹',
+          outputRelativePath:
+            '2026/04/요세미티_국립공원그룹/2026-04-03_080000_IMG_0001.JPG'
+        },
+        {
+          id: 'fallback-photo-la',
+          sourcePath:
+            'C:/photos/output/2026/04/la/2026-04-03_090000_IMG_0002.JPG',
+          sourceFileName: '2026-04-03_090000_IMG_0002.JPG',
+          capturedAt: {
+            iso: '2026-04-03T09:00:00.000Z',
+            year: '2026',
+            month: '04',
+            day: '03',
+            time: '090000'
+          },
+          regionName: 'california',
+          folderGroupingLabel: 'la',
+          outputRelativePath: '2026/04/la/2026-04-03_090000_IMG_0002.JPG'
+        }
+      ]
+    })
     const useCase = new UpdatePhotoGroupUseCase(
       store,
       fileSystem,

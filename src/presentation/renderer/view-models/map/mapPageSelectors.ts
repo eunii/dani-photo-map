@@ -285,32 +285,34 @@ export function buildSelectedGroupPhotoPins(
     return []
   }
 
-  return group.photos
-    .map((photo) => {
-      const pinLocation = resolvePhotoPinLocation(photo)
+  const pins: MapPhotoPinRecord[] = []
 
-      if (!pinLocation) {
-        return null
-      }
+  for (const photo of group.photos) {
+    const pinLocation = resolvePhotoPinLocation(photo)
 
-      const isRepresentative = group.representativePhotoId === photo.id
+    if (!pinLocation) {
+      continue
+    }
 
-      return {
-        id: `photo-pin:${photo.id}`,
-        photoId: photo.id,
-        sourceFileName: photo.sourceFileName,
-        latitude: pinLocation.latitude,
-        longitude: pinLocation.longitude,
-        capturedAtIso: photo.capturedAtIso,
-        regionName: photo.regionName,
-        thumbnailRelativePath: photo.thumbnailRelativePath,
-        outputRelativePath: photo.outputRelativePath,
-        isRepresentative,
-        gpsSource: pinLocation.gpsSource,
-        score: resolvePhotoPinScore(photo, isRepresentative, pinLocation)
-      }
+    const isRepresentative = group.representativePhotoId === photo.id
+
+    pins.push({
+      id: `photo-pin:${photo.id}`,
+      photoId: photo.id,
+      sourceFileName: photo.sourceFileName,
+      latitude: pinLocation.latitude,
+      longitude: pinLocation.longitude,
+      capturedAtIso: photo.capturedAtIso,
+      regionName: photo.regionName,
+      thumbnailRelativePath: photo.thumbnailRelativePath,
+      outputRelativePath: photo.outputRelativePath,
+      isRepresentative,
+      gpsSource: pinLocation.gpsSource,
+      score: resolvePhotoPinScore(photo, isRepresentative, pinLocation)
     })
-    .filter((photo): photo is MapPhotoPinRecord => Boolean(photo))
+  }
+
+  return pins
     .sort((left, right) => {
       if (left.score !== right.score) {
         return right.score - left.score

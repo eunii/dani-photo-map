@@ -13,6 +13,6 @@ export const previewPendingOrganizationCommandSchema = z.object({
     .default(defaultMissingGpsGroupingBasis)
 })
 
-export type PreviewPendingOrganizationCommand = z.infer<
+export type PreviewPendingOrganizationCommand = z.input<
   typeof previewPendingOrganizationCommandSchema
 >

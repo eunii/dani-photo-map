@@ -188,13 +188,19 @@ function finalizeGroupSeed(
     }
   }
 
+  const firstPhoto = photos[0]
+
+  if (!firstPhoto) {
+    throw new Error('Cannot finalize a group seed without photos.')
+  }
+
   return {
     ...seed,
     year: earliest.year,
     month: earliest.month,
     day: getPhotoBucketDay(
       {
-        ...photos[0],
+        ...firstPhoto,
         capturedAt: earliest,
         missingGpsGroupingBasis: seed.basis
       },

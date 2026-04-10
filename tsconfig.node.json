@@ -19,6 +19,7 @@
     "src/presentation/common/**/*.ts",
     "src/presentation/electron/**/*.ts",
     "src/infrastructure/**/*.ts",
-    "src/shared/**/*.ts"
+    "src/shared/**/*.ts",
+    "src/test/**/*.ts"
   ]
 }

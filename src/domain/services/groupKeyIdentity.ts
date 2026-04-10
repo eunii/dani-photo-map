@@ -25,6 +25,11 @@ export function parseGroupKeyParts(groupKey: string): ParsedGroupKeyParts | null
 
   for (let index = 1; index < parts.length; index += 1) {
     const segment = parts[index]
+
+    if (!segment) {
+      continue
+    }
+
     const equalsIndex = segment.indexOf('=')
 
     if (equalsIndex <= 0) {
