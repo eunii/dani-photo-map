@@ -89,10 +89,6 @@ function resolveGroupingBasis(
   photo: Photo,
   options: GroupingPolicyOptions
 ): MissingGpsGroupingBasis {
-  if (photo.gps) {
-    return 'month'
-  }
-
   return (
     photo.missingGpsGroupingBasis ??
     options.missingGpsGroupingBasis ??

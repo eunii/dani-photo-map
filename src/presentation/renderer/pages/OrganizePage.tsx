@@ -22,6 +22,7 @@ import {
   buildOrganizeScanPayload,
   type OrganizeCustomSplitInput
 } from '@presentation/renderer/pages/organizeScanPayload'
+import { SaveProgressCard } from '@presentation/renderer/components/organize/SaveProgressCard'
 import { joinPathSegments, normalizePathSeparators } from '@shared/utils/path'
 
 const SOURCE_DIALOG_OPTIONS = {
@@ -1439,11 +1440,11 @@ export function OrganizePage({
 
           <div
             className="border-t border-[var(--app-border)] pt-2"
-            title="GPS 없음만 아래 기준으로 묶습니다. GPS 있음은 월별로 유지됩니다."
+            title="아래 기준으로 GPS 유무와 관계없이 그룹을 나누고 폴더를 구성합니다."
           >
             <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <p className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-[var(--app-muted)]">
-                GPS 없음 그룹 기준
+                그룹 기준 (GPS 포함)
               </p>
               <div className="flex min-w-0 flex-wrap gap-1">
                 {MISSING_GPS_GROUPING_OPTIONS.map((option) => {
@@ -1556,7 +1557,7 @@ export function OrganizePage({
           {previewResult ? (
             <p className="text-[10px] leading-snug text-[var(--app-muted)]">
               그룹 메타 입력 후 카드에서 저장하거나 일괄 저장으로 이어서 처리합니다.
-              GPS 없는 그룹은 마지막입니다.
+              GPS 유무와 관계없이 같은 기준으로 그룹을 나눕니다.
             </p>
           ) : null}
         </div>
@@ -1574,108 +1575,52 @@ export function OrganizePage({
       ) : null}
 
       {bulkSaveActive && savePipelineBusy ? (
-        <section
-          className="rounded-[28px] border border-indigo-200 bg-indigo-50 p-5"
-          aria-live="polite"
-          aria-busy={runningSaveTarget !== null}
-        >
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <h2 className="text-sm font-semibold text-indigo-900">
-              이후 그룹 일괄 저장 진행 중
-            </h2>
-            <Button
-              variant="secondary"
-              className="shrink-0 rounded-2xl border border-indigo-300 bg-white text-xs font-medium text-indigo-900"
-              onPress={() => cancelRemainingSaveJobs()}
-            >
-              남은 작업 취소
-            </Button>
-          </div>
-          <p className="mt-1 text-sm text-indigo-800">
-            현재 위저드 위치부터 남은 그룹만 복사·인덱스에 반영합니다. 막대에는
-            원본 읽기·해시와 복사·썸네일이 함께 반영됩니다.
-          </p>
-          {prepareProgress ? (
-            <p className="mt-2 text-xs text-indigo-700">
-              원본 읽기·해시 (현재 그룹){' '}
-              {prepareProgress.completed} / {prepareProgress.total}장
-            </p>
-          ) : null}
-          {(() => {
-            const denom =
-              photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview || 1
-            const overallPct = Math.min(
-              100,
-              Math.round((photosSavedCount / denom) * 100)
+        (() => {
+          const denom = photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview || 1
+          const overallPct = Math.min(
+            100,
+            Math.round((photosSavedCount / denom) * 100)
+          )
+          const targetGroups =
+            bulkRunStartIndex != null
+              ? orderedPreviewGroups.slice(bulkRunStartIndex)
+              : orderedPreviewGroups
+          const groupLines = targetGroups.map((g) => {
+            const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
+            const linePct = getGroupLinePercent(
+              phase,
+              runningSaveTarget,
+              g.groupKey,
+              activeSaveJobMeta,
+              photosSavedCount
             )
+            return {
+              key: g.groupKey,
+              title: effectiveGroupTitle(g, groupTitleInputs),
+              phase,
+              linePct
+            }
+          })
 
-            return (
-              <>
-                <p className="mt-2 text-xs font-medium text-indigo-900">
-                  전체 진행 {overallPct}%
-                </p>
-                <progress
-                  className="mt-2 h-2 w-full overflow-hidden rounded-full accent-indigo-600 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-indigo-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-indigo-600"
-                  max={denom}
-                  value={Math.min(photosSavedCount, denom)}
-                />
-                <p className="mt-1 text-sm text-indigo-800">
-                  단위 진행{' '}
-                  <span className="font-semibold text-indigo-950">
-                    {photosSavedCount}
-                  </span>{' '}
-                  / {denom} ({overallPct}%)
-                </p>
-                <div className="mt-4 rounded-[24px] border border-indigo-200 bg-white/70 p-3">
-                  <p className="text-xs font-semibold text-indigo-900">
-                    그룹별 진행
-                  </p>
-                  <ul className="mt-2 space-y-2">
-                    {(bulkRunStartIndex != null
-                      ? orderedPreviewGroups.slice(bulkRunStartIndex)
-                      : orderedPreviewGroups
-                    ).map((g) => {
-                      const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
-                      const linePct = getGroupLinePercent(
-                        phase,
-                        runningSaveTarget,
-                        g.groupKey,
-                        activeSaveJobMeta,
-                        photosSavedCount
-                      )
-                      const titleLabel = effectiveGroupTitle(g, groupTitleInputs)
-
-                      return (
-                        <li key={g.groupKey}>
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-indigo-900">
-                            <span
-                              className="min-w-0 flex-1 truncate font-medium"
-                              title={titleLabel}
-                            >
-                              {titleLabel}
-                            </span>
-                            <span className="shrink-0 text-indigo-800">
-                              {linePct}% · {formatGroupSavePhaseLabel(phase)}
-                            </span>
-                          </div>
-                          <progress
-                            className="mt-1 h-1.5 w-full overflow-hidden rounded-full accent-indigo-500 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-indigo-100 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-indigo-500"
-                            max={100}
-                            value={linePct}
-                          />
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              </>
-            )
-          })()}
-          <p className="mt-2 text-xs text-indigo-700">
-            현재 그룹마다 원본 처리(절반)와 저장(절반)을 합산해 전체 막대가
-            움직입니다. 진행 중인 그룹은 끝날 때까지 걸릴 수 있습니다.
-          </p>
-        </section>
+          return (
+            <SaveProgressCard
+              title="이후 그룹 일괄 저장 진행 중"
+              description="현재 위저드 위치부터 남은 그룹만 복사·인덱스에 반영합니다. 막대에는 원본 읽기·해시와 복사·썸네일이 함께 반영됩니다."
+              prepareProgressText={
+                prepareProgress
+                  ? `원본 읽기·해시 (현재 그룹) ${prepareProgress.completed} / ${prepareProgress.total}장`
+                  : null
+              }
+              overallPct={overallPct}
+              processedCount={photosSavedCount}
+              totalCount={denom}
+              groupLines={groupLines}
+              footerText="현재 그룹마다 원본 처리(절반)와 저장(절반)을 합산해 전체 막대가 움직입니다. 진행 중인 그룹은 끝날 때까지 걸릴 수 있습니다."
+              ariaBusy={runningSaveTarget !== null}
+              onCancelRemaining={() => cancelRemainingSaveJobs()}
+            />
+          )
+        })()
       ) : null}
 
       {hidePreviewPanelWhileSaving &&
@@ -1683,93 +1628,44 @@ export function OrganizePage({
       savePipelineBusy &&
       hasPendingPreviewGroups &&
       !bulkSaveActive ? (
-        <section className="rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <h2 className="text-sm font-semibold text-[var(--app-foreground)]">
-              저장 진행 중
-            </h2>
-            <Button
-              variant="secondary"
-              className="shrink-0 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-xs font-medium text-[var(--app-foreground)]"
-              onPress={() => cancelRemainingSaveJobs()}
-            >
-              남은 작업 취소
-            </Button>
-          </div>
-          {prepareProgress ? (
-            <p className="mt-1 text-xs text-[var(--app-muted)]">
-              원본 읽기·해시 (현재 그룹) {prepareProgress.completed} /{' '}
-              {prepareProgress.total}장
-            </p>
-          ) : null}
-          {(() => {
-            const denom =
-              photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview || 1
-            const overallPct =
-              denom > 0
-                ? Math.min(100, Math.round((photosSavedCount / denom) * 100))
-                : 0
-
-            return (
-              <>
-                <p className="mt-2 text-xs font-medium text-[var(--app-foreground)]">
-                  전체 진행 {overallPct}%
-                </p>
-                <progress
-                  className="mt-2 h-2 w-full overflow-hidden rounded-full accent-sky-600 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-slate-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-sky-600"
-                  max={denom}
-                  value={Math.min(photosSavedCount, denom)}
-                />
-                <p className="mt-1 text-xs text-[var(--app-muted)]">
-                  단위 진행{' '}
-                  <span className="font-medium text-[var(--app-foreground)]">
-                    {photosSavedCount}
-                  </span>{' '}
-                  / {denom} ({overallPct}%)
-                </p>
-              </>
+        (() => {
+          const denom = photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview || 1
+          const overallPct =
+            denom > 0 ? Math.min(100, Math.round((photosSavedCount / denom) * 100)) : 0
+          const groupLines = orderedPreviewGroups.map((g) => {
+            const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
+            const linePct = getGroupLinePercent(
+              phase,
+              runningSaveTarget,
+              g.groupKey,
+              activeSaveJobMeta,
+              photosSavedCount
             )
-          })()}
-          <div className="mt-3 rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-3">
-            <p className="text-xs font-semibold text-[var(--app-foreground)]">
-              그룹별 진행
-            </p>
-            <ul className="mt-2 space-y-2">
-              {orderedPreviewGroups.map((g) => {
-                const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
-                const linePct = getGroupLinePercent(
-                  phase,
-                  runningSaveTarget,
-                  g.groupKey,
-                  activeSaveJobMeta,
-                  photosSavedCount
-                )
-                const titleLabel = effectiveGroupTitle(g, groupTitleInputs)
+            return {
+              key: g.groupKey,
+              title: effectiveGroupTitle(g, groupTitleInputs),
+              phase,
+              linePct
+            }
+          })
 
-                return (
-                  <li key={g.groupKey}>
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--app-foreground)]">
-                      <span
-                        className="min-w-0 flex-1 truncate font-medium"
-                        title={titleLabel}
-                      >
-                        {titleLabel}
-                      </span>
-                      <span className="shrink-0 text-[var(--app-muted)]">
-                        {linePct}% · {formatGroupSavePhaseLabel(phase)}
-                      </span>
-                    </div>
-                    <progress
-                      className="mt-1 h-1.5 w-full overflow-hidden rounded-full accent-sky-500 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-slate-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-sky-500"
-                      max={100}
-                      value={linePct}
-                    />
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        </section>
+          return (
+            <SaveProgressCard
+              title="저장 진행 중"
+              prepareProgressText={
+                prepareProgress
+                  ? `원본 읽기·해시 (현재 그룹) ${prepareProgress.completed} / ${prepareProgress.total}장`
+                  : null
+              }
+              overallPct={overallPct}
+              processedCount={photosSavedCount}
+              totalCount={denom}
+              groupLines={groupLines}
+              ariaBusy={runningSaveTarget !== null}
+              onCancelRemaining={() => cancelRemainingSaveJobs()}
+            />
+          )
+        })()
       ) : null}
       </div>
 
@@ -1823,14 +1719,14 @@ export function OrganizePage({
                         <span
                           className={`shrink-0 rounded-full px-2 py-0.5 ${
                             phase === 'saving' || isCurrentRun
-                              ? 'bg-amber-100 text-amber-900'
+                              ? 'bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface)_82%)] text-[var(--app-accent-strong)]'
                               : phase === 'done'
                                 ? 'bg-[color:color-mix(in_srgb,var(--app-accent)_22%,var(--app-surface)_78%)] text-[var(--app-accent-strong)]'
                                 : phase === 'error'
-                                  ? 'bg-red-100 text-red-800'
+                                  ? 'bg-[color:color-mix(in_srgb,var(--app-danger)_26%,var(--app-surface)_74%)] text-[var(--app-danger-foreground)]'
                                   : phase === 'queued'
-                                    ? 'bg-slate-200 text-slate-800'
-                                    : 'bg-slate-100 text-slate-600'
+                                    ? 'bg-[color:color-mix(in_srgb,var(--app-border)_32%,var(--app-surface)_68%)] text-[var(--app-foreground)]'
+                                    : 'bg-[color:color-mix(in_srgb,var(--app-border)_20%,var(--app-surface)_80%)] text-[var(--app-muted)]'
                           }`}
                         >
                           {formatGroupSavePhaseLabel(phase)}
@@ -1905,13 +1801,11 @@ export function OrganizePage({
                             사진 {group.photoCount}장
                             {group.representativeGps ? ' · GPS 기반 그룹' : ' · GPS 없음'}
                           </p>
-                          {!group.representativeGps ? (
-                            <p className="text-xs text-[var(--app-muted)]">
-                              현재 기준: {formatMissingGpsGroupingBasisLabel(missingGpsGroupingBasis)}
-                              {' · '}
-                              실제 폴더: {formatMissingGpsFolderPattern(missingGpsGroupingBasis)}
-                            </p>
-                          ) : null}
+                          <p className="text-xs text-[var(--app-muted)]">
+                            현재 기준: {formatMissingGpsGroupingBasisLabel(missingGpsGroupingBasis)}
+                            {' · '}
+                            실제 폴더: {formatMissingGpsFolderPattern(missingGpsGroupingBasis)}
+                          </p>
                           <div className="flex flex-wrap gap-2">
                             {getMissingGpsCategoryLabel(group.missingGpsCategory) ? (
                               <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">

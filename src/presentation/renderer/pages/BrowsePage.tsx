@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@heroui/react'
 
@@ -29,6 +30,9 @@ interface BrowsePageProps {
 const SELECTED_GROUP_PHOTO_PIN_MAX_COUNT = 24
 const SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM = 12.5
 const FOCUSED_PHOTO_CONTEXT_MIN_ZOOM = 8.5
+const MAP_PANEL_MIN_WIDTH = 480
+const SIDEBAR_PANEL_MIN_WIDTH = 360
+const SIDEBAR_PANEL_MAX_WIDTH = 620
 type BrowsePanelTab = 'photos' | 'details'
 
 export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
@@ -57,9 +61,11 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 220)
   const [previewPhotoId, setPreviewPhotoId] = useState<string | undefined>()
   const [panelTab, setPanelTab] = useState<BrowsePanelTab>('photos')
+  const [sidebarWidth, setSidebarWidth] = useState(420)
   const [isSavingGroup, setIsSavingGroup] = useState(false)
   const [isMovingGroupPhotos, setIsMovingGroupPhotos] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const splitLayoutRef = useRef<HTMLDivElement | null>(null)
 
   const allMapRecords = useMemo(
     () => buildMapGroupRecords(libraryIndex?.groups ?? []),
@@ -289,6 +295,43 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
     setSelectedGroupId
   ])
 
+  const handleStartSidebarResize = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>): void => {
+      const container = splitLayoutRef.current
+
+      if (!container) {
+        return
+      }
+
+      event.preventDefault()
+      const startX = event.clientX
+      const startWidth = sidebarWidth
+
+      const handleMouseMove = (moveEvent: MouseEvent): void => {
+        const deltaX = moveEvent.clientX - startX
+        const containerWidth = container.clientWidth
+        const maxByContainer = Math.max(
+          SIDEBAR_PANEL_MIN_WIDTH,
+          containerWidth - MAP_PANEL_MIN_WIDTH - 8
+        )
+        const clampedWidth = Math.min(
+          Math.max(startWidth - deltaX, SIDEBAR_PANEL_MIN_WIDTH),
+          Math.min(SIDEBAR_PANEL_MAX_WIDTH, maxByContainer)
+        )
+        setSidebarWidth(clampedWidth)
+      }
+
+      const handleMouseUp = (): void => {
+        window.removeEventListener('mousemove', handleMouseMove)
+        window.removeEventListener('mouseup', handleMouseUp)
+      }
+
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+    },
+    [sidebarWidth]
+  )
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain app-scroll pr-0.5">
       {errorMessage ? (
@@ -328,8 +371,8 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
       ) : (
         <section className="flex min-h-0 flex-1 flex-col space-y-3">
           <div className="shrink-0 rounded-[18px] bg-[var(--app-surface-strong)] p-2.5">
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-stretch lg:gap-4">
-              <div className="flex min-h-0 min-w-0 flex-col">
+            <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-12 lg:items-stretch lg:gap-3">
+              <div className="flex min-h-0 min-w-0 flex-col lg:col-span-6 xl:col-span-7">
                 <MapSearchBar
                   value={searchQuery}
                   resultCount={filteredRecords.length}
@@ -337,7 +380,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
                   onClear={() => setSearchQuery('')}
                 />
               </div>
-              <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:h-full">
+              <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:col-span-6 lg:h-full xl:col-span-5">
                 <MapFilterBar
                   section="dates"
                   quickFilter={quickFilter}
@@ -387,8 +430,16 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
             ) : null}
           </div>
 
-          <div className="grid min-h-0 flex-1 gap-2 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,460px)] xl:items-stretch">
-            <div className="relative h-[min(68vh,720px)] min-h-[520px] overflow-hidden rounded-[18px] bg-[var(--app-surface-strong)]">
+          <div
+            ref={splitLayoutRef}
+            className="flex min-h-0 flex-1 flex-col gap-2 xl:flex-row xl:items-stretch"
+            style={
+              {
+                '--browse-sidebar-width': `${sidebarWidth}px`
+              } as CSSProperties
+            }
+          >
+            <div className="relative h-[min(68vh,720px)] min-h-[520px] overflow-hidden rounded-[18px] bg-[var(--app-surface-strong)] xl:min-w-[480px] xl:flex-1">
               <PhotoGroupMap
                 sourceGroups={mapCanvasGroups}
                 markerGroups={markerGroups}
@@ -419,7 +470,16 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
               />
             </div>
 
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden xl:max-h-[min(68vh,720px)] xl:min-h-[520px]">
+            <button
+              type="button"
+              aria-label="사이드바 너비 조절"
+              className="hidden shrink-0 cursor-col-resize rounded-full border border-[var(--app-border)] bg-[var(--app-surface)]/90 px-1 text-[10px] text-[var(--app-muted)] transition hover:bg-[var(--app-surface-strong)] xl:block"
+              onMouseDown={handleStartSidebarResize}
+            >
+              ⋮
+            </button>
+
+            <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col gap-2 overflow-hidden xl:max-h-[min(68vh,720px)] xl:min-h-[520px] xl:min-w-[360px] xl:w-[var(--browse-sidebar-width)] xl:flex-none">
               <div className="flex shrink-0 flex-wrap gap-1.5">
                 <button
                   type="button"

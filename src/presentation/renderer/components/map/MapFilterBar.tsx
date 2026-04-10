@@ -79,7 +79,7 @@ export function MapFilterBar({
         <Button
           key={filter.id}
           variant={quickFilter === filter.id ? 'primary' : 'secondary'}
-          className={`h-7 rounded-full px-2.5 text-[11px] font-medium transition ${
+          className={`h-8 rounded-full px-2.5 text-[11px] font-medium transition ${
             quickFilter === filter.id
               ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
               : 'border border-[var(--app-border)] bg-[var(--app-surface-strong)] text-[var(--app-foreground)]'
@@ -92,7 +92,7 @@ export function MapFilterBar({
       {(quickFilter !== 'all' || hasRange) && (
         <Button
           variant="secondary"
-          className="h-7 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[11px] font-medium text-[var(--app-foreground)]"
+          className="h-8 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[11px] font-medium text-[var(--app-foreground)]"
           onPress={onReset}
         >
           필터 초기화
@@ -103,7 +103,7 @@ export function MapFilterBar({
 
   if (section === 'dates') {
     return (
-      <div className="flex flex-col gap-1.5 rounded-[16px] bg-[var(--app-surface)] px-3 py-2">
+      <div className="flex min-h-[102px] flex-col gap-2 rounded-[16px] bg-[var(--app-surface)] px-3.5 py-2.5">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--app-muted)]">
           날짜
         </span>
@@ -114,7 +114,7 @@ export function MapFilterBar({
 
   if (section === 'quick') {
     return (
-      <div className="flex flex-col gap-1.5 rounded-[16px] bg-[var(--app-surface)] px-3 py-2">
+      <div className="flex min-h-[102px] flex-col gap-2 rounded-[16px] bg-[var(--app-surface)] px-3.5 py-2.5">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--app-muted)]">
           빠른 필터
         </span>
@@ -124,7 +124,7 @@ export function MapFilterBar({
   }
 
   return (
-    <div className="space-y-2 rounded-[16px] bg-[var(--app-surface)] px-3 py-2">
+    <div className="space-y-2 rounded-[16px] bg-[var(--app-surface)] px-3.5 py-2.5">
       <div className="flex flex-col gap-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--app-muted)]">
           날짜

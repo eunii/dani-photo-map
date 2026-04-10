@@ -87,9 +87,6 @@ export function MapPhotoSidebar({
                             총 {filteredGroups.length}개
                           </span>
                         </div>
-                        <p className="text-[10px] leading-snug text-[var(--app-muted)]">
-                          아코디언 · 헤더를 눌러 목록을 접거나 펼칩니다
-                        </p>
                       </div>
                     </div>
                   </Accordion.Trigger>

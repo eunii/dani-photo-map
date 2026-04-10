@@ -235,7 +235,7 @@ describe('PhotoGroupingService', () => {
     ])
   })
 
-  it('keeps gps photos monthly even when missing-gps basis is day', () => {
+  it('splits gps photos by selected basis when day is chosen', () => {
     const groups = createPhotoGroups([
       createPhoto({
         id: 'photo-1',
@@ -273,9 +273,10 @@ describe('PhotoGroupingService', () => {
       })
     ])
 
-    expect(groups).toHaveLength(1)
-    expect(groups[0]?.groupKey).toBe(
-      'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1'
-    )
+    expect(groups).toHaveLength(2)
+    expect(groups.map((group) => group.groupKey)).toEqual([
+      'group|region=seoul|year=2026|month=04|basis=day|day=03|slot=1',
+      'group|region=seoul|year=2026|month=04|basis=day|day=20|slot=2'
+    ])
   })
 })

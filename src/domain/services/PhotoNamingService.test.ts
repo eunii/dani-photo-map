@@ -120,7 +120,7 @@ describe('PhotoNamingService', () => {
     expect(relativePath).toBe('2025/04/2025-04-03_101112_a.JPG')
   })
 
-  it('keeps missing-gps monthly output under year/month', () => {
+  it('keeps monthly output under year/month/groupLabel', () => {
     const relativePath = buildScanPhotoOutputRelativePath(
       {
         sourceFileName: 'shot.png',
@@ -137,7 +137,7 @@ describe('PhotoNamingService', () => {
       ''
     )
 
-    expect(relativePath).toBe('2025/04/2025-04-03_101112_shot.png')
+    expect(relativePath).toBe('2025/04/capture/2025-04-03_101112_shot.png')
   })
 
   it('routes missing-gps weekly output to year/month/weekN', () => {

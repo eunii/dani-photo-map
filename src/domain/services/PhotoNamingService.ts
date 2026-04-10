@@ -120,10 +120,6 @@ function resolvePhotoRegionSegment(
 function resolveMissingGpsGroupingBasis(
   photo: Pick<Photo, 'gps' | 'missingGpsGroupingBasis'>
 ): MissingGpsGroupingBasis {
-  if (photo.gps) {
-    return 'month'
-  }
-
   return photo.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
 }
 
@@ -142,10 +138,6 @@ function resolveMonthWeekSegment(
 export function resolveMissingGpsOutputFolderSegment(
   photo: Pick<Photo, 'capturedAt' | 'gps' | 'missingGpsGroupingBasis'>
 ): string | null {
-  if (photo.gps) {
-    return null
-  }
-
   switch (resolveMissingGpsGroupingBasis(photo)) {
     case 'week':
       return resolveMonthWeekSegment(photo)
@@ -218,23 +210,24 @@ export function buildScanOutputDirectoryRelativePath(
   rules: OrganizationRules
 ): string {
   const safeTimestamp = getSafeTimestamp(photo.capturedAt)
-  const missingGpsFolderSegment = resolveMissingGpsOutputFolderSegment(photo)
-
-  if (missingGpsFolderSegment) {
-    return [safeTimestamp.year, safeTimestamp.month, missingGpsFolderSegment].join('/')
-  }
-
-  if (!photo.gps) {
-    return [safeTimestamp.year, safeTimestamp.month].join('/')
-  }
+  const basisFolderSegment = resolveMissingGpsOutputFolderSegment(photo)
 
   const segment = sanitizeGroupDisplayTitleForFileName(groupFileLabel)
+  const baseSegments = [safeTimestamp.year, safeTimestamp.month]
 
-  if (segment === rules.unknownRegionLabel) {
-    return [safeTimestamp.year, safeTimestamp.month].join('/')
+  if (basisFolderSegment) {
+    baseSegments.push(basisFolderSegment)
   }
 
-  return [safeTimestamp.year, safeTimestamp.month, segment].join('/')
+  if (segment === rules.unknownRegionLabel) {
+    return baseSegments.join('/')
+  }
+
+  if (basisFolderSegment && segment === basisFolderSegment) {
+    return baseSegments.join('/')
+  }
+
+  return [...baseSegments, segment].join('/')
 }
 
 /**

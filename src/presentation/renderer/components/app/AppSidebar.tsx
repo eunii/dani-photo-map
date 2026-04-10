@@ -80,7 +80,7 @@ export function AppSidebar({
                 isIconOnly
                 className={`h-9 w-9 self-center rounded-xl border-transparent bg-transparent transition-colors ${
                   item.isActive
-                    ? 'text-[var(--app-accent-strong)]'
+                    ? 'border border-[color:color-mix(in_srgb,var(--app-accent)_42%,var(--app-border)_58%)] bg-[color:color-mix(in_srgb,var(--app-accent)_20%,var(--app-surface)_80%)] text-[var(--app-accent-strong)] shadow-[var(--app-shadow)]'
                     : 'text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
                 }`}
                 onPress={item.onPress}
@@ -92,10 +92,10 @@ export function AppSidebar({
                 key={item.key}
                 aria-label={item.label}
                 variant="ghost"
-                className={`h-9 w-full justify-start rounded-xl border-transparent px-2 text-[13px] font-medium transition-colors ${
+                className={`h-9 w-full justify-start rounded-xl border px-2 text-[13px] transition-colors ${
                   item.isActive
-                    ? 'bg-transparent text-[var(--app-accent-strong)]'
-                    : 'bg-transparent text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
+                    ? 'border-[color:color-mix(in_srgb,var(--app-accent)_42%,var(--app-border)_58%)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface)_82%)] font-semibold text-[var(--app-accent-strong)] shadow-[var(--app-shadow)]'
+                    : 'border-transparent bg-transparent font-medium text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
                 }`}
                 onPress={item.onPress}
               >

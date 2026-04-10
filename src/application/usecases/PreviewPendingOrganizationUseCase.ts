@@ -189,7 +189,9 @@ export class PreviewPendingOrganizationUseCase {
       canonicalCandidates.push(candidatePhoto)
     }
 
-    const previewGroups = createPhotoGroups(canonicalCandidates)
+    const previewGroups = createPhotoGroups(canonicalCandidates, {
+      missingGpsGroupingBasis: validatedCommand.missingGpsGroupingBasis
+    })
     const photosById = new Map(canonicalCandidates.map((photo) => [photo.id, photo]))
     const photoIdToDisplayTitle = new Map<string, string>()
 
@@ -368,9 +370,7 @@ export class PreviewPendingOrganizationUseCase {
       gps: metadata.gps,
       locationSource: metadata.gps ? 'exif' : 'none',
       missingGpsCategory: metadata.missingGpsCategory,
-      missingGpsGroupingBasis: metadata.gps
-        ? undefined
-        : missingGpsGroupingBasis,
+      missingGpsGroupingBasis,
       regionName,
       isDuplicate: false,
       metadataIssues: metadata.metadataIssues ?? []

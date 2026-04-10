@@ -129,7 +129,7 @@ describe('assignGroupDisplayTitledOutputRelativePaths', () => {
     expect(map.get('daily')).toBe('2026/04/10/2026-04-10_100000_daily.jpg')
   })
 
-  it('keeps gps-backed photos on the existing monthly region path', async () => {
+  it('applies selected basis folders to gps-backed photos too', async () => {
     const listDirectoryFileNames = vi.fn().mockResolvedValue([])
     const gpsPhoto = photo({
       id: 'gps',
@@ -158,6 +158,6 @@ describe('assignGroupDisplayTitledOutputRelativePaths', () => {
       fileSystem: { listDirectoryFileNames }
     })
 
-    expect(map.get('gps')).toBe('2026/04/seoul/2026-04-10_100000_gps.jpg')
+    expect(map.get('gps')).toBe('2026/04/10/seoul/2026-04-10_100000_gps.jpg')
   })
 })

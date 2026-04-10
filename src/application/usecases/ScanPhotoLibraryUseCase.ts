@@ -162,6 +162,7 @@ export class ScanPhotoLibraryUseCase {
 
     const { photoIdToGroupKey, photoIdToDisplayTitle } = this.computeGroupingMaps(
       preparedPhotoRecords,
+      validatedCommand.missingGpsGroupingBasis,
       validatedCommand.pendingCustomGroupSplits ?? [],
       validatedCommand.defaultTitleManualPhotoIds ?? []
     )
@@ -290,9 +291,7 @@ export class ScanPhotoLibraryUseCase {
       gps: metadata.gps,
       locationSource: metadata.gps ? 'exif' : 'none',
       missingGpsCategory: metadata.missingGpsCategory,
-      missingGpsGroupingBasis: metadata.gps
-        ? undefined
-        : missingGpsGroupingBasis,
+      missingGpsGroupingBasis,
       regionName,
       isDuplicate: false,
       metadataIssues
@@ -363,6 +362,7 @@ export class ScanPhotoLibraryUseCase {
 
   private computeGroupingMaps(
     preparedPhotoRecords: PreparedPhotoRecord[],
+    missingGpsGroupingBasis: ScanPhotoLibraryCommand['missingGpsGroupingBasis'],
     pendingCustomGroupSplits: Array<{
       groupKey: string
       splitId: string
@@ -389,7 +389,11 @@ export class ScanPhotoLibraryUseCase {
     const photoIdToGroupKey = new Map<string, string>()
     const photoIdToDisplayTitle = new Map<string, string>()
 
-    for (const group of createPhotoGroups(afterManual)) {
+    for (
+      const group of createPhotoGroups(afterManual, {
+        missingGpsGroupingBasis
+      })
+    ) {
       for (const photoId of group.photoIds) {
         photoIdToGroupKey.set(photoId, group.groupKey)
         photoIdToDisplayTitle.set(photoId, group.displayTitle)

@@ -16,7 +16,7 @@ export function MapSearchBar({
   onClear
 }: MapSearchBarProps) {
   return (
-    <div className="flex h-full min-h-0 flex-col gap-1.5 rounded-[16px] bg-[var(--app-surface)] px-3 py-2">
+    <div className="flex h-full min-h-[102px] min-w-0 flex-col gap-2 rounded-[16px] bg-[var(--app-surface)] px-3.5 py-2.5">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--app-muted)]">
           검색
@@ -33,7 +33,7 @@ export function MapSearchBar({
             value={value}
             onChange={(event) => onChange(event.target.value)}
             placeholder="그룹명, 지역, 날짜, 파일명으로 검색"
-            className="h-9 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] pl-9 pr-2.5 text-xs text-[var(--app-foreground)] outline-none placeholder:text-[var(--app-muted)]"
+            className="h-8 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] pl-9 pr-2.5 text-xs text-[var(--app-foreground)] outline-none placeholder:text-[var(--app-muted)]"
           />
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -43,7 +43,7 @@ export function MapSearchBar({
           {value ? (
             <Button
               variant="secondary"
-              className="h-7 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[11px] font-medium text-[var(--app-foreground)]"
+              className="h-8 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[11px] font-medium text-[var(--app-foreground)]"
               onPress={onClear}
             >
               지우기
