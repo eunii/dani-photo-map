@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 
 import {
+  DashboardIcon,
   FilesIcon,
   MapIcon,
   OrganizeIcon
@@ -10,16 +11,17 @@ import { AppSidebar } from '@presentation/renderer/components/app/AppSidebar'
 import { AppTopbar } from '@presentation/renderer/components/app/AppTopbar'
 import { SettingsDrawer } from '@presentation/renderer/components/settings/SettingsDrawer'
 import { BrowsePage } from '@presentation/renderer/pages/BrowsePage'
+import { DashboardPage } from '@presentation/renderer/pages/DashboardPage'
 import { FileListPage } from '@presentation/renderer/pages/FileListPage'
 import { OrganizePage } from '@presentation/renderer/pages/OrganizePage'
-import { SettingsPage } from '@presentation/renderer/pages/SettingsPage'
 import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
 import { useUiPreferencesStore } from '@presentation/renderer/store/useUiPreferencesStore'
 
-type AppRoute = 'organize' | 'files' | 'browse'
+type AppRoute = 'dashboard' | 'organize' | 'files' | 'browse'
 type HashRoute = AppRoute | 'settings'
 
 const ROUTE_HASHES: Record<AppRoute, string> = {
+  dashboard: '#/dashboard',
   organize: '#/organize',
   files: '#/files',
   browse: '#/browse'
@@ -31,6 +33,12 @@ const ROUTE_META: Record<
   AppRoute,
   { title: string; description: string; statusLabel: string }
 > = {
+  dashboard: {
+    title: '메인 대시보드',
+    description:
+      '정리된 라이브러리의 전체 폴더 경로를 검색하고 원하는 폴더로 바로 이동합니다.',
+    statusLabel: 'Library Overview'
+  },
   organize: {
     title: '사진 정리',
     description: '원본 폴더를 스캔하고 출력 규칙에 맞춰 결과를 준비합니다.',
@@ -48,11 +56,14 @@ const ROUTE_META: Record<
   }
 }
 
-function getFallbackRoute(outputRoot: string): AppRoute {
-  return outputRoot ? 'browse' : 'organize'
+function getFallbackRoute(): AppRoute {
+  return 'dashboard'
 }
 
 function getRouteFromHash(hash: string): HashRoute | undefined {
+  if (hash === ROUTE_HASHES.dashboard) {
+    return 'dashboard'
+  }
   if (hash === ROUTE_HASHES.files) {
     return 'files'
   }
@@ -75,11 +86,15 @@ function getInitialRoute(hash: string, outputRoot: string): AppRoute {
     return parsed
   }
 
-  return getFallbackRoute(outputRoot)
+  void outputRoot
+  return getFallbackRoute()
 }
 
 export function App() {
   const outputRoot = useLibraryWorkspaceStore((state) => state.outputRoot)
+  const setPendingFileListPathSegments = useLibraryWorkspaceStore(
+    (state) => state.setPendingFileListPathSegments
+  )
   const themeId = useUiPreferencesStore((state) => state.themeId)
   const sidebarCollapsed = useUiPreferencesStore(
     (state) => state.sidebarCollapsed
@@ -115,7 +130,7 @@ export function App() {
       }
 
       if (!nextHashRoute) {
-        const fallbackRoute = getFallbackRoute(outputRoot)
+        const fallbackRoute = getFallbackRoute()
         setRoute(fallbackRoute)
         return
       }
@@ -127,7 +142,7 @@ export function App() {
     window.addEventListener('hashchange', handleHashChange)
 
     if (!window.location.hash) {
-      window.location.hash = ROUTE_HASHES[getFallbackRoute(outputRoot)]
+      window.location.hash = ROUTE_HASHES[getFallbackRoute()]
     }
 
     return () => {
@@ -154,6 +169,11 @@ export function App() {
     setRoute(nextRoute)
   }
 
+  function navigateToFilesPath(pathSegments: string[]): void {
+    setPendingFileListPathSegments(pathSegments)
+    navigate('files')
+  }
+
   function openSettings(): void {
     setIsSettingsOpen(true)
   }
@@ -171,6 +191,7 @@ export function App() {
     label: string
     icon: ReactNode
   }> = [
+    { route: 'dashboard', label: 'Home', icon: <DashboardIcon className="h-5 w-5" /> },
     { route: 'organize', label: '정리', icon: <OrganizeIcon className="h-5 w-5" /> },
     { route: 'files', label: '파일 목록', icon: <FilesIcon className="h-5 w-5" /> },
     { route: 'browse', label: '지도', icon: <MapIcon className="h-5 w-5" /> }
@@ -183,6 +204,7 @@ export function App() {
           collapsed={sidebarCollapsed}
           onToggleCollapsed={toggleSidebarCollapsed}
           onOpenSettings={openSettings}
+          onPressBrand={() => navigate('dashboard')}
           items={navigationItems.map((item) => ({
             key: item.route,
             label: item.label,
@@ -201,7 +223,14 @@ export function App() {
           />
 
           <section className="app-page-section min-h-0 flex-1 rounded-[18px] p-1 lg:p-2">
-            {route === 'organize' ? (
+            {route === 'dashboard' ? (
+              <DashboardPage
+                onNavigateToBrowse={() => navigate('browse')}
+                onNavigateToFilesPath={navigateToFilesPath}
+                onNavigateToOrganize={() => navigate('organize')}
+                onNavigateToSettings={openSettings}
+              />
+            ) : route === 'organize' ? (
               <OrganizePage
                 onNavigateToSettings={openSettings}
               />
@@ -210,7 +239,12 @@ export function App() {
             ) : route === 'browse' ? (
               <BrowsePage onNavigateToSettings={openSettings} />
             ) : (
-              <SettingsPage />
+              <DashboardPage
+                onNavigateToBrowse={() => navigate('browse')}
+                onNavigateToFilesPath={navigateToFilesPath}
+                onNavigateToOrganize={() => navigate('organize')}
+                onNavigateToSettings={openSettings}
+              />
             )}
           </section>
 

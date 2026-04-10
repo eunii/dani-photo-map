@@ -45,6 +45,17 @@ export function FilesIcon(props: IconProps) {
   )
 }
 
+export function DashboardIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="4" rx="1.5" />
+      <rect x="13" y="10" width="7" height="10" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+    </BaseIcon>
+  )
+}
+
 export function MapIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>

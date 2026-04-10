@@ -17,6 +17,7 @@ import {
   useOutputLibraryIndexPanel
 } from '@presentation/renderer/hooks/useOutputLibraryIndexPanel'
 import { useLibraryGroupDetail } from '@presentation/renderer/hooks/useLibraryGroupDetail'
+import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
 import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 import {
   deleteOutputFolderSubtreeIpc,
@@ -118,6 +119,12 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     setErrorMessage,
     reloadLibraryIndex
   } = useOutputLibraryIndexPanel()
+  const pendingFileListPathSegments = useLibraryWorkspaceStore(
+    (state) => state.pendingFileListPathSegments
+  )
+  const consumePendingFileListPathSegments = useLibraryWorkspaceStore(
+    (state) => state.consumePendingFileListPathSegments
+  )
 
   const [pathSegments, setPathSegments] = useState<string[]>([])
   const [sortOption, setSortOption] = useState<PhotoListSortOption>('captured-desc')
@@ -175,6 +182,15 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
   useEffect(() => {
     setPathSegments([])
   }, [outputRoot])
+
+  useEffect(() => {
+    if (!pendingFileListPathSegments) {
+      return
+    }
+
+    setPathSegments(pendingFileListPathSegments)
+    consumePendingFileListPathSegments()
+  }, [consumePendingFileListPathSegments, pendingFileListPathSegments])
 
   useEffect(() => {
     setSelectedForMove(new Set())

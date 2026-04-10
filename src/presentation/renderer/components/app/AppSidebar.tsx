@@ -21,13 +21,15 @@ interface AppSidebarProps {
   collapsed: boolean
   onToggleCollapsed: () => void
   onOpenSettings: () => void
+  onPressBrand?: () => void
 }
 
 export function AppSidebar({
   items,
   collapsed,
   onToggleCollapsed,
-  onOpenSettings
+  onOpenSettings,
+  onPressBrand
 }: AppSidebarProps) {
   return (
     <aside
@@ -40,14 +42,18 @@ export function AppSidebar({
           className={`flex ${collapsed ? 'justify-center' : 'items-start justify-between'} gap-2 px-1`}
         >
           {!collapsed ? (
-            <div className="min-w-0">
+            <button
+              type="button"
+              className="min-w-0 rounded-lg text-left outline-none transition hover:opacity-85"
+              onClick={onPressBrand}
+            >
               <p className="text-[14px] font-semibold tracking-tight text-[var(--app-accent-strong)]">
-                Dani Photo
+                DaniPhoto
               </p>
               <p className="mt-0.5 text-[12px] text-[var(--app-muted)]">
                 organizer
               </p>
-            </div>
+            </button>
           ) : null}
           <Button
             isIconOnly
