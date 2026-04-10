@@ -185,6 +185,8 @@ function toErrorMessage(error: unknown): string {
 async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
   const jobId = `organize-${Date.now()}`
   let mergedSummary: ScanPhotoLibrarySummary | null = null
+  const shouldNotifyPreviewCompletion =
+    request.mode !== 'preview' || request.notifyCompletion !== false
 
   organizeJobStatus = {
     jobId,
@@ -229,11 +231,13 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
         }
       })
 
-      showOrganizeTaskNotification({
-        kind: 'preview-load',
-        ok: true,
-        body: `신규 대상 ${previewResult.pendingPhotoCount}장, 그룹 ${previewResult.groups.length}개`
-      })
+      if (shouldNotifyPreviewCompletion) {
+        showOrganizeTaskNotification({
+          kind: 'preview-load',
+          ok: true,
+          body: `신규 대상 ${previewResult.pendingPhotoCount}장, 그룹 ${previewResult.groups.length}개`
+        })
+      }
       return
     }
 
@@ -323,11 +327,13 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
       phase: 'failed',
       message: toErrorMessage(error)
     })
-    showOrganizeTaskNotification({
-      kind: request.mode === 'preview' ? 'preview-load' : 'scan-save',
-      ok: false,
-      body: toErrorMessage(error)
-    })
+    if (request.mode !== 'preview' || shouldNotifyPreviewCompletion) {
+      showOrganizeTaskNotification({
+        kind: request.mode === 'preview' ? 'preview-load' : 'scan-save',
+        ok: false,
+        body: toErrorMessage(error)
+      })
+    }
   }
 }
 

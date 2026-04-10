@@ -77,6 +77,8 @@ export interface OrganizeJobPreviewStartRequest {
   sourceRoot: string
   outputRoot: string
   missingGpsGroupingBasis?: MissingGpsGroupingBasis
+  /** false면 프리뷰 완료/실패 알림을 표시하지 않습니다 (기준 전환 재불러오기 등). */
+  notifyCompletion?: boolean
 }
 
 export interface OrganizeJobSaveStepRequest {

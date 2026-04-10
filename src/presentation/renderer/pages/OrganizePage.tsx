@@ -1253,9 +1253,12 @@ export function OrganizePage({
     }
   }
 
-  async function handlePreview(
-    basis: MissingGpsGroupingBasis = missingGpsGroupingBasis
-  ): Promise<void> {
+  async function handlePreview(options?: {
+    basis?: MissingGpsGroupingBasis
+    notifyCompletion?: boolean
+  }): Promise<void> {
+    const basis = options?.basis ?? missingGpsGroupingBasis
+    const notifyCompletion = options?.notifyCompletion ?? true
     if (!sourceRoot || !outputRoot) {
       setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
       return
@@ -1268,7 +1271,8 @@ export function OrganizePage({
         mode: 'preview',
         sourceRoot,
         outputRoot,
-        missingGpsGroupingBasis: basis
+        missingGpsGroupingBasis: basis,
+        notifyCompletion
       })
       const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
       setLastLoadedIndex(loadedIndex)
@@ -1601,7 +1605,10 @@ export function OrganizePage({
                         setMissingGpsGroupingBasis(option.value)
 
                         if (previewResult && sourceRoot && outputRoot) {
-                          void handlePreview(option.value)
+                          void handlePreview({
+                            basis: option.value,
+                            notifyCompletion: false
+                          })
                         }
                       }}
                     >
