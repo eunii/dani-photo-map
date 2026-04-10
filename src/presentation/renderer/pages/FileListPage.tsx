@@ -22,7 +22,7 @@ import {
   sortFlatPhotoRows,
   type PhotoListSortOption
 } from '@presentation/renderer/view-models/flattenLibraryPhotos'
-import { stripLeadingDateFromAutoGroupDisplayTitle } from '@domain/services/PhotoNamingService'
+import { stripLeadingDateFromGroupTitle } from '@presentation/common/formatters/groupTitle'
 import {
   buildGroupFolderTree,
   countPhotosInGroupSubtree,
@@ -64,7 +64,7 @@ function folderRenameLabelWithoutDate(raw: string): string {
   if (!t) {
     return ''
   }
-  const stripped = stripLeadingDateFromAutoGroupDisplayTitle(t)
+  const stripped = stripLeadingDateFromGroupTitle(t)
   return stripped.length > 0 ? stripped : t
 }
 
@@ -305,7 +305,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
         title: folderRenameLabelWithoutDate(
           groupAtPath.title.trim().length > 0
             ? groupAtPath.title
-            : stripLeadingDateFromAutoGroupDisplayTitle(groupAtPath.displayTitle)
+            : stripLeadingDateFromGroupTitle(groupAtPath.displayTitle)
         )
       }
     ]

@@ -2,8 +2,10 @@ import { pathToFileURL } from 'node:url'
 
 import { ipcRenderer } from 'electron'
 
-import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
-import type { PreloadBridge } from '@shared/types/preload'
+import type {
+  PreloadBridge,
+  ScanPhotoLibraryProgressPayload
+} from '@shared/types/preload'
 
 const IPC_CHANNELS = {
   selectDirectory: 'photo-app/select-directory',

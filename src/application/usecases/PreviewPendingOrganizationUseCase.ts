@@ -18,11 +18,11 @@ import { buildFallbackNearbyGroupTitleSuggestions } from '@application/services/
 import { buildNearbyGroupTitleSuggestions } from '@application/services/buildNearbyGroupTitleSuggestions'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
 import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
+import { createCanonicalPhotoIdByHash } from '@application/services/createCanonicalPhotoIdByHash'
 import {
   defaultOrganizationRules,
   type OrganizationRules
 } from '@domain/policies/OrganizationRules'
-import { selectCanonicalDuplicatePhoto } from '@domain/services/DuplicatePhotoPolicy'
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import type { Photo } from '@domain/entities/Photo'
@@ -32,8 +32,13 @@ import {
   getPathBaseName,
   normalizePathSeparators
 } from '@shared/utils/path'
+import { mapWithConcurrencyLimit } from '@shared/utils/mapWithConcurrencyLimit'
 
 type AssignmentMode = 'new-group' | 'auto-capture' | 'manual-existing-group'
+
+const PREVIEW_PREPARE_CONCURRENCY_LIMIT = 4
+const PREVIEW_GROUP_CONCURRENCY_LIMIT = 2
+const PREVIEW_IMAGE_CONCURRENCY_LIMIT = 2
 
 export interface PendingOrganizationPreviewGroupPhoto {
   id: string
@@ -116,31 +121,30 @@ export class PreviewPendingOrganizationUseCase {
     const { hashes: existingOutputHashes } = await buildExistingOutputHashSet({
       snapshot: existingOutputSnapshot,
       storedIndex,
-      hasher: this.dependencies.hasher
+      hasher: this.dependencies.hasher,
+      hashConcurrencyLimit: PREVIEW_PREPARE_CONCURRENCY_LIMIT
     })
     const existingIndex = this.buildExistingIndex(existingOutputSnapshot, storedIndex)
     const listedPhotoPaths = await this.dependencies.fileSystem.listPhotoFiles(sourceRoot)
-    const candidatePhotos: Photo[] = []
+    const candidatePhotos = (
+      await mapWithConcurrencyLimit(
+        listedPhotoPaths,
+        PREVIEW_PREPARE_CONCURRENCY_LIMIT,
+        async (listedPhotoPath, index) =>
+          this.prepareCandidatePhoto(
+            {
+              photoId: `preview-photo-${index + 1}`,
+              sourcePath: normalizePathSeparators(listedPhotoPath),
+              sourceFileName: getPathBaseName(listedPhotoPath)
+            },
+            validatedCommand.missingGpsGroupingBasis
+          )
+      )
+    ).filter((candidatePhoto): candidatePhoto is Photo => candidatePhoto !== null)
     const canonicalCandidates: Photo[] = []
     let skippedExistingCount = 0
 
-    for (const [index, listedPhotoPath] of listedPhotoPaths.entries()) {
-      const sourcePath = normalizePathSeparators(listedPhotoPath)
-      const candidatePhoto = await this.prepareCandidatePhoto(
-        {
-          photoId: `preview-photo-${index + 1}`,
-          sourcePath,
-          sourceFileName: getPathBaseName(sourcePath)
-        },
-        validatedCommand.missingGpsGroupingBasis
-      )
-
-      if (candidatePhoto) {
-        candidatePhotos.push(candidatePhoto)
-      }
-    }
-
-    const canonicalPhotoIdByHash = this.createCanonicalPhotoIdByHash(candidatePhotos)
+    const canonicalPhotoIdByHash = createCanonicalPhotoIdByHash(candidatePhotos)
 
     for (const candidatePhoto of candidatePhotos) {
       const canonicalPhotoId = candidatePhoto.sha256
@@ -194,8 +198,10 @@ export class PreviewPendingOrganizationUseCase {
       fileSystem: this.dependencies.fileSystem
     })
 
-    const groups = await Promise.all(
-      previewGroups.map(async (group) => {
+    const groups = await mapWithConcurrencyLimit(
+      previewGroups,
+      PREVIEW_GROUP_CONCURRENCY_LIMIT,
+      async (group) => {
         const representativePhoto = group.representativePhotoId
           ? photosById.get(group.representativePhotoId)
           : undefined
@@ -241,23 +247,24 @@ export class PreviewPendingOrganizationUseCase {
           ),
           photoCount: group.photoIds.length,
           representativeGps: group.representativeGps,
-          representativePhotos: await Promise.all(
+          representativePhotos: await mapWithConcurrencyLimit(
             group.photoIds
               .map((photoId) => photosById.get(photoId))
-              .filter((photo): photo is Photo => photo !== undefined)
-              .map(async (photo) => ({
-                id: photo.id,
-                sourcePath: photo.sourcePath,
-                sourceFileName: photo.sourceFileName,
-                capturedAtIso: photo.capturedAt?.iso,
-                hasGps: Boolean(photo.gps),
-                missingGpsCategory: photo.missingGpsCategory,
-                previewDataUrl: await this.createPreviewDataUrlSafely(photo.sourcePath),
-                outputRelativePath: previewOutputPaths.get(photo.id)
-              }))
+              .filter((photo): photo is Photo => photo !== undefined),
+            PREVIEW_IMAGE_CONCURRENCY_LIMIT,
+            async (photo) => ({
+              id: photo.id,
+              sourcePath: photo.sourcePath,
+              sourceFileName: photo.sourceFileName,
+              capturedAtIso: photo.capturedAt?.iso,
+              hasGps: Boolean(photo.gps),
+              missingGpsCategory: photo.missingGpsCategory,
+              previewDataUrl: await this.createPreviewDataUrlSafely(photo.sourcePath),
+              outputRelativePath: previewOutputPaths.get(photo.id)
+            })
           )
         }
-      })
+      }
     )
 
     return {
@@ -377,31 +384,6 @@ export class PreviewPendingOrganizationUseCase {
     } catch {
       return this.rules.unknownRegionLabel
     }
-  }
-
-  private createCanonicalPhotoIdByHash(photos: Photo[]): Map<string, string> {
-    const photosByHash = new Map<string, Photo[]>()
-
-    for (const photo of photos) {
-      if (!photo.sha256) {
-        continue
-      }
-
-      const duplicateSet = photosByHash.get(photo.sha256) ?? []
-
-      duplicateSet.push(photo)
-      photosByHash.set(photo.sha256, duplicateSet)
-    }
-
-    return new Map(
-      Array.from(photosByHash.entries())
-        .map(([sha256, duplicateSet]) => {
-          const canonicalPhoto = selectCanonicalDuplicatePhoto(duplicateSet)
-
-          return canonicalPhoto ? ([sha256, canonicalPhoto.id] as const) : null
-        })
-        .filter((entry): entry is readonly [string, string] => entry !== null)
-    )
   }
 
   private async createPreviewDataUrlSafely(

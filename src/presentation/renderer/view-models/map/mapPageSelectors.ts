@@ -1,4 +1,4 @@
-import { stripLeadingDateFromAutoGroupDisplayTitle } from '@domain/services/PhotoNamingService'
+import { stripLeadingDateFromGroupTitle } from '@presentation/common/formatters/groupTitle'
 import type { GroupDetail, GroupSummary } from '@shared/types/preload'
 
 export type BottomSheetState = 'collapsed' | 'half' | 'full'
@@ -89,7 +89,7 @@ function normalizeTitleCandidate(value?: string): string {
     .replace(/\s+/g, ' ')
     .trim()
 
-  const cleaned = stripLeadingDateFromAutoGroupDisplayTitle(replaced).trim()
+  const cleaned = stripLeadingDateFromGroupTitle(replaced).trim()
   const candidate = cleaned || replaced
   const lower = candidate.toLowerCase()
 

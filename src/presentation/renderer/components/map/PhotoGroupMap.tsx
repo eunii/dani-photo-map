@@ -85,6 +85,7 @@ interface GroupMarkerBinding {
   groupId: string
   marker: maplibregl.Marker
   element: HTMLButtonElement
+  markerKey: string
 }
 
 interface FocusedPhotoMarkerBinding {
@@ -259,7 +260,7 @@ export function PhotoGroupMap({
 }: PhotoGroupMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
-  const markersRef = useRef<GroupMarkerBinding[]>([])
+  const markersRef = useRef<Map<string, GroupMarkerBinding>>(new Map())
   const focusedPhotoMarkerRef = useRef<FocusedPhotoMarkerBinding | null>(null)
   const moveDebounceRef = useRef<number | null>(null)
   const hasInitialFitRef = useRef(false)
@@ -292,12 +293,21 @@ export function PhotoGroupMap({
   unclusteredMinZoomRef.current = unclusteredMinZoom
   photoMarkerMinZoomRef.current = photoMarkerMinZoom
 
+  function getMarkerRenderKey(group: MapGroupRecord): string {
+    return [
+      outputRoot ?? '',
+      group.displayTitle,
+      group.group.representativeThumbnailRelativePath ?? '',
+      group.group.representativeOutputRelativePath ?? ''
+    ].join('|')
+  }
+
   function clearMarkers(): void {
-    for (const binding of markersRef.current) {
+    for (const binding of markersRef.current.values()) {
       binding.marker.remove()
     }
 
-    markersRef.current = []
+    markersRef.current.clear()
   }
 
   function clearFocusedPhotoMarker(): void {
@@ -306,7 +316,7 @@ export function PhotoGroupMap({
   }
 
   function updateMarkerPresentation(): void {
-    for (const binding of markersRef.current) {
+    for (const binding of markersRef.current.values()) {
       const isSelected = binding.groupId === selectedGroupId
 
       binding.element.className = [
@@ -382,6 +392,60 @@ export function PhotoGroupMap({
     })
 
     return button
+  }
+
+  function createMarkerBinding(
+    map: maplibregl.Map,
+    group: MapGroupRecord
+  ): GroupMarkerBinding {
+    const markerElement = buildMarkerElement(group)
+    const marker = new maplibregl.Marker({
+      element: markerElement,
+      anchor: 'center'
+    })
+      .setLngLat([group.pinLocation!.longitude, group.pinLocation!.latitude])
+      .addTo(map)
+
+    return {
+      groupId: group.group.id,
+      marker,
+      element: markerElement,
+      markerKey: getMarkerRenderKey(group)
+    }
+  }
+
+  function syncMarkers(map: maplibregl.Map, groups: MapGroupRecord[]): void {
+    const nextGroupIds = new Set<string>()
+
+    for (const group of groups) {
+      if (!group.pinLocation) {
+        continue
+      }
+
+      nextGroupIds.add(group.group.id)
+      const existingBinding = markersRef.current.get(group.group.id)
+      const nextMarkerKey = getMarkerRenderKey(group)
+
+      if (existingBinding && existingBinding.markerKey === nextMarkerKey) {
+        existingBinding.marker.setLngLat([
+          group.pinLocation.longitude,
+          group.pinLocation.latitude
+        ])
+        continue
+      }
+
+      existingBinding?.marker.remove()
+      markersRef.current.set(group.group.id, createMarkerBinding(map, group))
+    }
+
+    for (const [groupId, binding] of markersRef.current.entries()) {
+      if (nextGroupIds.has(groupId)) {
+        continue
+      }
+
+      binding.marker.remove()
+      markersRef.current.delete(groupId)
+    }
   }
 
   function buildFocusedPhotoMarkerElement(photo: MapPhotoPinRecord): HTMLButtonElement {
@@ -639,8 +703,6 @@ export function PhotoGroupMap({
         map.on('mouseleave', PHOTO_LAYER_ID, clearPointerCursor)
 
         map.on('move', () => {
-          updateMarkerPresentation()
-
           if (moveDebounceRef.current !== null) {
             window.clearTimeout(moveDebounceRef.current)
           }
@@ -651,10 +713,6 @@ export function PhotoGroupMap({
               zoomLevel: map.getZoom()
             })
           }, 120)
-        })
-
-        map.on('zoom', () => {
-          updateMarkerPresentation()
         })
 
         setSelectedFilter(map, selectedGroupId)
@@ -711,33 +769,6 @@ export function PhotoGroupMap({
     source.setData(featureCollection)
     const photoSource = map.getSource(PHOTO_SOURCE_ID) as GeoJSONSource | undefined
     photoSource?.setData(photoFeatureCollection)
-    clearMarkers()
-
-    for (const group of markerGroups) {
-      if (!group.pinLocation) {
-        continue
-      }
-
-      const markerElement = buildMarkerElement(group)
-      const marker = new maplibregl.Marker({
-        element: markerElement,
-        anchor: 'center'
-      })
-        .setLngLat([group.pinLocation.longitude, group.pinLocation.latitude])
-        .addTo(map)
-
-      markersRef.current.push({
-        groupId: group.group.id,
-        marker,
-        element: markerElement
-      })
-    }
-
-    updateMarkerPresentation()
-
-    window.requestAnimationFrame(() => {
-      updateMarkerPresentation()
-    })
 
     if (!hasInitialFitRef.current) {
       fitToGroups(map, sourceGroups)
@@ -745,11 +776,24 @@ export function PhotoGroupMap({
     }
   }, [
     featureCollection,
-    markerGroups,
-    outputRoot,
     photoFeatureCollection,
     sourceGroups
   ])
+
+  useEffect(() => {
+    const map = mapRef.current
+
+    if (!map || !map.isStyleLoaded()) {
+      return
+    }
+
+    syncMarkers(map, markerGroups)
+    updateMarkerPresentation()
+
+    window.requestAnimationFrame(() => {
+      updateMarkerPresentation()
+    })
+  }, [markerGroups, outputRoot])
 
   useEffect(() => {
     const map = mapRef.current

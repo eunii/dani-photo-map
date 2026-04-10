@@ -19,13 +19,14 @@ function localCapturedAtParts(isoInstant: string) {
 describe('ExifrPhotoMetadataReader', () => {
   it('prefers DateTimeOriginal over CreateDate for capturedAt', async () => {
     const dateOriginal = new Date('2024-05-01T01:02:03.000Z')
+    const parseMetadata = vi.fn().mockResolvedValue({
+      DateTimeOriginal: dateOriginal,
+      CreateDate: new Date('2024-05-02T04:05:06.000Z'),
+      latitude: 37.5665,
+      longitude: 126.978
+    })
     const reader = new ExifrPhotoMetadataReader(
-      vi.fn().mockResolvedValue({
-        DateTimeOriginal: dateOriginal,
-        CreateDate: new Date('2024-05-02T04:05:06.000Z'),
-        latitude: 37.5665,
-        longitude: 126.978
-      }),
+      parseMetadata,
       vi.fn()
     )
 
@@ -40,6 +41,7 @@ describe('ExifrPhotoMetadataReader', () => {
       },
       metadataIssues: []
     })
+    expect(parseMetadata).toHaveBeenCalledOnce()
   })
 
   it('falls back to file modified time when exif date fields are missing', async () => {
@@ -93,14 +95,19 @@ describe('ExifrPhotoMetadataReader', () => {
   })
 
   it('uses XMP/Photoshop date when EXIF originals are absent', async () => {
-    const reader = new ExifrPhotoMetadataReader(
-      vi.fn().mockResolvedValue({
-        photoshop: {
-          DateCreated: new Date('2023-08-15T12:30:00.000Z')
-        },
+    const parseMetadata = vi
+      .fn()
+      .mockResolvedValueOnce({
         latitude: 37.5665,
         longitude: 126.978
-      }),
+      })
+      .mockResolvedValueOnce({
+        photoshop: {
+          DateCreated: new Date('2023-08-15T12:30:00.000Z')
+        }
+      })
+    const reader = new ExifrPhotoMetadataReader(
+      parseMetadata,
       vi.fn()
     )
 
@@ -111,5 +118,6 @@ describe('ExifrPhotoMetadataReader', () => {
       capturedAtSource: 'xmp-capture-date',
       metadataIssues: []
     })
+    expect(parseMetadata).toHaveBeenCalledTimes(2)
   })
 })

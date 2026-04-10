@@ -93,6 +93,14 @@ function pickDateFromEmbeddedSidecar(metadata: Record<string, unknown>): Date | 
   return undefined
 }
 
+function hasPrimaryCapturedAt(metadata: Record<string, unknown> | null | undefined): boolean {
+  return (
+    isValidDate(metadata?.DateTimeOriginal) ||
+    isValidDate(metadata?.CreateDate) ||
+    isValidDate(metadata?.ModifyDate)
+  )
+}
+
 export class ExifrPhotoMetadataReader implements PhotoMetadataReaderPort {
   constructor(
     private readonly parseMetadata: typeof exifr.parse = exifr.parse,
@@ -100,13 +108,29 @@ export class ExifrPhotoMetadataReader implements PhotoMetadataReaderPort {
   ) {}
 
   async read(sourcePath: string): Promise<PhotoMetadata> {
-    const metadata = (await this.parseMetadata(sourcePath, {
+    const primaryMetadata = (await this.parseMetadata(sourcePath, {
       gps: true,
       tiff: true,
       exif: true,
-      xmp: true,
-      iptc: true
+      xmp: false,
+      iptc: false
     })) as Record<string, unknown> | null | undefined
+    const embeddedDateMetadata =
+      primaryMetadata && hasPrimaryCapturedAt(primaryMetadata)
+        ? undefined
+        : ((await this.parseMetadata(sourcePath, {
+            gps: false,
+            tiff: false,
+            exif: false,
+            xmp: true,
+            iptc: true
+          })) as Record<string, unknown> | null | undefined)
+    const metadata = embeddedDateMetadata
+      ? {
+          ...(primaryMetadata ?? {}),
+          ...embeddedDateMetadata
+        }
+      : primaryMetadata
     const metadataIssues: string[] = []
 
     if (!metadata) {

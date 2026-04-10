@@ -1,6 +1,7 @@
 import type { ExistingOutputLibrarySnapshot } from '@application/ports/ExistingOutputScannerPort'
 import type { PhotoHasherPort } from '@application/ports/PhotoHasherPort'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
+import { mapWithConcurrencyLimit } from '@shared/utils/mapWithConcurrencyLimit'
 
 /**
  * Maps output-relative paths to SHA-256 hex from a previously saved library index.
@@ -31,6 +32,7 @@ export interface BuildExistingOutputHashSetParams {
   snapshot: ExistingOutputLibrarySnapshot
   storedIndex: LibraryIndex | null
   hasher: Pick<PhotoHasherPort, 'createSha256'>
+  hashConcurrencyLimit?: number
   onDiskHashFailure?: (context: {
     sourcePath: string
     photoId: string
@@ -65,30 +67,67 @@ function recordHash(
 export async function buildExistingOutputHashSet(
   params: BuildExistingOutputHashSetParams
 ): Promise<BuildExistingOutputHashSetResult> {
-  const { snapshot, storedIndex, hasher, onDiskHashFailure } = params
+  const {
+    snapshot,
+    storedIndex,
+    hasher,
+    hashConcurrencyLimit = 2,
+    onDiskHashFailure
+  } = params
   const hashes = new Set<string>()
   const hashToOutputRelativePath = new Map<string, string>()
   const fromIndex = sha256ByOutputRelativePathFromStoredIndex(storedIndex)
 
-  for (const existingPhoto of snapshot.photos) {
-    const indexed = fromIndex.get(existingPhoto.outputRelativePath)
+  const results = await mapWithConcurrencyLimit(
+    snapshot.photos,
+    hashConcurrencyLimit,
+    async (existingPhoto) => {
+      const indexed = fromIndex.get(existingPhoto.outputRelativePath)
 
-    if (indexed) {
-      recordHash(hashes, hashToOutputRelativePath, indexed, existingPhoto.outputRelativePath)
+      if (indexed) {
+        return {
+          kind: 'indexed' as const,
+          outputRelativePath: existingPhoto.outputRelativePath,
+          hash: indexed
+        }
+      }
+
+      try {
+        const hash = await hasher.createSha256(existingPhoto.sourcePath)
+        return {
+          kind: 'hashed' as const,
+          outputRelativePath: existingPhoto.outputRelativePath,
+          hash
+        }
+      } catch (error) {
+        return {
+          kind: 'failed' as const,
+          sourcePath: existingPhoto.sourcePath,
+          photoId: existingPhoto.id,
+          outputRelativePath: existingPhoto.outputRelativePath,
+          error
+        }
+      }
+    }
+  )
+
+  for (const result of results) {
+    if (result.kind === 'failed') {
+      onDiskHashFailure?.({
+        sourcePath: result.sourcePath,
+        photoId: result.photoId,
+        outputRelativePath: result.outputRelativePath,
+        error: result.error
+      })
       continue
     }
 
-    try {
-      const hash = await hasher.createSha256(existingPhoto.sourcePath)
-      recordHash(hashes, hashToOutputRelativePath, hash, existingPhoto.outputRelativePath)
-    } catch (error) {
-      onDiskHashFailure?.({
-        sourcePath: existingPhoto.sourcePath,
-        photoId: existingPhoto.id,
-        outputRelativePath: existingPhoto.outputRelativePath,
-        error
-      })
-    }
+    recordHash(
+      hashes,
+      hashToOutputRelativePath,
+      result.hash,
+      result.outputRelativePath
+    )
   }
 
   return { hashes, hashToOutputRelativePath }

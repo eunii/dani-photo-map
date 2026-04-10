@@ -29,11 +29,11 @@ import {
   defaultOrganizationRules,
   type OrganizationRules
 } from '@domain/policies/OrganizationRules'
-import { selectCanonicalDuplicatePhoto } from '@domain/services/DuplicatePhotoPolicy'
 import { createPhotoGroups } from '@domain/services/PhotoGroupingService'
 import { assignGroupDisplayTitledOutputRelativePaths } from '@application/services/assignGroupDisplayTitledOutputPaths'
 import { resolveGroupLabelForOutputFileName } from '@domain/services/PhotoNamingService'
 import { buildExistingOutputHashSet } from '@application/services/buildExistingOutputHashSet'
+import { createCanonicalPhotoIdByHash } from '@application/services/createCanonicalPhotoIdByHash'
 import { mergeGroupsByMatchingTitle } from '@application/services/mergeGroupsByMatchingTitle'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
 import { movePhotosIntoGroup } from '@application/services/movePhotosIntoGroup'
@@ -49,6 +49,10 @@ import {
   joinPathSegments,
   normalizePathSeparators
 } from '@shared/utils/path'
+import { mapWithConcurrencyLimit } from '@shared/utils/mapWithConcurrencyLimit'
+
+const PREPARE_PHOTO_CONCURRENCY_LIMIT = 4
+const EXISTING_OUTPUT_HASH_CONCURRENCY_LIMIT = 2
 
 export interface ScanPhotoLibraryDependencies {
   fileSystem: PhotoLibraryFileSystemPort
@@ -75,6 +79,11 @@ interface ScanPhotoContext {
 interface PreparedPhotoRecord {
   photo: Photo
   context: ScanPhotoContext
+}
+
+interface PreparedPhotoRecordResult {
+  preparedPhotoRecord: PreparedPhotoRecord | null
+  issues: ScanPhotoLibraryIssue[]
 }
 
 interface FinalizedScanResult {
@@ -110,6 +119,7 @@ export class ScanPhotoLibraryUseCase {
         snapshot: existingOutputSnapshot,
         storedIndex,
         hasher: this.dependencies.hasher,
+        hashConcurrencyLimit: EXISTING_OUTPUT_HASH_CONCURRENCY_LIMIT,
         onDiskHashFailure: ({ sourcePath, photoId, outputRelativePath, error }) => {
           issues.push(
             this.createIssue({
@@ -128,32 +138,14 @@ export class ScanPhotoLibraryUseCase {
     const photoPaths = await this.dependencies.fileSystem.listPhotoFiles(
       paths.sourceRoot
     )
-    const preparedPhotoRecords: PreparedPhotoRecord[] = []
 
     await this.prepareOutputDirectories(paths.outputRoot)
-
-    for (const [index, listedPhotoPath] of photoPaths.entries()) {
-      const sourcePath = normalizePathSeparators(listedPhotoPath)
-      const preparedPhotoRecord = await this.preparePhotoRecord(
-        {
-          photoId: `photo-${index + 1}`,
-          sourcePath,
-          sourceFileName: getPathBaseName(sourcePath)
-        },
-        validatedCommand.missingGpsGroupingBasis,
-        issues
-      )
-
-      if (preparedPhotoRecord) {
-        preparedPhotoRecords.push(preparedPhotoRecord)
-      }
-
-      onScanProgress?.({
-        kind: 'prepare',
-        completed: index + 1,
-        total: photoPaths.length
-      })
-    }
+    const preparedPhotoRecords = await this.preparePhotoRecords(
+      photoPaths,
+      validatedCommand.missingGpsGroupingBasis,
+      issues,
+      onScanProgress
+    )
 
     const { photoIdToGroupKey, photoIdToDisplayTitle } = this.computeGroupingMaps(
       preparedPhotoRecords,
@@ -296,6 +288,58 @@ export class ScanPhotoLibraryUseCase {
     }
   }
 
+  private async preparePhotoRecords(
+    photoPaths: string[],
+    missingGpsGroupingBasis: ScanPhotoLibraryCommand['missingGpsGroupingBasis'],
+    issues: ScanPhotoLibraryIssue[],
+    onScanProgress?: ScanPhotoLibraryExecuteOptions['onScanProgress']
+  ): Promise<PreparedPhotoRecord[]> {
+    let prepareCompleted = 0
+
+    const results = await mapWithConcurrencyLimit(
+      photoPaths,
+      PREPARE_PHOTO_CONCURRENCY_LIMIT,
+      async (listedPhotoPath, index): Promise<PreparedPhotoRecordResult> => {
+        const sourcePath = normalizePathSeparators(listedPhotoPath)
+        const localIssues: ScanPhotoLibraryIssue[] = []
+
+        try {
+          return {
+            preparedPhotoRecord: await this.preparePhotoRecord(
+              {
+                photoId: `photo-${index + 1}`,
+                sourcePath,
+                sourceFileName: getPathBaseName(sourcePath)
+              },
+              missingGpsGroupingBasis,
+              localIssues
+            ),
+            issues: localIssues
+          }
+        } finally {
+          prepareCompleted += 1
+          onScanProgress?.({
+            kind: 'prepare',
+            completed: prepareCompleted,
+            total: photoPaths.length
+          })
+        }
+      }
+    )
+
+    const preparedPhotoRecords: PreparedPhotoRecord[] = []
+
+    for (const result of results) {
+      issues.push(...result.issues)
+
+      if (result.preparedPhotoRecord) {
+        preparedPhotoRecords.push(result.preparedPhotoRecord)
+      }
+    }
+
+    return preparedPhotoRecords
+  }
+
   private computeGroupingMaps(
     preparedPhotoRecords: PreparedPhotoRecord[],
     pendingCustomGroupSplits: Array<{
@@ -402,8 +446,7 @@ export class ScanPhotoLibraryUseCase {
           })
           .map((record) => record.photo)
       : preparedPhotoRecords.map((record) => record.photo)
-    const canonicalPhotoIdByHash =
-      this.createCanonicalPhotoIdByHash(photosForCanonical)
+    const canonicalPhotoIdByHash = createCanonicalPhotoIdByHash(photosForCanonical)
     const copiedPhotos: Photo[] = []
     let duplicateCount = 0
     let skippedExistingCount = 0
@@ -502,31 +545,6 @@ export class ScanPhotoLibraryUseCase {
       inBatchDuplicateDetails,
       existingOutputSkipDetails
     }
-  }
-
-  private createCanonicalPhotoIdByHash(photos: Photo[]): Map<string, string> {
-    const photosByHash = new Map<string, Photo[]>()
-
-    for (const photo of photos) {
-      if (!photo.sha256) {
-        continue
-      }
-
-      const duplicateSet = photosByHash.get(photo.sha256) ?? []
-
-      duplicateSet.push(photo)
-      photosByHash.set(photo.sha256, duplicateSet)
-    }
-
-    return new Map(
-      Array.from(photosByHash.entries())
-        .map(([sha256, duplicateSet]) => {
-          const canonicalPhoto = selectCanonicalDuplicatePhoto(duplicateSet)
-
-          return canonicalPhoto ? ([sha256, canonicalPhoto.id] as const) : null
-        })
-        .filter((entry): entry is readonly [string, string] => entry !== null)
-    )
   }
 
   private async finalizePreparedPhoto(

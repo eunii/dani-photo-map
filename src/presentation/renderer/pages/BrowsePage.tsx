@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { MapFilterBar } from '@presentation/renderer/components/map/MapFilterBar'
+import { GroupDetailPanel } from '@presentation/renderer/components/GroupDetailPanel'
 import { MapPhotoSidebar } from '@presentation/renderer/components/map/MapPhotoSidebar'
 import { MapPhotoPreviewOverlay } from '@presentation/renderer/components/map/MapPhotoPreviewOverlay'
 import { MapSearchBar } from '@presentation/renderer/components/map/MapSearchBar'
@@ -26,13 +27,17 @@ interface BrowsePageProps {
 const SELECTED_GROUP_PHOTO_PIN_MAX_COUNT = 24
 const SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM = 12.5
 const FOCUSED_PHOTO_CONTEXT_MIN_ZOOM = 8.5
+type BrowsePanelTab = 'photos' | 'details'
 
 export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
   const {
     outputRoot,
     libraryIndex,
+    loadSource,
     isLoadingIndex,
-    errorMessage
+    errorMessage,
+    setErrorMessage,
+    reloadLibraryIndex
   } = useOutputLibraryIndexPanel()
   const searchQuery = useBrowseMapStore((state) => state.searchQuery)
   const quickFilter = useBrowseMapStore((state) => state.quickFilter)
@@ -49,6 +54,10 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
   const resetFilters = useBrowseMapStore((state) => state.resetFilters)
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 220)
   const [previewPhotoId, setPreviewPhotoId] = useState<string | undefined>()
+  const [panelTab, setPanelTab] = useState<BrowsePanelTab>('photos')
+  const [isSavingGroup, setIsSavingGroup] = useState(false)
+  const [isMovingGroupPhotos, setIsMovingGroupPhotos] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const allMapRecords = useMemo(
     () => buildMapGroupRecords(libraryIndex?.groups ?? []),
@@ -151,6 +160,14 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
     setPreviewPhotoId(undefined)
   }, [selectedGroupId])
 
+  useEffect(() => {
+    if (selectedGroupDetail) {
+      return
+    }
+
+    setPanelTab('photos')
+  }, [selectedGroupDetail])
+
   const handleQuickFilterChange = useCallback((nextFilter: typeof quickFilter): void => {
     setQuickFilter(nextFilter)
 
@@ -173,6 +190,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
 
   const handleSelectGroup = useCallback((groupId: string): void => {
     setSelectedGroupId(groupId)
+    setSuccessMessage(null)
   }, [setSelectedGroupId])
 
   const handleViewportChange = useCallback(
@@ -182,6 +200,92 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
     },
     [setMapBounds, setZoomLevel]
   )
+
+  const handleSaveGroup = useCallback(async (nextGroup: {
+    title: string
+    companions: string[]
+    notes?: string
+    representativePhotoId?: string
+  }): Promise<void> => {
+    const currentGroup = selectedGroupDetail
+    const activeOutputRoot = libraryIndex?.outputRoot ?? outputRoot
+
+    if (!currentGroup || !activeOutputRoot) {
+      return
+    }
+
+    setIsSavingGroup(true)
+    setSuccessMessage(null)
+    setErrorMessage(null)
+
+    try {
+      await window.photoApp.updatePhotoGroup({
+        outputRoot: activeOutputRoot,
+        groupId: currentGroup.id,
+        title: nextGroup.title,
+        companions: nextGroup.companions,
+        notes: nextGroup.notes,
+        representativePhotoId: nextGroup.representativePhotoId
+      })
+      await reloadLibraryIndex()
+      setSelectedGroupId(currentGroup.id)
+      setSuccessMessage('그룹 메타데이터를 저장했습니다.')
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '그룹 저장에 실패했습니다.'
+      )
+    } finally {
+      setIsSavingGroup(false)
+    }
+  }, [
+    libraryIndex?.outputRoot,
+    outputRoot,
+    reloadLibraryIndex,
+    selectedGroupDetail,
+    setErrorMessage,
+    setSelectedGroupId
+  ])
+
+  const handleMoveGroupPhotos = useCallback(async (nextMove: {
+    sourceGroupId: string
+    destinationGroupId: string
+    photoIds: string[]
+  }): Promise<void> => {
+    const activeOutputRoot = libraryIndex?.outputRoot ?? outputRoot
+
+    if (!activeOutputRoot) {
+      return
+    }
+
+    setIsMovingGroupPhotos(true)
+    setSuccessMessage(null)
+    setErrorMessage(null)
+
+    try {
+      await window.photoApp.movePhotosToGroup({
+        outputRoot: activeOutputRoot,
+        sourceGroupId: nextMove.sourceGroupId,
+        destinationGroupId: nextMove.destinationGroupId,
+        photoIds: nextMove.photoIds
+      })
+      await reloadLibraryIndex()
+      setSelectedGroupId(nextMove.sourceGroupId)
+      setPreviewPhotoId(undefined)
+      setSuccessMessage('선택한 사진을 다른 그룹으로 이동했습니다.')
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '사진 이동에 실패했습니다.'
+      )
+    } finally {
+      setIsMovingGroupPhotos(false)
+    }
+  }, [
+    libraryIndex?.outputRoot,
+    outputRoot,
+    reloadLibraryIndex,
+    setErrorMessage,
+    setSelectedGroupId
+  ])
 
   return (
     <div className="space-y-6">
@@ -202,6 +306,11 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
       {groupDetailErrorMessage ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {groupDetailErrorMessage}
+        </div>
+      ) : null}
+      {successMessage ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {successMessage}
         </div>
       ) : null}
 
@@ -301,20 +410,66 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
               />
             </div>
 
-            <MapPhotoSidebar
-              outputRoot={libraryIndex?.outputRoot ?? outputRoot}
-              selectedGroup={selectedGroup}
-              selectedGroupDetail={selectedGroupDetail}
-              selectedPhotoPinCount={selectedPhotoPins.length}
-              selectedPhotoPinMaxCount={SELECTED_GROUP_PHOTO_PIN_MAX_COUNT}
-              photoPinMinZoom={SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM}
-              isLoadingGroupDetail={isLoadingGroupDetail}
-              groupDetailErrorMessage={groupDetailErrorMessage}
-              filteredGroups={filteredRecords}
-              unmappedGroups={unmappedRecords}
-              onSelectGroup={handleSelectGroup}
-              onPreviewPhoto={setPreviewPhotoId}
-            />
+            <div className="min-w-0 space-y-3">
+              <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
+                <button
+                  type="button"
+                  className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                    panelTab === 'photos'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-white text-slate-700'
+                  }`}
+                  onClick={() => setPanelTab('photos')}
+                >
+                  사진 미리보기
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                    panelTab === 'details'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-white text-slate-700'
+                  }`}
+                  onClick={() => setPanelTab('details')}
+                  disabled={!selectedGroupDetail}
+                >
+                  그룹 상세 편집
+                </button>
+              </div>
+
+              {panelTab === 'details' ? (
+                <GroupDetailPanel
+                  group={selectedGroupDetail ?? undefined}
+                  allGroups={(libraryIndex?.groups ?? []).map((group) => ({
+                    id: group.id,
+                    title: group.title,
+                    photoCount: group.photoCount,
+                    representativeGps: group.representativeGps
+                  }))}
+                  outputRoot={libraryIndex?.outputRoot ?? outputRoot}
+                  loadSource={loadSource}
+                  isSaving={isSavingGroup}
+                  isMovingPhotos={isMovingGroupPhotos}
+                  onSave={handleSaveGroup}
+                  onMovePhotos={handleMoveGroupPhotos}
+                />
+              ) : (
+                <MapPhotoSidebar
+                  outputRoot={libraryIndex?.outputRoot ?? outputRoot}
+                  selectedGroup={selectedGroup}
+                  selectedGroupDetail={selectedGroupDetail}
+                  selectedPhotoPinCount={selectedPhotoPins.length}
+                  selectedPhotoPinMaxCount={SELECTED_GROUP_PHOTO_PIN_MAX_COUNT}
+                  photoPinMinZoom={SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM}
+                  isLoadingGroupDetail={isLoadingGroupDetail}
+                  groupDetailErrorMessage={groupDetailErrorMessage}
+                  filteredGroups={filteredRecords}
+                  unmappedGroups={unmappedRecords}
+                  onSelectGroup={handleSelectGroup}
+                  onPreviewPhoto={setPreviewPhotoId}
+                />
+              )}
+            </div>
           </div>
         </section>
       )}

@@ -17,6 +17,7 @@ interface MapMarkerBinding {
   groupId: string
   marker: maplibregl.Marker
   element: HTMLButtonElement
+  markerKey: string
 }
 
 const DEFAULT_CENTER: [number, number] = [127.0, 37.5]
@@ -53,7 +54,7 @@ export function GroupsMap({
 }: GroupsMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
-  const markersRef = useRef<MapMarkerBinding[]>([])
+  const markersRef = useRef<Map<string, MapMarkerBinding>>(new Map())
   const popupByGroupIdRef = useRef(new Map<string, maplibregl.Popup>())
   const [mapErrorMessage, setMapErrorMessage] = useState<string | null>(null)
 
@@ -71,7 +72,7 @@ export function GroupsMap({
   }
 
   function updateMarkerStyles(): void {
-    for (const binding of markersRef.current) {
+    for (const binding of markersRef.current.values()) {
       const isSelected = binding.groupId === selectedGroupId
       const isHovered = binding.groupId === hoveredGroupId
 
@@ -83,6 +84,116 @@ export function GroupsMap({
             ? 'scale-110 bg-sky-500 ring-2 ring-sky-100'
             : 'bg-blue-600'
       ].join(' ')
+    }
+  }
+
+  function clearMarkers(): void {
+    for (const binding of markersRef.current.values()) {
+      binding.marker.remove()
+    }
+
+    markersRef.current.clear()
+    popupByGroupIdRef.current.clear()
+  }
+
+  function getMarkerRenderKey(group: MapGroupSummary): string {
+    return [
+      outputRoot ?? '',
+      group.title,
+      String(group.photoCount),
+      group.representativeThumbnailRelativePath ?? ''
+    ].join('|')
+  }
+
+  function createMarkerBinding(
+    map: maplibregl.Map,
+    group: MapGroupSummary
+  ): MapMarkerBinding {
+    const markerElement = document.createElement('button')
+    markerElement.type = 'button'
+    markerElement.setAttribute('aria-label', group.title)
+    markerElement.addEventListener('mouseenter', () => {
+      onHoverGroup?.(group.id)
+    })
+    markerElement.addEventListener('mouseleave', () => {
+      onHoverGroup?.(undefined)
+    })
+
+    const popupContainer = document.createElement('div')
+    popupContainer.className = 'space-y-2'
+
+    const thumbnailUrl = toFileUrl(group.representativeThumbnailRelativePath)
+
+    if (thumbnailUrl) {
+      const image = document.createElement('img')
+      image.src = thumbnailUrl
+      image.alt = group.title
+      image.className = 'h-24 w-40 rounded-lg object-cover'
+      image.addEventListener('error', () => {
+        image.remove()
+      })
+      popupContainer.appendChild(image)
+    }
+
+    const titleElement = document.createElement('strong')
+    titleElement.textContent = group.title
+    popupContainer.appendChild(titleElement)
+
+    const metaElement = document.createElement('div')
+    metaElement.textContent = `사진 ${group.photoCount}장`
+    popupContainer.appendChild(metaElement)
+
+    const popup = new maplibregl.Popup({ offset: 16 }).setDOMContent(
+      popupContainer
+    )
+
+    markerElement.addEventListener('click', () => {
+      onSelectGroup?.(group.id)
+    })
+
+    const marker = new maplibregl.Marker({ element: markerElement })
+      .setLngLat([group.longitude, group.latitude])
+      .setPopup(popup)
+      .addTo(map)
+
+    popupByGroupIdRef.current.set(group.id, popup)
+
+    return {
+      groupId: group.id,
+      marker,
+      element: markerElement,
+      markerKey: getMarkerRenderKey(group)
+    }
+  }
+
+  function syncMarkers(map: maplibregl.Map, groups: MapGroupSummary[]): void {
+    const nextGroupIds = new Set<string>()
+
+    for (const group of groups) {
+      nextGroupIds.add(group.id)
+      const existingBinding = markersRef.current.get(group.id)
+      const nextMarkerKey = getMarkerRenderKey(group)
+
+      if (existingBinding && existingBinding.markerKey === nextMarkerKey) {
+        existingBinding.marker.setLngLat([group.longitude, group.latitude])
+        continue
+      }
+
+      existingBinding?.marker.remove()
+      popupByGroupIdRef.current.get(group.id)?.remove()
+      popupByGroupIdRef.current.delete(group.id)
+      markersRef.current.set(group.id, createMarkerBinding(map, group))
+    }
+
+    for (const [groupId, binding] of markersRef.current.entries()) {
+      if (nextGroupIds.has(groupId)) {
+        continue
+      }
+
+      binding.marker.remove()
+      popupByGroupIdRef.current.get(groupId)?.remove()
+      popupByGroupIdRef.current.delete(groupId)
+      markersRef.current.delete(groupId)
     }
   }
 
@@ -120,11 +231,7 @@ export function GroupsMap({
     }
 
     return () => {
-      for (const binding of markersRef.current) {
-        binding.marker.remove()
-      }
-
-      markersRef.current = []
+      clearMarkers()
       mapRef.current?.remove()
       mapRef.current = null
     }
@@ -138,14 +245,8 @@ export function GroupsMap({
     }
 
     try {
-      for (const binding of markersRef.current) {
-        binding.marker.remove()
-      }
-
-      markersRef.current = []
-      popupByGroupIdRef.current.clear()
-
       if (mapGroups.length === 0) {
+        clearMarkers()
         map.easeTo({
           center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
@@ -158,62 +259,10 @@ export function GroupsMap({
       const bounds = new LngLatBounds()
 
       for (const group of mapGroups) {
-        const markerElement = document.createElement('button')
-        markerElement.type = 'button'
-        markerElement.setAttribute('aria-label', group.title)
-        markerElement.addEventListener('mouseenter', () => {
-          onHoverGroup?.(group.id)
-        })
-        markerElement.addEventListener('mouseleave', () => {
-          onHoverGroup?.(undefined)
-        })
-
-        const popupContainer = document.createElement('div')
-        popupContainer.className = 'space-y-2'
-
-        const thumbnailUrl = toFileUrl(group.representativeThumbnailRelativePath)
-
-        if (thumbnailUrl) {
-          const image = document.createElement('img')
-          image.src = thumbnailUrl
-          image.alt = group.title
-          image.className = 'h-24 w-40 rounded-lg object-cover'
-          image.addEventListener('error', () => {
-            image.remove()
-          })
-          popupContainer.appendChild(image)
-        }
-
-        const titleElement = document.createElement('strong')
-        titleElement.textContent = group.title
-        popupContainer.appendChild(titleElement)
-
-        const metaElement = document.createElement('div')
-        metaElement.textContent = `사진 ${group.photoCount}장`
-        popupContainer.appendChild(metaElement)
-
-        const popup = new maplibregl.Popup({ offset: 16 }).setDOMContent(
-          popupContainer
-        )
-
-        markerElement.addEventListener('click', () => {
-          onSelectGroup?.(group.id)
-        })
-
-        const marker = new maplibregl.Marker({ element: markerElement })
-          .setLngLat([group.longitude, group.latitude])
-          .setPopup(popup)
-          .addTo(map)
-
-        markersRef.current.push({
-          groupId: group.id,
-          marker,
-          element: markerElement
-        })
-        popupByGroupIdRef.current.set(group.id, popup)
         bounds.extend([group.longitude, group.latitude])
       }
 
+      syncMarkers(map, mapGroups)
       updateMarkerStyles()
 
       if (mapGroups.length === 1) {
@@ -243,11 +292,7 @@ export function GroupsMap({
           ? error.message
           : '지도 마커를 그리는 중 오류가 발생했습니다.'
       )
-      for (const binding of markersRef.current) {
-        binding.marker.remove()
-      }
-      markersRef.current = []
-      popupByGroupIdRef.current.clear()
+      clearMarkers()
     }
   }, [mapErrorMessage, mapGroups, onHoverGroup, onSelectGroup, outputRoot])
 

@@ -6,9 +6,19 @@ import type {
   LibraryIndexLoadSource
 } from '@shared/types/preload'
 
+interface MoveTargetGroup {
+  id: string
+  title: string
+  photoCount: number
+  representativeGps?: {
+    latitude: number
+    longitude: number
+  }
+}
+
 interface GroupDetailPanelProps {
   group?: GroupDetail
-  allGroups?: GroupDetail[]
+  allGroups?: MoveTargetGroup[]
   titleSuggestions?: string[]
   outputRoot?: string
   loadSource?: LibraryIndexLoadSource | null
