@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { Button, Input, TextArea } from '@heroui/react'
+import { Button } from '@heroui/react'
 
 import { buildGroupAwarePhotoOutputRelativePath } from '@domain/services/GroupAwarePhotoNamingService'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
@@ -300,16 +300,10 @@ export function GroupDetailPanel({
 
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-800">제목</span>
-                <Input
+                <input
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
-                  className="text-sm"
-                  classNames={{
-                    inputWrapper:
-                      'rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] shadow-none',
-                    input: 'text-[var(--app-foreground)]',
-                    innerWrapper: 'bg-transparent'
-                  }}
+                  className="h-11 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-foreground)] outline-none"
                   placeholder={group.displayTitle}
                 />
               </label>
@@ -387,16 +381,10 @@ export function GroupDetailPanel({
 
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-800">동행인</span>
-                <Input
+                <input
                   value={companionsText}
                   onChange={(event) => setCompanionsText(event.target.value)}
-                  className="text-sm"
-                  classNames={{
-                    inputWrapper:
-                      'rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] shadow-none',
-                    input: 'text-[var(--app-foreground)]',
-                    innerWrapper: 'bg-transparent'
-                  }}
+                  className="h-11 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-foreground)] outline-none"
                   placeholder="예: Alice, Bob"
                 />
               </label>
@@ -418,16 +406,10 @@ export function GroupDetailPanel({
 
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-800">메모</span>
-                <TextArea
+                <textarea
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
-                  className="text-sm"
-                  classNames={{
-                    inputWrapper:
-                      'rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] shadow-none',
-                    input: 'min-h-28 text-[var(--app-foreground)]',
-                    innerWrapper: 'bg-transparent'
-                  }}
+                  className="min-h-28 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none"
                   placeholder="이 그룹에 대한 메모를 남겨두세요."
                 />
               </label>
@@ -507,7 +489,7 @@ export function GroupDetailPanel({
                     <Button
                       variant="primary"
                       className="rounded-[12px] bg-[var(--app-button)] px-4 text-sm font-medium text-[var(--app-button-foreground)] disabled:opacity-60"
-                      disabled={
+                      isDisabled={
                         isMovingPhotos ||
                         !moveTargetGroupId ||
                         selectedPhotoIds.length === 0
@@ -530,7 +512,7 @@ export function GroupDetailPanel({
                 <Button
                   variant="primary"
                   className="rounded-[12px] bg-[var(--app-button)] px-4 text-sm font-medium text-[var(--app-button-foreground)] disabled:opacity-60"
-                  disabled={isSaving}
+                  isDisabled={isSaving}
                   onPress={() => void handleSave()}
                 >
                   {isSaving ? '저장 중...' : '그룹 저장'}

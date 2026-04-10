@@ -1,6 +1,4 @@
-import { Button, Dropdown } from '@heroui/react'
-
-import { ChevronDownIcon } from '@presentation/renderer/components/app/AppIcons'
+import { Dropdown } from '@heroui/react'
 
 export interface BreadcrumbDropdownOption {
   key: string
@@ -27,15 +25,12 @@ export function BreadcrumbDropdown({
   return (
     <Dropdown>
       <Dropdown.Trigger>
-        <Button
-          variant="ghost"
-          className="h-9 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-[var(--app-foreground)] hover:bg-[var(--app-surface-strong)]"
+        <button
+          type="button"
+          className="min-w-0 truncate rounded-md text-left text-sm font-medium text-[var(--app-foreground)] transition-colors hover:text-[var(--app-accent-strong)]"
         >
-          <span className="inline-flex items-center gap-2">
-            <span className="max-w-[160px] truncate">{label}</span>
-            <ChevronDownIcon className="h-3.5 w-3.5 text-[var(--app-muted)]" />
-          </span>
-        </Button>
+          <span className="truncate">{label}</span>
+        </button>
       </Dropdown.Trigger>
       <Dropdown.Popover
         placement="bottom start"

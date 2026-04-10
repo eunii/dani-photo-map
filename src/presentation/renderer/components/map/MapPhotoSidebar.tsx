@@ -1,3 +1,5 @@
+import type { Key } from '@heroui/react'
+import { Accordion } from '@heroui/react'
 import { useEffect, useState } from 'react'
 
 import { GroupPhotoGrid } from '@presentation/renderer/components/map/GroupPhotoGrid'
@@ -35,7 +37,9 @@ export function MapPhotoSidebar({
   onPreviewPhoto
 }: MapPhotoSidebarProps) {
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | undefined>()
-  const [isFilteredGroupsExpanded, setIsFilteredGroupsExpanded] = useState(true)
+  const [expandedKeys, setExpandedKeys] = useState<Set<Key>>(
+    () => new Set<Key>(['filtered-groups'])
+  )
 
   useEffect(() => {
     const nextDefaultPhotoId =
@@ -60,42 +64,45 @@ export function MapPhotoSidebar({
       <div className="flex-1 overflow-y-auto p-2.5">
         {selectedGroup ? (
           <div className="space-y-2.5">
-            <section className="space-y-2">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-[14px] bg-[var(--app-surface)] px-3 py-2 text-left"
-                aria-expanded={isFilteredGroupsExpanded}
-                aria-controls="filtered-groups-panel"
-                onClick={() =>
-                  setIsFilteredGroupsExpanded((expanded) => !expanded)
-                }
+            <Accordion
+              expandedKeys={expandedKeys}
+              variant="surface"
+              onExpandedChange={setExpandedKeys}
+            >
+              <Accordion.Item
+                id="filtered-groups"
+                className="rounded-[16px] bg-[var(--app-surface)] px-1"
               >
-                <span className="text-sm font-semibold text-[var(--app-foreground)]">
-                  검색/필터 결과
-                </span>
-                <span className="text-xs text-[var(--app-muted)]">
-                  총 {filteredGroups.length}개 ·{' '}
-                  {isFilteredGroupsExpanded ? '접기' : '펼치기'}
-                </span>
-              </button>
-              {isFilteredGroupsExpanded ? (
-                <div
-                  id="filtered-groups-panel"
-                  className="grid grid-cols-4 gap-1.5 sm:grid-cols-5 2xl:grid-cols-6"
-                >
-                  {filteredGroups.slice(0, 10).map((record) => (
-                    <GroupPreviewCard
-                      key={record.group.id}
-                      record={record}
-                      outputRoot={outputRoot}
-                      selected={selectedGroup.group.id === record.group.id}
-                      onClick={onSelectGroup}
-                      compact
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </section>
+                <Accordion.Heading>
+                  <Accordion.Trigger className="px-2 py-2.5">
+                    <div className="flex flex-1 items-center justify-between gap-3 text-left">
+                      <span className="text-sm font-semibold text-[var(--app-foreground)]">
+                        검색/필터 결과
+                      </span>
+                      <span className="text-xs text-[var(--app-muted)]">
+                        총 {filteredGroups.length}개
+                      </span>
+                    </div>
+                  </Accordion.Trigger>
+                </Accordion.Heading>
+                <Accordion.Panel>
+                  <Accordion.Body className="pt-0">
+                    <div className="grid grid-cols-4 gap-1.5 pb-2 sm:grid-cols-5 2xl:grid-cols-6">
+                      {filteredGroups.slice(0, 10).map((record) => (
+                        <GroupPreviewCard
+                          key={record.group.id}
+                          record={record}
+                          outputRoot={outputRoot}
+                          selected={selectedGroup.group.id === record.group.id}
+                          onClick={onSelectGroup}
+                          compact
+                        />
+                      ))}
+                    </div>
+                  </Accordion.Body>
+                </Accordion.Panel>
+              </Accordion.Item>
+            </Accordion>
 
             <section className="space-y-2.5 rounded-[16px] bg-[var(--app-surface)] p-2.5">
               <div className="flex items-start justify-between gap-3">

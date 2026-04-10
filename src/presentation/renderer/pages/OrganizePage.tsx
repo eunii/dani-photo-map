@@ -425,7 +425,6 @@ function getGroupLinePercent(
 }
 
 interface OrganizePageProps {
-  onNavigateToBrowse?: () => void
   onNavigateToSettings?: () => void
 }
 
@@ -514,7 +513,6 @@ function PendingPreviewImageBlock({
 }
 
 export function OrganizePage({
-  onNavigateToBrowse,
   onNavigateToSettings
 }: OrganizePageProps) {
   const sourceRoot = useLibraryWorkspaceStore((state) => state.sourceRoot)
@@ -1578,14 +1576,6 @@ export function OrganizePage({
             ) : null}
           </>
         )}
-        <Button
-          variant="secondary"
-          className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
-          isDisabled={!outputRoot}
-          onPress={onNavigateToBrowse}
-        >
-          조회 페이지 열기
-        </Button>
         <p className="text-sm text-[var(--app-muted)]">
           그룹마다 메타를 입력한 뒤 카드에서 한 그룹씩 저장하거나, 위의
           「이후 그룹 전체 저장하기」로 현재 카드 그룹부터 끝까지 입력값을
@@ -2128,13 +2118,6 @@ export function OrganizePage({
               <h2 className="text-sm font-semibold text-emerald-900">
                 실행 결과
               </h2>
-              <Button
-                variant="secondary"
-                className="rounded-2xl border border-emerald-300 bg-white text-emerald-800"
-                onPress={onNavigateToBrowse}
-              >
-                결과 조회로 이동
-              </Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <div className="rounded-[24px] bg-white px-4 py-3">

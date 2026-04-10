@@ -67,8 +67,7 @@ export function SettingsIcon(props: IconProps) {
 export function SidebarCollapseIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
-      <path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />
-      <path d="M9 4v16" />
+      <path d="M8 5.5v13" />
       <path d="m14.5 9-3 3 3 3" />
     </BaseIcon>
   )
@@ -77,8 +76,7 @@ export function SidebarCollapseIcon(props: IconProps) {
 export function SidebarExpandIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
-      <path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />
-      <path d="M9 4v16" />
+      <path d="M8 5.5v13" />
       <path d="m11.5 9 3 3-3 3" />
     </BaseIcon>
   )
@@ -88,6 +86,15 @@ export function ChevronDownIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
       <path d="m6 9 6 6 6-6" />
+    </BaseIcon>
+  )
+}
+
+export function SearchIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4 4" />
     </BaseIcon>
   )
 }

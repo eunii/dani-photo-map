@@ -171,9 +171,9 @@ export function App() {
     label: string
     icon: ReactNode
   }> = [
-    { route: 'organize', label: '정리', icon: <OrganizeIcon className="h-4 w-4" /> },
-    { route: 'files', label: '파일 목록', icon: <FilesIcon className="h-4 w-4" /> },
-    { route: 'browse', label: '지도', icon: <MapIcon className="h-4 w-4" /> }
+    { route: 'organize', label: '정리', icon: <OrganizeIcon className="h-5 w-5" /> },
+    { route: 'files', label: '파일 목록', icon: <FilesIcon className="h-5 w-5" /> },
+    { route: 'browse', label: '지도', icon: <MapIcon className="h-5 w-5" /> }
   ]
 
   return (
@@ -203,7 +203,6 @@ export function App() {
           <section className="app-page-section min-h-0 flex-1 rounded-[18px] p-1 lg:p-2">
             {route === 'organize' ? (
               <OrganizePage
-                onNavigateToBrowse={() => navigate('browse')}
                 onNavigateToSettings={openSettings}
               />
             ) : route === 'files' ? (

@@ -261,7 +261,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     if (pathSegments.length === 0) {
       return '홈'
     }
-    return pathSegments.map(formatPathSegmentLabel).join(' / ')
+    return pathSegments.map(formatPathSegmentLabel).join(' > ')
   }, [pathSegments])
 
   const rootBreadcrumbOptions = useMemo(
@@ -289,7 +289,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
       if (pathSegments.length === 0) {
         return '홈'
       }
-      return pathSegments.map(formatPathSegmentLabel).join(' / ')
+      return pathSegments.map(formatPathSegmentLabel).join(' > ')
     }
     if (pathSegments.length <= 1) {
       return '홈'
@@ -297,7 +297,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     return pathSegments
       .slice(0, -1)
       .map(formatPathSegmentLabel)
-      .join(' / ')
+      .join(' > ')
   }, [pathSegments, moveDestinationUsesChildFolders])
 
   /**
@@ -632,9 +632,11 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
       {sourceBadge ? (
-        <section className={`rounded-[16px] border px-3 py-2 text-sm ${sourceBadge.tone}`}>
+        <section
+          className={`shrink-0 rounded-[16px] border px-3 py-2 text-sm ${sourceBadge.tone}`}
+        >
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full border border-current/20 bg-white/70 px-3 py-1 text-xs font-semibold">
               {sourceBadge.label}
@@ -645,20 +647,20 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-[16px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="shrink-0 rounded-[16px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {errorMessage}
         </div>
       ) : null}
 
       {groupDetailErrorMessage ? (
-        <div className="rounded-[16px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="shrink-0 rounded-[16px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {groupDetailErrorMessage}
         </div>
       ) : null}
 
-      <section className="space-y-2">
+      <section className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
         {outputRoot ? (
-          <div className="rounded-[16px] bg-[var(--app-surface-strong)] px-3 py-2">
+          <div className="shrink-0 rounded-[16px] bg-[var(--app-surface-strong)] px-3 py-2">
             <div className="flex flex-wrap items-center gap-3">
             <div className="rounded-full bg-[var(--app-surface)] px-3 py-1 text-xs font-medium text-[var(--app-foreground)]">
               전체 {totalCount}장
@@ -702,7 +704,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
         ) : null}
 
         {!outputRoot ? (
-          <div className="rounded-[16px] bg-[var(--app-surface)] p-5 text-center">
+          <div className="flex-1 rounded-[16px] bg-[var(--app-surface)] p-5 text-center">
             <p className="text-sm font-semibold text-[var(--app-foreground)]">
               출력 폴더를 먼저 설정하세요.
             </p>
@@ -720,8 +722,8 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
             ) : null}
           </div>
         ) : (
-          <div className="grid gap-2.5 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)] lg:items-start">
-            <div className="space-y-2 lg:sticky lg:top-2 lg:self-start">
+          <div className="grid min-h-0 flex-1 gap-2.5 overflow-hidden lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)]">
+            <div className="min-h-0 lg:h-full">
               <OutputFolderTreePanel
                 folderTreeRoot={folderTree}
                 selectedPathSegments={pathSegments}
@@ -729,11 +731,11 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
               />
             </div>
 
-            <div className="flex min-w-0 flex-col gap-2">
-              <div className="w-full overflow-hidden rounded-[18px] bg-[var(--app-surface)]">
-                <div className="flex flex-wrap items-center gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface-strong)] px-2.5 py-2">
+            <div className="flex min-h-0 min-w-0 flex-col gap-2">
+              <div className="flex min-h-0 w-full flex-col overflow-hidden rounded-[18px] bg-[var(--app-surface)]">
+                <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface-strong)] px-2.5 py-2">
                   <nav
-                    className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-xs text-[var(--app-foreground)]"
+                    className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-sm text-[var(--app-foreground)]"
                     aria-label="폴더 경로"
                   >
                     <BreadcrumbDropdown
@@ -745,7 +747,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                     {pathSegments.map((segment, index) => (
                       <span key={`${segment}-${index}`} className="flex items-center gap-1">
                         <span className="text-[var(--app-muted)]" aria-hidden>
-                          /
+                          &gt;
                         </span>
                         <BreadcrumbDropdown
                           label={formatPathSegmentLabel(segment)}
@@ -773,7 +775,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                     <Button
                       variant="ghost"
                       className="h-7 shrink-0 rounded-[10px] border border-[var(--app-danger)] bg-[var(--app-danger)] px-2.5 text-[11px] font-medium text-[var(--app-danger-foreground)] disabled:opacity-50"
-                      disabled={
+                      isDisabled={
                         isDeletingFolder || isDeletingPhotos || isMovingPhotos
                       }
                       onPress={() => setDeleteFolderConfirmOpen(true)}
@@ -789,7 +791,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                         <Button
                           variant="primary"
                           className="h-7 rounded-[10px] bg-[var(--app-button)] px-2.5 text-xs font-medium text-[var(--app-button-foreground)] disabled:opacity-60"
-                          disabled={
+                          isDisabled={
                             selectedForMove.size === 0 ||
                             isMovingPhotos ||
                             folderCount === 0
@@ -814,7 +816,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                           <Button
                             variant="ghost"
                             className="h-7 rounded-[10px] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-foreground)] disabled:opacity-50"
-                            disabled={
+                            isDisabled={
                               groupsInCurrentFolder.length === 0 || isRenaming
                             }
                             onPress={() => {
@@ -843,7 +845,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                         <Button
                           variant="ghost"
                           className="h-7 rounded-[10px] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-foreground)] disabled:opacity-50"
-                          disabled={visibleRows.length === 0}
+                          isDisabled={visibleRows.length === 0}
                           onPress={() => toggleSelectAllVisible()}
                         >
                           {allVisibleSelected ? '목록 선택 해제' : '목록 전체 선택'}
@@ -851,7 +853,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                         <Button
                           variant="ghost"
                           className="h-7 rounded-[10px] border border-[var(--app-danger)] bg-[var(--app-danger)] px-2.5 text-xs font-medium text-[var(--app-danger-foreground)] disabled:opacity-50"
-                          disabled={
+                          isDisabled={
                             selectedForMove.size === 0 ||
                             isDeletingPhotos ||
                             isDeletingFolder ||
@@ -866,14 +868,14 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                 ) : null}
               </div>
 
-              <div className="grid min-h-0 w-full min-w-0 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(220px,290px)] lg:items-start">
-                <div className="min-h-0 min-w-0 overflow-hidden rounded-[16px] bg-[var(--app-surface)]">
+              <div className="grid min-h-0 flex-1 w-full min-w-0 gap-2 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(220px,290px)]">
+                <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] bg-[var(--app-surface)]">
                   <div className="border-b border-[var(--app-border)] px-2.5 py-1.5">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                       이 폴더의 사진
                     </h3>
                   </div>
-                  <div className="max-h-[min(55vh,720px)] overflow-y-auto">
+                  <div className="min-h-0 flex-1 overflow-y-auto">
                   {!groupAtPath && pathSegments.length > 0 ? (
                     <p className="px-4 py-8 text-center text-sm text-slate-500">
                       년·월·그룹(지역) 폴더까지 들어가면 그 안의 사진 목록을
@@ -981,15 +983,15 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                   </div>
                 </div>
 
-                <div className="min-h-0 min-w-0 lg:sticky lg:top-2 lg:self-start">
-                  <div className="rounded-[16px] bg-[var(--app-surface-strong)] p-3">
+                <div className="min-h-0 min-w-0 lg:h-full">
+                  <div className="flex h-full min-h-0 flex-col rounded-[16px] bg-[var(--app-surface-strong)] p-3">
                     <h2 className="text-sm font-semibold text-slate-900">미리보기</h2>
                     {!selectedRow ? (
                       <p className="mt-3 text-sm text-slate-600">
                         목록에서 사진을 선택하면 썸네일 미리보기가 표시됩니다.
                       </p>
                     ) : (
-                      <div className="mt-3 space-y-2.5">
+                      <div className="mt-3 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
                         <div className="overflow-hidden rounded-[14px] bg-[var(--app-surface)]">
                           {previewThumbUrl ? (
                             <img
@@ -1043,7 +1045,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
         )}
 
         {isLoadingIndex ? (
-          <p className="text-sm text-slate-500">출력 결과를 불러오는 중입니다…</p>
+          <p className="shrink-0 text-sm text-slate-500">출력 결과를 불러오는 중입니다…</p>
         ) : null}
       </section>
 
