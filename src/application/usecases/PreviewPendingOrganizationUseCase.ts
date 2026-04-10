@@ -78,6 +78,15 @@ export interface PendingOrganizationPreviewGroup {
 
 export interface PreviewPendingOrganizationResult {
   scannedCount: number
+  skippedUnchangedCount: number
+  skippedUnchangedDetails: Array<{
+    sourcePath: string
+    sourceFileName: string
+    sourceFingerprint: {
+      sizeBytes: number
+      modifiedAtMs: number
+    }
+  }>
   pendingPhotoCount: number
   skippedExistingCount: number
   groups: PendingOrganizationPreviewGroup[]
@@ -128,7 +137,11 @@ export class PreviewPendingOrganizationUseCase {
     })
     const existingIndex = this.buildExistingIndex(existingOutputSnapshot, storedIndex)
     const listedPhotoPaths = await this.dependencies.fileSystem.listPhotoFiles(sourceRoot)
-    const { candidates: sourcePhotoCandidates } =
+    const {
+      candidates: sourcePhotoCandidates,
+      skippedUnchangedCount,
+      skippedUnchangedDetails
+    } =
       await buildIncrementalSourcePhotoCandidates({
         listedPhotoPaths,
         sourceRoot,
@@ -279,6 +292,8 @@ export class PreviewPendingOrganizationUseCase {
 
     return {
       scannedCount: listedPhotoPaths.length,
+      skippedUnchangedCount,
+      skippedUnchangedDetails,
       pendingPhotoCount: canonicalCandidates.length,
       skippedExistingCount,
       groups

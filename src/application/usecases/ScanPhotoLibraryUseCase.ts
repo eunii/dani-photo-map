@@ -140,7 +140,11 @@ export class ScanPhotoLibraryUseCase {
     const listedPhotoPaths = await this.dependencies.fileSystem.listPhotoFiles(
       paths.sourceRoot
     )
-    const { candidates: sourcePhotoCandidates } =
+    const {
+      candidates: sourcePhotoCandidates,
+      skippedUnchangedCount,
+      skippedUnchangedDetails
+    } =
       await buildIncrementalSourcePhotoCandidates({
         listedPhotoPaths,
         sourceRoot: paths.sourceRoot,
@@ -209,10 +213,12 @@ export class ScanPhotoLibraryUseCase {
 
     return {
       scannedCount: listedPhotoPaths.length,
+      skippedUnchangedCount,
       duplicateCount: finalizedScanResult.duplicateCount,
       keptCount: finalizedScanResult.copiedCount,
       copiedCount: finalizedScanResult.copiedCount,
       skippedExistingCount: finalizedScanResult.skippedExistingCount,
+      skippedUnchangedDetails,
       groupCount: groups.length,
       warningCount: issues.filter((issue) => issue.severity === 'warning').length,
       failureCount: issues.filter((issue) => issue.severity === 'error').length,

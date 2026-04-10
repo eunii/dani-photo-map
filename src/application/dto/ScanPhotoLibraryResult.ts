@@ -43,12 +43,23 @@ export const existingOutputSkipDetailSchema = z.object({
   existingOutputRelativePath: z.string().min(1)
 })
 
+export const incrementalSkipDetailSchema = z.object({
+  sourcePath: z.string().min(1),
+  sourceFileName: z.string().min(1),
+  sourceFingerprint: z.object({
+    sizeBytes: z.number().int().nonnegative(),
+    modifiedAtMs: z.number().finite().nonnegative()
+  })
+})
+
 export const scanPhotoLibraryResultSchema = z.object({
   scannedCount: z.number().int().nonnegative(),
+  skippedUnchangedCount: z.number().int().nonnegative(),
   duplicateCount: z.number().int().nonnegative(),
   keptCount: z.number().int().nonnegative(),
   copiedCount: z.number().int().nonnegative(),
   skippedExistingCount: z.number().int().nonnegative(),
+  skippedUnchangedDetails: z.array(incrementalSkipDetailSchema),
   groupCount: z.number().int().nonnegative(),
   warningCount: z.number().int().nonnegative(),
   failureCount: z.number().int().nonnegative(),
@@ -65,6 +76,7 @@ export type InBatchDuplicateDetail = z.infer<
 export type ExistingOutputSkipDetail = z.infer<
   typeof existingOutputSkipDetailSchema
 >
+export type IncrementalSkipDetail = z.infer<typeof incrementalSkipDetailSchema>
 export type ScanPhotoLibraryResult = z.infer<
   typeof scanPhotoLibraryResultSchema
 >

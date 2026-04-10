@@ -1,6 +1,7 @@
 import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
 import type {
   ExistingOutputSkipDetail,
+  IncrementalSkipDetail,
   InBatchDuplicateDetail
 } from '@application/dto/ScanPhotoLibraryResult'
 import type { MissingGpsCategory } from '@domain/entities/Photo'
@@ -8,7 +9,11 @@ import type { MissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupin
 import type { PhotoAppInvokeChannel } from '@shared/ipc/photoAppChannels'
 
 export type { ScanPhotoLibraryProgressPayload }
-export type { ExistingOutputSkipDetail, InBatchDuplicateDetail }
+export type {
+  ExistingOutputSkipDetail,
+  IncrementalSkipDetail,
+  InBatchDuplicateDetail
+}
 
 export interface AppInfo {
   name: string
@@ -225,10 +230,12 @@ export interface ScanPhotoLibraryIssue {
 
 export interface ScanPhotoLibrarySummary {
   scannedCount: number
+  skippedUnchangedCount: number
   duplicateCount: number
   keptCount: number
   copiedCount: number
   skippedExistingCount: number
+  skippedUnchangedDetails: IncrementalSkipDetail[]
   groupCount: number
   warningCount: number
   failureCount: number
@@ -284,6 +291,8 @@ export interface PendingOrganizationPreviewGroup {
 
 export interface PreviewPendingOrganizationResult {
   scannedCount: number
+  skippedUnchangedCount: number
+  skippedUnchangedDetails: IncrementalSkipDetail[]
   pendingPhotoCount: number
   skippedExistingCount: number
   groups: PendingOrganizationPreviewGroup[]

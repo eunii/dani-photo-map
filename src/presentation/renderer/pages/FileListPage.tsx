@@ -6,6 +6,8 @@ import {
   useState
 } from 'react'
 
+import { buildGroupAwarePhotoOutputRelativePath } from '@domain/services/GroupAwarePhotoNamingService'
+import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import { OutputFolderTreePanel } from '@presentation/renderer/components/OutputFolderTreePanel'
 import {
   getLoadSourceBadge,
@@ -77,6 +79,30 @@ function formatCapturedLabel(iso?: string): string {
     return iso
   }
   return d.toLocaleString()
+}
+
+function toPreviewTimestamp(capturedAtIso?: string) {
+  if (!capturedAtIso) {
+    return undefined
+  }
+
+  const date = new Date(capturedAtIso)
+
+  if (Number.isNaN(date.getTime())) {
+    return undefined
+  }
+
+  return {
+    iso: capturedAtIso,
+    year: String(date.getUTCFullYear()).padStart(4, '0'),
+    month: String(date.getUTCMonth() + 1).padStart(2, '0'),
+    day: String(date.getUTCDate()).padStart(2, '0'),
+    time: [
+      String(date.getUTCHours()).padStart(2, '0'),
+      String(date.getUTCMinutes()).padStart(2, '0'),
+      String(date.getUTCSeconds()).padStart(2, '0')
+    ].join('')
+  }
 }
 
 export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
@@ -310,6 +336,55 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
       }
     ]
   }, [groupAtPath])
+  const renamePreviewRows = useMemo(() => {
+    if (!groupDetail || groupDetail.id !== renameTargetGroupId) {
+      return []
+    }
+
+    const effectiveTitle = renameNewTitle.trim() || groupDetail.displayTitle
+
+    return [...rowsInFolder]
+      .sort((left, right) => {
+        const leftIso = left.photo.capturedAtIso ?? ''
+        const rightIso = right.photo.capturedAtIso ?? ''
+
+        if (leftIso !== rightIso) {
+          return leftIso.localeCompare(rightIso)
+        }
+
+        return left.photo.sourceFileName.localeCompare(right.photo.sourceFileName)
+      })
+      .map((row, index) => {
+        const nextOutputRelativePath = buildGroupAwarePhotoOutputRelativePath(
+          {
+            sourceFileName: row.photo.sourceFileName,
+            capturedAt: toPreviewTimestamp(row.photo.capturedAtIso),
+            gps: row.photo.gps,
+            regionName: row.photo.regionName,
+            missingGpsCategory: row.photo.missingGpsCategory
+          },
+          effectiveTitle,
+          index + 1,
+          defaultOrganizationRules
+        )
+
+        return {
+          photoId: row.photo.id,
+          sourceFileName: row.photo.sourceFileName,
+          currentOutputRelativePath: row.photo.outputRelativePath,
+          nextOutputRelativePath,
+          willChange: row.photo.outputRelativePath !== nextOutputRelativePath
+        }
+      })
+  }, [groupDetail, renameNewTitle, renameTargetGroupId, rowsInFolder])
+  const renamePreviewSummary = useMemo(() => {
+    const changedCount = renamePreviewRows.filter((row) => row.willChange).length
+
+    return {
+      changedCount,
+      unchangedCount: Math.max(0, renamePreviewRows.length - changedCount)
+    }
+  }, [renamePreviewRows])
 
   const toggleMoveSelection = useCallback((photoId: string) => {
     setSelectedForMove((previous) => {
@@ -1152,6 +1227,77 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </label>
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">
+                    저장 전 예상 파일명 미리보기
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    실제 저장 시 기존 파일 충돌이 있으면 시퀀스 번호는 달라질 수
+                    있습니다.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
+                  <span className="rounded-full bg-white px-2 py-1">
+                    변경 {renamePreviewSummary.changedCount}장
+                  </span>
+                  <span className="rounded-full bg-white px-2 py-1">
+                    유지 {renamePreviewSummary.unchangedCount}장
+                  </span>
+                </div>
+              </div>
+              <div className="mt-3 space-y-2">
+                {renamePreviewRows.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    현재 선택된 폴더의 사진 미리보기를 불러오지 못했습니다.
+                  </p>
+                ) : (
+                  <>
+                    {renamePreviewRows.slice(0, 6).map((row) => (
+                      <div
+                        key={row.photoId}
+                        className="rounded-lg border border-slate-200 bg-white p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium text-slate-900">
+                            {row.sourceFileName}
+                          </p>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              row.willChange
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {row.willChange ? '변경 예정' : '변경 없음'}
+                          </span>
+                        </div>
+                        <div className="mt-2 grid gap-2 text-[11px] text-slate-600">
+                          <div>
+                            <p className="font-medium text-slate-500">현재</p>
+                            <p className="break-all">
+                              {row.currentOutputRelativePath ?? '출력 경로 없음'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="font-medium text-slate-500">예상</p>
+                            <p className="break-all text-slate-800">
+                              {row.nextOutputRelativePath}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {renamePreviewRows.length > 6 ? (
+                      <p className="text-xs text-slate-500">
+                        총 {renamePreviewRows.length}장 중 처음 6장만 표시합니다.
+                      </p>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            </div>
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"

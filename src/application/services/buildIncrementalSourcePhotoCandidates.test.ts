@@ -64,6 +64,16 @@ describe('buildIncrementalSourcePhotoCandidates', () => {
     })
 
     expect(result.skippedUnchangedCount).toBe(1)
+    expect(result.skippedUnchangedDetails).toEqual([
+      {
+        sourcePath: 'C:/photos/source/a.jpg',
+        sourceFileName: 'a.jpg',
+        sourceFingerprint: {
+          sizeBytes: 100,
+          modifiedAtMs: 1_710_000_000_000
+        }
+      }
+    ])
     expect(result.candidates).toHaveLength(1)
     expect(result.candidates[0]).toMatchObject({
       sourcePath: 'C:/photos/source/b.jpg',
@@ -88,6 +98,7 @@ describe('buildIncrementalSourcePhotoCandidates', () => {
     })
 
     expect(result.skippedUnchangedCount).toBe(0)
+    expect(result.skippedUnchangedDetails).toEqual([])
     expect(result.candidates).toEqual([
       {
         sourcePath: 'C:/photos/source/a.jpg',

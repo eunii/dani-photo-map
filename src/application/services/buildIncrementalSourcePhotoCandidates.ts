@@ -15,6 +15,12 @@ export interface SourcePhotoCandidate {
   sourceFingerprint?: SourcePhotoFingerprint
 }
 
+export interface IncrementalSkipDetail {
+  sourcePath: string
+  sourceFileName: string
+  sourceFingerprint: SourcePhotoFingerprint
+}
+
 interface IncrementalFingerprintReader {
   getPhotoFileFingerprint?: (
     absolutePath: string
@@ -29,6 +35,7 @@ export async function buildIncrementalSourcePhotoCandidates(params: {
 }): Promise<{
   candidates: SourcePhotoCandidate[]
   skippedUnchangedCount: number
+  skippedUnchangedDetails: IncrementalSkipDetail[]
 }> {
   const { fileSystem, listedPhotoPaths, sourceRoot, storedIndex } = params
 
@@ -59,7 +66,8 @@ export async function buildIncrementalSourcePhotoCandidates(params: {
           sourceFileName: getPathBaseName(sourcePath)
         }
       }),
-      skippedUnchangedCount: 0
+      skippedUnchangedCount: 0,
+      skippedUnchangedDetails: []
     }
   }
 
@@ -86,10 +94,18 @@ export async function buildIncrementalSourcePhotoCandidates(params: {
       }
     }
   )
+  const skippedUnchangedDetails: IncrementalSkipDetail[] = []
 
   for (const result of results) {
     if (result.isUnchanged) {
       skippedUnchangedCount += 1
+      if (result.sourceFingerprint) {
+        skippedUnchangedDetails.push({
+          sourcePath: result.sourcePath,
+          sourceFileName: result.sourceFileName,
+          sourceFingerprint: result.sourceFingerprint
+        })
+      }
       continue
     }
 
@@ -102,6 +118,7 @@ export async function buildIncrementalSourcePhotoCandidates(params: {
 
   return {
     candidates,
-    skippedUnchangedCount
+    skippedUnchangedCount,
+    skippedUnchangedDetails
   }
 }

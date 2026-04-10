@@ -44,6 +44,50 @@ const SCAN_ISSUE_STAGES: ScanPhotoLibraryIssue['stage'][] = [
   'copy',
   'thumbnail'
 ]
+const ISSUE_QUICK_FILTERS = [
+  {
+    key: 'all',
+    label: '전체 code',
+    codeQuery: '',
+    stage: 'all' as const
+  },
+  {
+    key: 'metadata',
+    label: '메타데이터 실패',
+    codeQuery: 'metadata-read-failed',
+    stage: 'metadata-read' as const
+  },
+  {
+    key: 'hash',
+    label: '해시 관련',
+    codeQuery: 'hash',
+    stage: 'hash' as const
+  },
+  {
+    key: 'region',
+    label: '지역 해석 실패',
+    codeQuery: 'region-resolve-failed',
+    stage: 'region-resolve' as const
+  },
+  {
+    key: 'copy',
+    label: '복사 관련',
+    codeQuery: 'copy',
+    stage: 'copy' as const
+  },
+  {
+    key: 'copy-conflict',
+    label: '복사 충돌',
+    codeQuery: 'copy-destination-conflict',
+    stage: 'copy' as const
+  },
+  {
+    key: 'thumbnail',
+    label: '썸네일 실패',
+    codeQuery: 'thumbnail',
+    stage: 'thumbnail' as const
+  }
+] as const
 
 function fileUrlFromAbsolutePath(absolutePath: string): string {
   const normalized = normalizePathSeparators(absolutePath)
@@ -99,6 +143,8 @@ function mergeScanSummaries(
 
   return {
     scannedCount: Math.max(previous.scannedCount, next.scannedCount),
+    skippedUnchangedCount:
+      previous.skippedUnchangedCount + next.skippedUnchangedCount,
     duplicateCount: previous.duplicateCount + next.duplicateCount,
     keptCount: previous.keptCount + next.keptCount,
     copiedCount: previous.copiedCount + next.copiedCount,
@@ -114,6 +160,10 @@ function mergeScanSummaries(
     existingOutputSkipDetails: [
       ...previous.existingOutputSkipDetails,
       ...next.existingOutputSkipDetails
+    ],
+    skippedUnchangedDetails: [
+      ...previous.skippedUnchangedDetails,
+      ...next.skippedUnchangedDetails
     ],
     mapGroups: next.mapGroups
   }
@@ -183,6 +233,82 @@ function getIssueSeverityBadgeClass(
     : 'border-amber-200 bg-amber-50 text-amber-700'
 }
 
+function isIssueQuickFilterActive(
+  filter: (typeof ISSUE_QUICK_FILTERS)[number],
+  stage: 'all' | ScanPhotoLibraryIssue['stage'],
+  codeQuery: string
+): boolean {
+  return filter.stage === stage && filter.codeQuery === codeQuery
+}
+
+function formatIncrementalSkipListForClipboard(
+  rows: PreviewPendingOrganizationResult['skippedUnchangedDetails']
+): string {
+  return rows
+    .map(
+      (row) =>
+        [
+          `sourceFileName: ${row.sourceFileName}`,
+          `sourcePath: ${row.sourcePath}`,
+          `sizeBytes: ${row.sourceFingerprint.sizeBytes}`,
+          `modifiedAtMs: ${row.sourceFingerprint.modifiedAtMs}`
+        ].join('\n')
+    )
+    .join('\n\n')
+}
+
+function formatDuplicateListForClipboard(
+  rows: Array<{
+    canonicalSourcePath: string
+    duplicateSourcePaths: string[]
+  }>
+): string {
+  return rows
+    .map((row) =>
+      [
+        `canonical: ${row.canonicalSourcePath}`,
+        ...row.duplicateSourcePaths.map((path) => `duplicate: ${path}`)
+      ].join('\n')
+    )
+    .join('\n\n')
+}
+
+function formatExistingSkipListForClipboard(
+  rows: ScanPhotoLibrarySummary['existingOutputSkipDetails']
+): string {
+  return rows
+    .map((row) =>
+      [
+        `sourcePhotoId: ${row.sourcePhotoId}`,
+        `sourcePath: ${row.sourcePath}`,
+        `existingOutputRelativePath: ${row.existingOutputRelativePath}`,
+        `sha256: ${row.sha256}`
+      ].join('\n')
+    )
+    .join('\n\n')
+}
+
+function formatIssueListForClipboard(rows: ScanPhotoLibrarySummary['issues']): string {
+  return rows
+    .map((issue) =>
+      [
+        `severity: ${issue.severity}`,
+        `stage: ${issue.stage}`,
+        `code: ${issue.code}`,
+        `sourcePath: ${issue.sourcePath}`,
+        issue.photoId ? `photoId: ${issue.photoId}` : null,
+        issue.outputRelativePath
+          ? `outputRelativePath: ${issue.outputRelativePath}`
+          : null,
+        issue.destinationPath ? `destinationPath: ${issue.destinationPath}` : null,
+        `message: ${issue.message}`
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join('\n')
+    )
+    .join('\n\n')
+}
+
 function getMissingGpsCategoryLabel(
   category?: PreviewPendingOrganizationResult['groups'][number]['missingGpsCategory']
 ): string | null {
@@ -235,6 +361,10 @@ function formatMissingGpsFolderPattern(
 
 type GroupSavePhase = 'idle' | 'queued' | 'saving' | 'done' | 'error'
 type IssueSeverityFilter = 'all' | ScanPhotoLibraryIssue['severity']
+type DuplicateSortOption = 'duplicates-desc' | 'path-asc'
+type IncrementalSkipSortOption = 'path-asc' | 'mtime-desc'
+type ExistingSkipSortOption = 'path-asc' | 'hash-asc'
+type IssueSortOption = 'severity-stage-path' | 'path-asc' | 'code-asc'
 
 function formatGroupSavePhaseLabel(phase: GroupSavePhase): string {
   switch (phase) {
@@ -396,6 +526,7 @@ export function OrganizePage({
   )
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [resultActionMessage, setResultActionMessage] = useState<string | null>(null)
   const [summary, setSummary] = useState<ScanPhotoLibrarySummary | null>(null)
   const [previewResult, setPreviewResult] =
     useState<PreviewPendingOrganizationResult | null>(null)
@@ -434,8 +565,14 @@ export function OrganizePage({
     useState(false)
   const [photosSavedCount, setPhotosSavedCount] = useState(0)
   const [openScanResultDetail, setOpenScanResultDetail] = useState<
-    null | 'inBatchDup' | 'existingSkip' | 'warnings' | 'failures'
+    null
+    | 'inBatchDup'
+    | 'incrementalSkip'
+    | 'existingSkip'
+    | 'warnings'
+    | 'failures'
   >(null)
+  const [incrementalSkipPathQuery, setIncrementalSkipPathQuery] = useState('')
   const [issueSeverityFilter, setIssueSeverityFilter] =
     useState<IssueSeverityFilter>('all')
   const [issueStageFilter, setIssueStageFilter] = useState<
@@ -444,8 +581,16 @@ export function OrganizePage({
   const [issueCodeQuery, setIssueCodeQuery] = useState('')
   const [issueSourcePathQuery, setIssueSourcePathQuery] = useState('')
   const [duplicatePathQuery, setDuplicatePathQuery] = useState('')
+  const [duplicateSort, setDuplicateSort] =
+    useState<DuplicateSortOption>('duplicates-desc')
   const [existingSkipPathQuery, setExistingSkipPathQuery] = useState('')
   const [existingSkipHashQuery, setExistingSkipHashQuery] = useState('')
+  const [existingSkipSort, setExistingSkipSort] =
+    useState<ExistingSkipSortOption>('hash-asc')
+  const [incrementalSkipSort, setIncrementalSkipSort] =
+    useState<IncrementalSkipSortOption>('path-asc')
+  const [issueSort, setIssueSort] =
+    useState<IssueSortOption>('severity-stage-path')
   const [activeSaveJobMeta, setActiveSaveJobMeta] = useState<{
     progressOffsetBeforeJob: number
     groupPhotoCount: number
@@ -517,13 +662,17 @@ export function OrganizePage({
         )
       })
       .sort((left, right) => {
+        if (duplicateSort === 'path-asc') {
+          return left.canonicalSourcePath.localeCompare(right.canonicalSourcePath)
+        }
+
         if (left.duplicateSourcePaths.length !== right.duplicateSourcePaths.length) {
           return right.duplicateSourcePaths.length - left.duplicateSourcePaths.length
         }
 
         return left.canonicalSourcePath.localeCompare(right.canonicalSourcePath)
       })
-  }, [duplicatePathQuery, groupedInBatchDuplicates])
+  }, [duplicatePathQuery, duplicateSort, groupedInBatchDuplicates])
   const reviewedExistingSkips = useMemo(() => {
     if (!summary) {
       return []
@@ -551,13 +700,42 @@ export function OrganizePage({
           : row.sha256.toLocaleLowerCase().includes(normalizedHashQuery)
       )
       .sort((left, right) => {
+        if (existingSkipSort === 'path-asc') {
+          return left.sourcePath.localeCompare(right.sourcePath)
+        }
+
         if (left.sha256 !== right.sha256) {
           return left.sha256.localeCompare(right.sha256)
         }
 
         return left.sourcePath.localeCompare(right.sourcePath)
       })
-  }, [existingSkipHashQuery, existingSkipPathQuery, summary])
+  }, [existingSkipHashQuery, existingSkipPathQuery, existingSkipSort, summary])
+  const reviewedIncrementalSkips = useMemo(() => {
+    if (!summary) {
+      return []
+    }
+
+    const normalizedPathQuery = incrementalSkipPathQuery
+      .trim()
+      .toLocaleLowerCase()
+
+    return summary.skippedUnchangedDetails
+      .filter((row) =>
+        normalizedPathQuery.length === 0
+          ? true
+          : row.sourcePath.toLocaleLowerCase().includes(normalizedPathQuery)
+      )
+      .sort((left, right) => {
+        if (incrementalSkipSort === 'mtime-desc') {
+          return (
+            right.sourceFingerprint.modifiedAtMs - left.sourceFingerprint.modifiedAtMs
+          )
+        }
+
+        return left.sourcePath.localeCompare(right.sourcePath)
+      })
+  }, [incrementalSkipPathQuery, incrementalSkipSort, summary])
   const issueStageOptions = useMemo(() => {
     if (!summary) {
       return []
@@ -597,6 +775,18 @@ export function OrganizePage({
           : issue.sourcePath.toLocaleLowerCase().includes(normalizedSourcePathQuery)
       )
       .sort((left, right) => {
+        if (issueSort === 'path-asc') {
+          return left.sourcePath.localeCompare(right.sourcePath)
+        }
+
+        if (issueSort === 'code-asc') {
+          if (left.code !== right.code) {
+            return left.code.localeCompare(right.code)
+          }
+
+          return left.sourcePath.localeCompare(right.sourcePath)
+        }
+
         if (left.severity !== right.severity) {
           return left.severity === 'error' ? -1 : 1
         }
@@ -614,6 +804,7 @@ export function OrganizePage({
   }, [
     issueCodeQuery,
     issueSeverityFilter,
+    issueSort,
     issueSourcePathQuery,
     issueStageFilter,
     summary
@@ -853,7 +1044,12 @@ export function OrganizePage({
   ])
 
   function handleToggleScanResultDetail(
-    detail: 'inBatchDup' | 'existingSkip' | 'warnings' | 'failures'
+    detail:
+      | 'inBatchDup'
+      | 'incrementalSkip'
+      | 'existingSkip'
+      | 'warnings'
+      | 'failures'
   ): void {
     const isClosing = openScanResultDetail === detail
 
@@ -877,9 +1073,40 @@ export function OrganizePage({
       setDuplicatePathQuery('')
     }
 
+    if (detail === 'incrementalSkip' && !isClosing) {
+      setIncrementalSkipPathQuery('')
+    }
+
     if (detail === 'existingSkip' && !isClosing) {
       setExistingSkipPathQuery('')
       setExistingSkipHashQuery('')
+    }
+  }
+
+  function applyIssueQuickFilter(
+    filter: (typeof ISSUE_QUICK_FILTERS)[number]
+  ): void {
+    setIssueStageFilter(filter.stage)
+    setIssueCodeQuery(filter.codeQuery)
+  }
+
+  async function copyResultDetail(
+    text: string,
+    successMessage: string
+  ): Promise<void> {
+    if (!text.trim()) {
+      setResultActionMessage(null)
+      setErrorMessage('복사할 내용이 없습니다.')
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(text)
+      setErrorMessage(null)
+      setResultActionMessage(successMessage)
+    } catch {
+      setResultActionMessage(null)
+      setErrorMessage('클립보드 복사에 실패했습니다.')
     }
   }
 
@@ -1338,6 +1565,11 @@ export function OrganizePage({
           {errorMessage}
         </div>
       ) : null}
+      {resultActionMessage ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {resultActionMessage}
+        </div>
+      ) : null}
 
       {bulkSaveActive && savePipelineBusy ? (
         <section
@@ -1544,6 +1776,12 @@ export function OrganizePage({
                   신규 정리 대상 {previewResult.pendingPhotoCount}장, 기존 중복
                   스킵 예정 {previewResult.skippedExistingCount}장
                 </p>
+                {previewResult.skippedUnchangedCount > 0 ? (
+                  <p className="text-sm text-sky-700">
+                    증분 재스캔 기준으로 변경 없는 입력{' '}
+                    {previewResult.skippedUnchangedCount}장은 준비 단계에서 건너뛰었습니다.
+                  </p>
+                ) : null}
                 {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
                   <p className="text-sm font-medium text-sky-900">
                     그룹 {wizardStepIndex + 1} / {orderedPreviewGroups.length} — GPS
@@ -1853,11 +2091,17 @@ export function OrganizePage({
                 결과 조회로 이동
               </button>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <div className="rounded-lg bg-white px-4 py-3">
                 <p className="text-xs text-slate-500">스캔 수</p>
                 <p className="text-xl font-semibold text-slate-900">
                   {summary.scannedCount}
+                </p>
+              </div>
+              <div className="rounded-lg bg-white px-4 py-3">
+                <p className="text-xs text-slate-500">증분 스킵 수</p>
+                <p className="text-xl font-semibold text-slate-900">
+                  {summary.skippedUnchangedCount}
                 </p>
               </div>
               <div className="rounded-lg bg-white px-4 py-3">
@@ -1895,6 +2139,23 @@ export function OrganizePage({
                   {summary.duplicateCount}
                 </p>
                 <p className="mt-1 text-[11px] text-slate-500">탭하여 쌍 비교</p>
+              </button>
+              <button
+                type="button"
+                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                  openScanResultDetail === 'incrementalSkip'
+                    ? 'border-emerald-500 bg-emerald-100'
+                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+                onClick={() => handleToggleScanResultDetail('incrementalSkip')}
+              >
+                <p className="text-xs text-slate-500">증분 스킵 (준비 단계)</p>
+                <p className="text-xl font-semibold text-slate-900">
+                  {summary.skippedUnchangedCount}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  sourcePath + size + mtime 기준
+                </p>
               </button>
               <button
                 type="button"
@@ -1960,6 +2221,20 @@ export function OrganizePage({
                     {groupedInBatchDuplicates.length}
                   </p>
                 </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() =>
+                      void copyResultDetail(
+                        formatDuplicateListForClipboard(reviewedInBatchDuplicates),
+                        '중복 검토 목록을 복사했습니다.'
+                      )
+                    }
+                  >
+                    목록 복사
+                  </button>
+                </div>
                 <label className="mt-3 block space-y-1">
                   <span className="text-[11px] font-medium text-slate-600">
                     sourcePath 검색
@@ -1970,6 +2245,21 @@ export function OrganizePage({
                     placeholder="canonical 또는 duplicate 경로 일부 검색"
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
                   />
+                </label>
+                <label className="mt-3 block space-y-1">
+                  <span className="text-[11px] font-medium text-slate-600">
+                    정렬
+                  </span>
+                  <select
+                    value={duplicateSort}
+                    onChange={(event) =>
+                      setDuplicateSort(event.target.value as DuplicateSortOption)
+                    }
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="duplicates-desc">duplicate 수 많은 순</option>
+                    <option value="path-asc">canonical 경로순</option>
+                  </select>
                 </label>
                 {reviewedInBatchDuplicates.length === 0 ? (
                   <p className="mt-2 text-sm text-slate-600">해당 없음</p>
@@ -2042,6 +2332,100 @@ export function OrganizePage({
               </div>
             ) : null}
 
+            {openScanResultDetail === 'incrementalSkip' ? (
+              <div className="rounded-lg border border-emerald-200 bg-white p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800">
+                      증분 재스캔으로 건너뛴 입력 검토
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      이전 저장 fingerprint 와 현재 `sourcePath + size + mtime` 이
+                      같아 준비 단계에서 제외된 원본 파일입니다.
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    필터 결과 {reviewedIncrementalSkips.length} / 전체{' '}
+                    {summary.skippedUnchangedDetails.length}
+                  </p>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() =>
+                      void copyResultDetail(
+                        formatIncrementalSkipListForClipboard(reviewedIncrementalSkips),
+                        '증분 스킵 목록을 복사했습니다.'
+                      )
+                    }
+                  >
+                    목록 복사
+                  </button>
+                </div>
+                <label className="mt-3 block space-y-1">
+                  <span className="text-[11px] font-medium text-slate-600">
+                    sourcePath 검색
+                  </span>
+                  <input
+                    value={incrementalSkipPathQuery}
+                    onChange={(event) =>
+                      setIncrementalSkipPathQuery(event.target.value)
+                    }
+                    placeholder="증분 스킵된 원본 경로 검색"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                  />
+                </label>
+                <label className="mt-3 block space-y-1">
+                  <span className="text-[11px] font-medium text-slate-600">
+                    정렬
+                  </span>
+                  <select
+                    value={incrementalSkipSort}
+                    onChange={(event) =>
+                      setIncrementalSkipSort(
+                        event.target.value as IncrementalSkipSortOption
+                      )
+                    }
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="path-asc">경로순</option>
+                    <option value="mtime-desc">mtime 최신순</option>
+                  </select>
+                </label>
+                {reviewedIncrementalSkips.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-600">해당 없음</p>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {reviewedIncrementalSkips.map((row, index) => (
+                      <li
+                        key={`${row.sourcePath}-${index}`}
+                        className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800"
+                      >
+                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
+                          <span className="rounded-full bg-white px-2 py-1">
+                            {row.sourceFileName}
+                          </span>
+                          <span className="rounded-full bg-white px-2 py-1">
+                            {row.sourceFingerprint.sizeBytes} bytes
+                          </span>
+                          <span className="rounded-full bg-white px-2 py-1">
+                            mtime{' '}
+                            {new Date(
+                              row.sourceFingerprint.modifiedAtMs
+                            ).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="mt-2 break-all text-slate-700">
+                          {row.sourcePath}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+
             {openScanResultDetail === 'existingSkip' ? (
               <div className="rounded-lg border border-emerald-200 bg-white p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -2057,6 +2441,20 @@ export function OrganizePage({
                     필터 결과 {reviewedExistingSkips.length} / 전체{' '}
                     {summary.existingOutputSkipDetails.length}
                   </p>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() =>
+                      void copyResultDetail(
+                        formatExistingSkipListForClipboard(reviewedExistingSkips),
+                        '기존 출력 스킵 목록을 복사했습니다.'
+                      )
+                    }
+                  >
+                    목록 복사
+                  </button>
                 </div>
                 <div className="mt-3 grid gap-3 lg:grid-cols-2">
                   <label className="space-y-1">
@@ -2082,6 +2480,23 @@ export function OrganizePage({
                     />
                   </label>
                 </div>
+                <label className="mt-3 block space-y-1">
+                  <span className="text-[11px] font-medium text-slate-600">
+                    정렬
+                  </span>
+                  <select
+                    value={existingSkipSort}
+                    onChange={(event) =>
+                      setExistingSkipSort(
+                        event.target.value as ExistingSkipSortOption
+                      )
+                    }
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="hash-asc">SHA-256 기준</option>
+                    <option value="path-asc">원본 경로순</option>
+                  </select>
+                </label>
                 {reviewedExistingSkips.length === 0 ? (
                   <p className="mt-2 text-sm text-slate-600">해당 없음</p>
                 ) : (
@@ -2180,6 +2595,20 @@ export function OrganizePage({
                     필터 결과 {reviewedIssues.length} / 전체 {summary.issues.length}
                   </p>
                 </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() =>
+                      void copyResultDetail(
+                        formatIssueListForClipboard(reviewedIssues),
+                        '이슈 검토 목록을 복사했습니다.'
+                      )
+                    }
+                  >
+                    목록 복사
+                  </button>
+                </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   {([
@@ -2198,6 +2627,26 @@ export function OrganizePage({
                       onClick={() => setIssueSeverityFilter(value)}
                     >
                       {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {ISSUE_QUICK_FILTERS.map((filter) => (
+                    <button
+                      type="button"
+                      key={filter.key}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                        isIssueQuickFilterActive(
+                          filter,
+                          issueStageFilter,
+                          issueCodeQuery
+                        )
+                          ? 'border-emerald-700 bg-emerald-700 text-white'
+                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                      onClick={() => applyIssueQuickFilter(filter)}
+                    >
+                      {filter.label}
                     </button>
                   ))}
                 </div>
@@ -2247,6 +2696,22 @@ export function OrganizePage({
                     />
                   </label>
                 </div>
+                <label className="mt-3 block space-y-1">
+                  <span className="text-[11px] font-medium text-slate-600">
+                    정렬
+                  </span>
+                  <select
+                    value={issueSort}
+                    onChange={(event) =>
+                      setIssueSort(event.target.value as IssueSortOption)
+                    }
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="severity-stage-path">severity/stage 기준</option>
+                    <option value="path-asc">sourcePath 기준</option>
+                    <option value="code-asc">code 기준</option>
+                  </select>
+                </label>
 
                 {reviewedIssues.length === 0 ? (
                   <p className="mt-3 text-sm text-slate-600">
