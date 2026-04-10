@@ -1398,28 +1398,28 @@ export function OrganizePage({
   }
 
   return (
-    <div className="space-y-6">
-      <Card className="app-surface-card border-0 shadow-none">
-        <div className="grid gap-4 px-5 py-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(300px,0.9fr)]">
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--app-accent-strong)]">
-                Source Library
-              </p>
-              <h2 className="text-lg font-semibold text-[var(--app-foreground)]">
-                원본 사진 폴더
-              </h2>
-              <p className="text-sm text-[var(--app-muted)]">
-                원본 폴더를 스캔해 그룹별 정리 후보를 만들고, 메타를 보완한 뒤 저장합니다.
-              </p>
-            </div>
-            <div className="rounded-[24px] border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm text-[var(--app-muted)]">
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto overflow-x-hidden">
+      <div className="shrink-0 space-y-1.5">
+      <section className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-2.5 py-2">
+        <div className="flex flex-col gap-2">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <span className="shrink-0 text-sm font-semibold text-[var(--app-foreground)]">
+              원본 사진 폴더
+            </span>
+            <div
+              className={`min-h-8 min-w-0 flex-1 truncate rounded-xl px-2 py-1.5 text-[12px] leading-snug ${
+                sourceRoot
+                  ? 'border border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_10%,var(--app-surface)_90%)] text-[var(--app-foreground)]'
+                  : 'border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)]'
+              }`}
+              title={sourceRoot || undefined}
+            >
               {sourceRoot || '아직 선택되지 않았습니다.'}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex shrink-0 flex-wrap gap-1.5">
               <Button
-                variant="primary"
-                className="rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
+                variant="secondary"
+                className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-3 text-[12px] font-medium text-[var(--app-foreground)] hover:bg-[color:color-mix(in_srgb,var(--app-foreground)_6%,var(--app-surface-strong)_94%)]"
                 onPress={() => void selectSourceRoot()}
               >
                 원본 폴더 선택
@@ -1427,35 +1427,63 @@ export function OrganizePage({
               {!previewResult ? (
                 <Button
                   variant="secondary"
-                  className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
+                  className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-[12px] font-semibold text-[var(--app-foreground)] shadow-sm hover:border-[var(--app-foreground)]/20 hover:bg-[var(--app-surface-strong)]"
                   isDisabled={isLoadingPreview}
                   onPress={() => void handlePreview()}
                 >
-                  {isLoadingPreview ? '후보 불러오는 중...' : '정리 시작하기'}
+                  {isLoadingPreview ? '불러오는 중…' : '정리 시작하기'}
                 </Button>
               ) : null}
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-4">
-              <p className="text-xs text-[var(--app-muted)]">현재 단계</p>
-              <p className="mt-2 text-lg font-semibold text-[var(--app-foreground)]">
-                {previewResult ? '후보 검토 및 저장' : '원본 스캔 준비'}
+          <div
+            className="border-t border-[var(--app-border)] pt-2"
+            title="GPS 없음만 아래 기준으로 묶습니다. GPS 있음은 월별로 유지됩니다."
+          >
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+              <p className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-[var(--app-muted)]">
+                GPS 없음 그룹 기준
               </p>
-            </div>
-            <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-4">
-              <p className="text-xs text-[var(--app-muted)]">출력 폴더</p>
-              <p className="mt-2 line-clamp-3 text-sm font-medium text-[var(--app-foreground)]">
-                {outputRoot || '설정 필요'}
-              </p>
+              <div className="flex min-w-0 flex-wrap gap-1">
+                {MISSING_GPS_GROUPING_OPTIONS.map((option) => {
+                  const isSelected = missingGpsGroupingBasis === option.value
+
+                  return (
+                    <Button
+                      key={option.value}
+                      size="sm"
+                      variant={isSelected ? 'primary' : 'secondary'}
+                      className={`h-7 min-w-0 rounded-full px-2.5 text-[11px] ${
+                        isSelected
+                          ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
+                          : 'border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]'
+                      }`}
+                      isDisabled={isLoadingPreview || savePipelineBusy}
+                      onPress={() => {
+                        if (option.value === missingGpsGroupingBasis) {
+                          return
+                        }
+
+                        setMissingGpsGroupingBasis(option.value)
+
+                        if (previewResult && sourceRoot && outputRoot) {
+                          void handlePreview(option.value)
+                        }
+                      }}
+                    >
+                      {option.label}
+                    </Button>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </Card>
+      </section>
 
       {!outputRoot ? (
-        <section className="rounded-[28px] border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] p-5">
+        <section className="rounded-2xl border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
               <h2 className="text-sm font-semibold text-[var(--app-foreground)]">
@@ -1478,112 +1506,60 @@ export function OrganizePage({
         </section>
       ) : null}
 
-      <section className="rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface)] p-5">
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <h2 className="text-sm font-semibold text-[var(--app-foreground)]">
-              GPS 없는 사진 그룹 기준
-            </h2>
-            <p className="text-sm text-[var(--app-muted)]">
-              GPS 없는 사진만 선택한 기준으로 추천하고 저장합니다. GPS 있는 사진은
-              계속 월별로 유지됩니다.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {MISSING_GPS_GROUPING_OPTIONS.map((option) => {
-              const isSelected = missingGpsGroupingBasis === option.value
-
-              return (
+      <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-2.5 py-2">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {previewResult ? (
+              <>
+                {hasPendingPreviewGroups && orderedPreviewGroups.length > 1 ? (
+                  <Button
+                    variant="secondary"
+                    className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[12px] text-[var(--app-foreground)]"
+                    isDisabled={savePipelineBusy || wizardStepIndex === 0}
+                    onPress={() =>
+                      setWizardStepIndex((step) => Math.max(0, step - 1))
+                    }
+                  >
+                    이전 그룹
+                  </Button>
+                ) : null}
                 <Button
-                  key={option.value}
-                  variant={isSelected ? 'primary' : 'secondary'}
-                  className={`rounded-full ${
-                    isSelected
-                      ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
-                      : 'border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]'
-                  }`}
+                  variant="secondary"
+                  className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[12px] text-[var(--app-foreground)]"
                   isDisabled={isLoadingPreview || savePipelineBusy}
-                  onPress={() => {
-                    if (option.value === missingGpsGroupingBasis) {
-                      return
-                    }
-
-                    setMissingGpsGroupingBasis(option.value)
-
-                    if (previewResult && sourceRoot && outputRoot) {
-                      void handlePreview(option.value)
-                    }
-                  }}
+                  onPress={() => void handlePreview()}
                 >
-                  {option.label}
+                  후보 다시 불러오기
                 </Button>
-              )
-            })}
+                {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
+                  <Button
+                    variant="primary"
+                    className="h-8 rounded-xl bg-[var(--app-accent)] px-2.5 text-[12px] text-[var(--app-accent-foreground)]"
+                    isDisabled={
+                      isLoadingPreview ||
+                      savePipelineBusy ||
+                      orderedPreviewGroups.length === 0
+                    }
+                    onPress={() => enqueueSaveAllGroups()}
+                  >
+                    이후 그룹 전체 저장하기
+                  </Button>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-[10px] leading-snug text-[var(--app-muted)]">
+                위에서 원본을 고르고 「정리 시작하기」로 후보를 만듭니다. 출력
+                폴더는 설정에서 지정합니다.
+              </p>
+            )}
           </div>
-          <p className="text-xs text-[var(--app-muted)]">
-            실제 폴더: `{formatMissingGpsFolderPattern(missingGpsGroupingBasis)}`.
-            주별은 `week1`, `week2` 식으로 월 안에서 나뉩니다.
-          </p>
+          {previewResult ? (
+            <p className="text-[10px] leading-snug text-[var(--app-muted)]">
+              그룹 메타 입력 후 카드에서 저장하거나 일괄 저장으로 이어서 처리합니다.
+              GPS 없는 그룹은 마지막입니다.
+            </p>
+          ) : null}
         </div>
-      </section>
-
-      <div className="rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-4">
-        <div className="flex flex-wrap items-center gap-3">
-        {!previewResult ? (
-          <Button
-            variant="primary"
-            className="rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
-            isDisabled={isLoadingPreview}
-            onPress={() => void handlePreview()}
-          >
-            {isLoadingPreview ? '후보 불러오는 중...' : '정리 시작하기'}
-          </Button>
-        ) : (
-          <>
-            {hasPendingPreviewGroups && orderedPreviewGroups.length > 1 ? (
-              <Button
-                variant="secondary"
-                className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
-                isDisabled={savePipelineBusy || wizardStepIndex === 0}
-                onPress={() =>
-                  setWizardStepIndex((step) => Math.max(0, step - 1))
-                }
-              >
-                이전 그룹
-              </Button>
-            ) : null}
-            <Button
-              variant="secondary"
-              className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
-              isDisabled={isLoadingPreview || savePipelineBusy}
-              onPress={() => void handlePreview()}
-            >
-              후보 다시 불러오기
-            </Button>
-            {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
-              <Button
-                variant="primary"
-                className="rounded-2xl bg-emerald-600 text-white"
-                isDisabled={
-                  isLoadingPreview ||
-                  savePipelineBusy ||
-                  orderedPreviewGroups.length === 0
-                }
-                onPress={() => enqueueSaveAllGroups()}
-              >
-                이후 그룹 전체 저장하기
-              </Button>
-            ) : null}
-          </>
-        )}
-        <p className="text-sm text-[var(--app-muted)]">
-          그룹마다 메타를 입력한 뒤 카드에서 한 그룹씩 저장하거나, 위의
-          「이후 그룹 전체 저장하기」로 현재 카드 그룹부터 끝까지 입력값을
-          한 번에 적용해 순서대로 복사합니다. 진행이 길면 아래 진행 표시를
-          확인하세요. 완료 후 실행 결과 요약이 표시됩니다. GPS 없는 그룹은
-          순서상 마지막에 처리됩니다.
-        </p>
-      </div>
       </div>
 
       {errorMessage ? (
@@ -1592,7 +1568,7 @@ export function OrganizePage({
         </div>
       ) : null}
       {resultActionMessage ? (
-        <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div className="rounded-[24px] border border-[color:color-mix(in_srgb,var(--app-accent)_30%,var(--app-border)_70%)] bg-[color:color-mix(in_srgb,var(--app-accent)_10%,var(--app-surface)_90%)] px-4 py-3 text-sm text-[var(--app-accent-strong)]">
           {resultActionMessage}
         </div>
       ) : null}
@@ -1795,43 +1771,39 @@ export function OrganizePage({
           </div>
         </section>
       ) : null}
+      </div>
 
       {previewResult && !hidePreviewPanelWhileSaving ? (
-        <section className="rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-5">
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="space-y-1">
-                <h2 className="text-sm font-semibold text-sky-900">
-                  신규 정리 후보 검토
-                </h2>
-                <p className="text-sm text-sky-800">
+        <div className="app-scroll min-h-0 flex-1 overflow-y-auto">
+        <section className="rounded-xl border border-[color:color-mix(in_srgb,var(--app-accent)_32%,var(--app-border)_68%)] bg-[color:color-mix(in_srgb,var(--app-accent)_6%,var(--app-surface)_94%)] p-2.5">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-xs text-[var(--app-foreground)]">
                   신규 정리 대상 {previewResult.pendingPhotoCount}장, 기존 중복
                   스킵 예정 {previewResult.skippedExistingCount}장
                 </p>
                 {previewResult.skippedUnchangedCount > 0 ? (
-                  <p className="text-sm text-sky-700">
+                  <p className="text-[11px] text-[var(--app-muted)]">
                     증분 재스캔 기준으로 변경 없는 입력{' '}
                     {previewResult.skippedUnchangedCount}장은 준비 단계에서 건너뛰었습니다.
                   </p>
                 ) : null}
                 {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
-                  <p className="text-sm font-medium text-sky-900">
+                  <p className="text-[11px] font-medium text-[var(--app-accent-strong)]">
                     그룹 {wizardStepIndex + 1} / {orderedPreviewGroups.length} — GPS
                     있는 그룹을 먼저, GPS 없는 그룹은 마지막에 저장합니다.
                   </p>
                 ) : null}
               </div>
-              <div className="rounded-full bg-[var(--app-surface)] px-3 py-1 text-xs font-medium text-[var(--app-accent-strong)]">
+              <div className="shrink-0 rounded-full bg-[var(--app-accent)] px-2.5 py-0.5 text-[10px] font-medium text-[var(--app-accent-foreground)]">
                 스캔 후보 {previewResult.scannedCount}장
               </div>
             </div>
 
             {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3">
-                <p className="text-xs font-semibold text-[var(--app-accent-strong)]">
-                  그룹별 저장 상태
-                </p>
-                <ul className="mt-2 space-y-1.5">
+              <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2">
+                <ul className="space-y-1">
                   {orderedPreviewGroups.map((g) => {
                     const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
                     const isCurrentRun = runningSaveTarget === g.groupKey
@@ -1853,7 +1825,7 @@ export function OrganizePage({
                             phase === 'saving' || isCurrentRun
                               ? 'bg-amber-100 text-amber-900'
                               : phase === 'done'
-                                ? 'bg-emerald-100 text-emerald-800'
+                                ? 'bg-[color:color-mix(in_srgb,var(--app-accent)_22%,var(--app-surface)_78%)] text-[var(--app-accent-strong)]'
                                 : phase === 'error'
                                   ? 'bg-red-100 text-red-800'
                                   : phase === 'queued'
@@ -1869,7 +1841,7 @@ export function OrganizePage({
                   })}
                 </ul>
                 {totalPhotosInPreview > 0 ? (
-                  <p className="mt-2 text-xs text-[var(--app-muted)]">
+                  <p className="mt-1.5 text-[10px] text-[var(--app-muted)]">
                     사진{' '}
                     <span className="font-medium text-[var(--app-accent-strong)]">
                       {photosSavedCount}
@@ -1886,7 +1858,7 @@ export function OrganizePage({
             ) : null}
 
             {hasPendingPreviewGroups && wizardGroup ? (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {(() => {
                   const group = wizardGroup
                   const phaseForGroup =
@@ -1921,9 +1893,9 @@ export function OrganizePage({
                   return (
                   <Card
                     key={group.groupKey}
-                    className="app-surface-card rounded-[28px] border-0 p-4 shadow-none"
+                    className="app-surface-card rounded-2xl border-0 p-2.5 shadow-none"
                   >
-                    <div className="space-y-4">
+                    <div className="space-y-2">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
                           <h3 className="text-sm font-semibold text-[var(--app-foreground)]">
@@ -1996,87 +1968,107 @@ export function OrganizePage({
                           ))}
                         </div>
 
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-slate-800">
-                            기본 그룹명 제안
-                          </p>
+                      <div className="mt-1 rounded-2xl border border-[var(--app-border)] bg-[color:color-mix(in_srgb,var(--app-surface-strong)_88%,var(--app-surface)_12%)] p-4 shadow-[0_1px_0_0_color-mix(in_srgb,var(--app-border)_65%,transparent)]">
+                        <div className="space-y-3">
                           {group.suggestedTitles.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {group.suggestedTitles.map((title) => (
-                                <button
-                                  key={title}
-                                  type="button"
-                                  className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-3 py-1 text-xs font-medium text-[var(--app-accent-strong)]"
-                                  onClick={() =>
-                                    setGroupTitleInputs((current) => ({
-                                      ...current,
-                                      [group.groupKey]: title
-                                    }))
-                                  }
-                                >
-                                  {title}
-                                </button>
-                              ))}
+                            <>
+                              <div className="space-y-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+                                  기본 그룹명 제안
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {group.suggestedTitles.map((title) => (
+                                    <button
+                                      key={title}
+                                      type="button"
+                                      className="rounded-full border border-[color:color-mix(in_srgb,var(--app-accent)_35%,var(--app-border)_65%)] bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)] px-3 py-1.5 text-xs font-medium text-[var(--app-accent-strong)] transition hover:bg-[color:color-mix(in_srgb,var(--app-accent)_14%,var(--app-surface)_86%)]"
+                                      onClick={() =>
+                                        setGroupTitleInputs((current) => ({
+                                          ...current,
+                                          [group.groupKey]: title
+                                        }))
+                                      }
+                                    >
+                                      {title}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="h-px w-full bg-[color:color-mix(in_srgb,var(--app-border)_75%,transparent_25%)]" />
+                            </>
+                          ) : null}
+
+                          <div className="space-y-4">
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap items-end justify-between gap-2">
+                                <span className="text-[13px] font-semibold text-[var(--app-foreground)]">
+                                  저장될 그룹명
+                                </span>
+                                <span className="text-[10px] text-[var(--app-muted)]">
+                                  인덱스·지도에 표시
+                                </span>
+                              </div>
+                              <Input
+                                value={groupTitleInputs[group.groupKey] ?? ''}
+                                onChange={(event) =>
+                                  setGroupTitleInputs((current) => ({
+                                    ...current,
+                                    [group.groupKey]: event.target.value
+                                  }))
+                                }
+                                placeholder={group.displayTitle}
+                                className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] shadow-[inset_0_1px_2px_color-mix(in_srgb,var(--app-foreground)_4%,transparent)] placeholder:text-[var(--app-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--app-accent)_40%,transparent)]"
+                              />
                             </div>
-                          ) : (
-                            <p className="text-sm text-[var(--app-muted)]">
-                              근처 GPS 범위에서 기존 그룹명이 없어 기본 그룹명을
-                              사용합니다.
-                            </p>
-                          )}
+
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap items-end justify-between gap-2">
+                                <span className="text-[13px] font-semibold text-[var(--app-foreground)]">
+                                  동행인
+                                </span>
+                                <span className="text-[10px] text-[var(--app-muted)]">
+                                  쉼표로 구분
+                                </span>
+                              </div>
+                              <Input
+                                value={
+                                  groupCompanionsInputs[group.groupKey] ?? ''
+                                }
+                                onChange={(event) =>
+                                  setGroupCompanionsInputs((current) => ({
+                                    ...current,
+                                    [group.groupKey]: event.target.value
+                                  }))
+                                }
+                                placeholder="예: Alice, Bob"
+                                className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] shadow-[inset_0_1px_2px_color-mix(in_srgb,var(--app-foreground)_4%,transparent)] placeholder:text-[var(--app-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--app-accent)_40%,transparent)]"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap items-end justify-between gap-2">
+                                <span className="text-[13px] font-semibold text-[var(--app-foreground)]">
+                                  메모
+                                </span>
+                                <span className="text-[10px] text-[var(--app-muted)]">
+                                  선택 · 그룹 상세에 표시
+                                </span>
+                              </div>
+                              <TextArea
+                                value={groupNotesInputs[group.groupKey] ?? ''}
+                                onChange={(event) =>
+                                  setGroupNotesInputs((current) => ({
+                                    ...current,
+                                    [group.groupKey]: event.target.value
+                                  }))
+                                }
+                                placeholder="여행 메모, 장소, 분위기 등을 적어 두세요."
+                                className="min-h-[5.75rem] w-full resize-y rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2.5 text-sm leading-relaxed text-[var(--app-foreground)] shadow-[inset_0_1px_2px_color-mix(in_srgb,var(--app-foreground)_4%,transparent)] placeholder:text-[var(--app-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--app-accent)_40%,transparent)]"
+                              />
+                            </div>
+                          </div>
                         </div>
-
-                        <label className="space-y-2">
-                          <span className="text-sm font-medium text-[var(--app-foreground)]">
-                            그룹명 (저장 시 적용)
-                          </span>
-                          <Input
-                            value={groupTitleInputs[group.groupKey] ?? ''}
-                            onChange={(event) =>
-                              setGroupTitleInputs((current) => ({
-                                ...current,
-                                [group.groupKey]: event.target.value
-                              }))
-                            }
-                            placeholder={group.displayTitle}
-                            className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]"
-                          />
-                        </label>
-
-                        <label className="space-y-2">
-                          <span className="text-sm font-medium text-[var(--app-foreground)]">
-                            동행인
-                          </span>
-                          <Input
-                            value={groupCompanionsInputs[group.groupKey] ?? ''}
-                            onChange={(event) =>
-                              setGroupCompanionsInputs((current) => ({
-                                ...current,
-                                [group.groupKey]: event.target.value
-                              }))
-                            }
-                            placeholder="예: Alice, Bob"
-                            className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]"
-                          />
-                        </label>
-
-                        <label className="space-y-2">
-                          <span className="text-sm font-medium text-[var(--app-foreground)]">
-                            메모
-                          </span>
-                          <TextArea
-                            value={groupNotesInputs[group.groupKey] ?? ''}
-                            onChange={(event) =>
-                              setGroupNotesInputs((current) => ({
-                                ...current,
-                                [group.groupKey]: event.target.value
-                              }))
-                            }
-                            placeholder="이 그룹에 대한 메모를 남겨두세요."
-                            className="min-h-24 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]"
-                          />
-                        </label>
                       </div>
 
                       {hasPendingPreviewGroups ? (
@@ -2109,44 +2101,46 @@ export function OrganizePage({
             )}
           </div>
         </section>
+        </div>
       ) : null}
 
       {summary ? (
-        <section className="rounded-[28px] border border-emerald-200 bg-emerald-50 p-5">
+        <div className="w-full shrink-0 pb-1">
+        <section className="rounded-[28px] border border-[color:color-mix(in_srgb,var(--app-accent)_26%,var(--app-border)_74%)] bg-[color:color-mix(in_srgb,var(--app-accent)_10%,var(--app-surface)_90%)] p-5">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-emerald-900">
+              <h2 className="text-sm font-semibold text-[var(--app-foreground)]">
                 실행 결과
               </h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="rounded-[24px] bg-white px-4 py-3">
-                <p className="text-xs text-slate-500">스캔 수</p>
-                <p className="text-xl font-semibold text-slate-900">
+              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+                <p className="text-xs text-[var(--app-muted)]">스캔 수</p>
+                <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.scannedCount}
                 </p>
               </div>
-              <div className="rounded-[24px] bg-white px-4 py-3">
-                <p className="text-xs text-slate-500">증분 스킵 수</p>
-                <p className="text-xl font-semibold text-slate-900">
+              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+                <p className="text-xs text-[var(--app-muted)]">증분 스킵 수</p>
+                <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.skippedUnchangedCount}
                 </p>
               </div>
-              <div className="rounded-[24px] bg-white px-4 py-3">
-                <p className="text-xs text-slate-500">유지 수</p>
-                <p className="text-xl font-semibold text-slate-900">
+              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+                <p className="text-xs text-[var(--app-muted)]">유지 수</p>
+                <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.keptCount}
                 </p>
               </div>
-              <div className="rounded-[24px] bg-white px-4 py-3">
-                <p className="text-xs text-slate-500">신규 복사 수</p>
-                <p className="text-xl font-semibold text-slate-900">
+              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+                <p className="text-xs text-[var(--app-muted)]">신규 복사 수</p>
+                <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.copiedCount}
                 </p>
               </div>
-              <div className="rounded-[24px] bg-white px-4 py-3">
-                <p className="text-xs text-slate-500">그룹 수</p>
-                <p className="text-xl font-semibold text-slate-900">
+              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+                <p className="text-xs text-[var(--app-muted)]">그룹 수</p>
+                <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.groupCount}
                 </p>
               </div>
@@ -2157,31 +2151,31 @@ export function OrganizePage({
                 type="button"
                 className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
                   openScanResultDetail === 'inBatchDup'
-                    ? 'border-emerald-500 bg-emerald-100 shadow-sm'
-                    : 'border-emerald-100 bg-white hover:bg-emerald-50/40'
+                    ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
+                    : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
                 }`}
                 onClick={() => handleToggleScanResultDetail('inBatchDup')}
               >
-                <p className="text-xs text-slate-500">중복 (같은 실행 내)</p>
-                <p className="text-xl font-semibold text-slate-900">
+                <p className="text-xs text-[var(--app-muted)]">중복 (같은 실행 내)</p>
+                <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.duplicateCount}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">탭하여 쌍 비교</p>
+                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 쌍 비교</p>
               </button>
               <button
                 type="button"
                 className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
                   openScanResultDetail === 'incrementalSkip'
-                    ? 'border-emerald-500 bg-emerald-100 shadow-sm'
-                    : 'border-emerald-100 bg-white hover:bg-emerald-50/40'
+                    ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
+                    : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
                 }`}
                 onClick={() => handleToggleScanResultDetail('incrementalSkip')}
               >
-                <p className="text-xs text-slate-500">증분 스킵 (준비 단계)</p>
-                <p className="text-xl font-semibold text-slate-900">
+                <p className="text-xs text-[var(--app-muted)]">증분 스킵 (준비 단계)</p>
+                <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.skippedUnchangedCount}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">
+                <p className="mt-1 text-[11px] text-[var(--app-muted)]">
                   sourcePath + size + mtime 기준
                 </p>
               </button>
@@ -2189,51 +2183,51 @@ export function OrganizePage({
                 type="button"
                 className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
                   openScanResultDetail === 'existingSkip'
-                    ? 'border-emerald-500 bg-emerald-100 shadow-sm'
-                    : 'border-emerald-100 bg-white hover:bg-emerald-50/40'
+                    ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
+                    : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
                 }`}
                 onClick={() => handleToggleScanResultDetail('existingSkip')}
               >
-                <p className="text-xs text-slate-500">기존 출력과 동일 (스킵)</p>
-                <p className="text-xl font-semibold text-slate-900">
+                <p className="text-xs text-[var(--app-muted)]">기존 출력과 동일 (스킵)</p>
+                <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.skippedExistingCount}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">탭하여 경로 비교</p>
+                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 경로 비교</p>
               </button>
               <button
                 type="button"
                 className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
                   openScanResultDetail === 'warnings'
-                    ? 'border-emerald-500 bg-emerald-100 shadow-sm'
-                    : 'border-emerald-100 bg-white hover:bg-emerald-50/40'
+                    ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
+                    : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
                 }`}
                 onClick={() => handleToggleScanResultDetail('warnings')}
               >
-                <p className="text-xs text-slate-500">경고 수</p>
-                <p className="text-xl font-semibold text-slate-900">
+                <p className="text-xs text-[var(--app-muted)]">경고 수</p>
+                <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.warningCount}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">탭하여 목록</p>
+                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 목록</p>
               </button>
               <button
                 type="button"
                 className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
                   openScanResultDetail === 'failures'
-                    ? 'border-emerald-500 bg-emerald-100 shadow-sm'
-                    : 'border-emerald-100 bg-white hover:bg-emerald-50/40'
+                    ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
+                    : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
                 }`}
                 onClick={() => handleToggleScanResultDetail('failures')}
               >
-                <p className="text-xs text-slate-500">실패 수</p>
-                <p className="text-xl font-semibold text-slate-900">
+                <p className="text-xs text-[var(--app-muted)]">실패 수</p>
+                <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.failureCount}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">탭하여 목록</p>
+                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 목록</p>
               </button>
             </div>
 
             {openScanResultDetail === 'inBatchDup' ? (
-              <div className="rounded-[24px] border border-emerald-200 bg-white p-4">
+              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold text-slate-800">
@@ -2361,7 +2355,7 @@ export function OrganizePage({
             ) : null}
 
             {openScanResultDetail === 'incrementalSkip' ? (
-              <div className="rounded-[24px] border border-emerald-200 bg-white p-4">
+              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold text-slate-800">
@@ -2455,7 +2449,7 @@ export function OrganizePage({
             ) : null}
 
             {openScanResultDetail === 'existingSkip' ? (
-              <div className="rounded-[24px] border border-emerald-200 bg-white p-4">
+              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold text-slate-800">
@@ -2669,8 +2663,8 @@ export function OrganizePage({
                           issueStageFilter,
                           issueCodeQuery
                         )
-                          ? 'border-emerald-700 bg-emerald-700 text-white'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                          ? 'border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
+                          : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] text-[var(--app-foreground)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_6%,var(--app-surface)_94%)]'
                       }`}
                       onClick={() => applyIssueQuickFilter(filter)}
                     >
@@ -2819,6 +2813,7 @@ export function OrganizePage({
             ) : null}
           </div>
         </section>
+        </div>
       ) : null}
     </div>
   )

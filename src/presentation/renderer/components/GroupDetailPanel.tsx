@@ -215,15 +215,17 @@ export function GroupDetailPanel({
   }
 
   return (
-    <section className="space-y-2.5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-[var(--app-foreground)]">그룹 상세</h2>
-        <p className="text-xs text-[var(--app-muted)]">
+    <section className="min-w-0 max-w-full space-y-2.5 overflow-x-hidden">
+      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+        <h2 className="shrink-0 text-sm font-semibold text-[var(--app-foreground)]">
+          그룹 상세
+        </h2>
+        <p className="min-w-0 text-xs leading-relaxed text-[var(--app-muted)] sm:max-w-[min(100%,28rem)] sm:text-right">
           제목, 동행인, 메모, 대표 사진을 수정할 수 있습니다.
         </p>
       </div>
 
-      <div className="rounded-[16px] bg-[var(--app-surface-strong)] p-3">
+      <div className="min-w-0 max-w-full rounded-[16px] bg-[var(--app-surface-strong)] p-3">
         {!group ? (
           <div className="flex min-h-[360px] items-center justify-center rounded-[14px] bg-[var(--app-surface)] p-5 text-center">
             <div className="space-y-1">
@@ -236,8 +238,8 @@ export function GroupDetailPanel({
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            <div className="grid gap-3 lg:grid-cols-[148px_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-3">
+            <div className="grid min-w-0 gap-3 lg:grid-cols-[148px_minmax(0,1fr)]">
               <div className="overflow-hidden rounded-[14px] bg-[var(--app-surface)]">
                 {representativeThumbnailUrl && !thumbnailLoadFailed ? (
                   <img
@@ -275,8 +277,8 @@ export function GroupDetailPanel({
               </div>
             </div>
 
-            <div className="grid gap-3">
-              <div className="rounded-[14px] bg-[var(--app-surface)] p-3">
+              <div className="grid min-w-0 gap-3">
+              <div className="min-w-0 rounded-[14px] bg-[var(--app-surface)] p-3">
                 <p className="text-sm font-medium text-slate-900">기본 그룹명 제안</p>
                 {titleSuggestions.length > 0 ? (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -308,13 +310,13 @@ export function GroupDetailPanel({
                 />
               </label>
 
-              <div className="rounded-[14px] bg-[var(--app-surface)] p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
+              <div className="min-w-0 rounded-[14px] bg-[var(--app-surface)] p-3">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+                  <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-900">
                       저장 전 예상 파일명 미리보기
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs leading-relaxed text-slate-500">
                       현재 입력한 그룹명 기준 예상 결과입니다. 실제 저장 시 같은 폴더에
                       이미 파일이 있으면 시퀀스 번호가 달라질 수 있습니다.
                     </p>
@@ -337,10 +339,10 @@ export function GroupDetailPanel({
                       {renamePreviewRows.slice(0, 8).map((row) => (
                         <div
                           key={row.photoId}
-                          className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                          className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-3"
                         >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-medium text-slate-900">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <p className="min-w-0 break-words text-sm font-medium text-slate-900">
                               {row.sourceFileName}
                             </p>
                             <span
@@ -394,7 +396,7 @@ export function GroupDetailPanel({
                 <select
                   value={representativePhotoId}
                   onChange={(event) => setRepresentativePhotoId(event.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-0 focus:border-blue-400"
+                  className="min-w-0 max-w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none ring-0 focus:border-[var(--app-accent)]"
                 >
                   {group.photos.map((photo) => (
                     <option key={photo.id} value={photo.id}>
@@ -414,46 +416,57 @@ export function GroupDetailPanel({
                 />
               </label>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <p className="text-sm font-medium text-slate-900">대표 사진 후보</p>
-                <div className="mt-3 grid gap-2">
+              <div className="min-w-0 rounded-[14px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-medium text-[var(--app-foreground)]">
+                    대표 사진 후보
+                  </p>
+                  <p className="text-[11px] leading-relaxed text-[var(--app-muted)]">
+                    아래 목록에서 현재 대표로 지정된 파일을 확인할 수 있습니다. 위
+                    「대표 사진」에서 바꿀 수 있습니다.
+                  </p>
+                </div>
+                <ul className="mt-3 grid list-none gap-2 p-0">
                   {group.photos.map((photo) => (
-                    <div
+                    <li
                       key={photo.id}
-                      className={`rounded-lg border px-3 py-2 text-sm ${
+                      className={`min-w-0 rounded-lg border px-3 py-2.5 text-sm leading-snug ${
                         photo.id === representativePhotoId
-                          ? 'border-blue-300 bg-blue-50 text-blue-800'
-                          : 'border-slate-200 bg-slate-50 text-slate-700'
+                          ? 'border-[var(--app-accent)] bg-[var(--app-sidebar-hover)] text-[var(--app-foreground)]'
+                          : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] text-[var(--app-foreground)]'
                       }`}
                     >
-                      {photo.sourceFileName}
-                    </div>
+                      <span className="block break-words">{photo.sourceFileName}</span>
+                      {photo.id === representativePhotoId ? (
+                        <span className="mt-1 inline-block text-[10px] font-medium text-[var(--app-accent-strong)]">
+                          현재 대표
+                        </span>
+                      ) : null}
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">
-                      사진을 다른 그룹으로 이동
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      선택한 사진은 대상 그룹 소속으로 들어가고 앱 내부 위치는 그
-                      그룹 대표 위치 기준으로 맞춰집니다. 파일 EXIF는 수정하지
-                      않습니다.
-                    </p>
-                  </div>
+              <div className="min-w-0 rounded-[14px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-medium text-[var(--app-foreground)]">
+                    사진을 다른 그룹으로 이동
+                  </p>
+                  <p className="text-[11px] leading-relaxed text-[var(--app-muted)]">
+                    선택한 사진은 대상 그룹 소속으로 들어가고, 앱 안에서의 묶음 위치는
+                    그 그룹의 대표 좌표에 맞춰집니다. 원본 파일의 EXIF는 바꾸지
+                    않습니다.
+                  </p>
                 </div>
-                <div className="mt-3 space-y-3">
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-800">
+                <div className="mt-3 min-w-0 space-y-3">
+                  <label className="block min-w-0 space-y-2">
+                    <span className="text-sm font-medium text-[var(--app-foreground)]">
                       이동할 대상 그룹
                     </span>
                     <select
                       value={moveTargetGroupId}
                       onChange={(event) => setMoveTargetGroupId(event.target.value)}
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-0 focus:border-blue-400"
+                      className="min-w-0 max-w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none ring-0 focus:border-[var(--app-accent)]"
                     >
                       <option value="">대상 그룹 선택</option>
                       {moveTargetGroups.map((candidate) => (
@@ -464,20 +477,23 @@ export function GroupDetailPanel({
                     </select>
                   </label>
 
-                  <div className="grid gap-2">
+                  <div className="grid min-w-0 gap-2">
                     {group.photos.map((photo) => (
                       <label
                         key={photo.id}
-                        className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                        className="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-3 py-2.5 text-sm text-[var(--app-foreground)]"
                       >
                         <input
                           type="checkbox"
+                          className="mt-0.5 shrink-0"
                           checked={selectedPhotoIds.includes(photo.id)}
                           onChange={() => togglePhotoSelection(photo.id)}
                         />
-                        <span className="flex-1 truncate">{photo.sourceFileName}</span>
+                        <span className="min-w-0 flex-1 break-words leading-snug">
+                          {photo.sourceFileName}
+                        </span>
                         {photo.missingGpsCategory ? (
-                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                          <span className="shrink-0 rounded-full bg-[var(--app-surface)] px-2 py-0.5 text-[10px] font-medium text-[var(--app-muted)]">
                             {photo.missingGpsCategory}
                           </span>
                         ) : null}
@@ -502,8 +518,8 @@ export function GroupDetailPanel({
                 </div>
               </div>
 
-              <div className="flex justify-end">
-                <p className="mr-auto text-xs text-slate-500">
+              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="min-w-0 text-xs leading-relaxed text-[var(--app-muted)] sm:max-w-[min(100%,36rem)]">
                   {loadSource === 'fallback' ||
                   loadSource === 'folder-structure'
                     ? '폴더 구조 기반 상태에서 저장하면 GPS/대표 정보는 유지한 채 index.json을 새로 만들고 그룹 메타데이터를 함께 반영합니다.'
@@ -511,7 +527,7 @@ export function GroupDetailPanel({
                 </p>
                 <Button
                   variant="primary"
-                  className="rounded-[12px] bg-[var(--app-button)] px-4 text-sm font-medium text-[var(--app-button-foreground)] disabled:opacity-60"
+                  className="shrink-0 rounded-[12px] bg-[var(--app-button)] px-4 text-sm font-medium text-[var(--app-button-foreground)] disabled:opacity-60 sm:self-start"
                   isDisabled={isSaving}
                   onPress={() => void handleSave()}
                 >

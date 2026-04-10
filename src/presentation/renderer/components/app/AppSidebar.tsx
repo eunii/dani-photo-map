@@ -37,9 +37,9 @@ export function AppSidebar({
         collapsed ? 'w-[72px]' : 'w-[228px]'
       } rounded-[18px]`}
     >
-      <div className="flex h-full flex-col gap-2 p-2">
+      <div className="flex h-full flex-col gap-1.5 p-1.5">
         <div
-          className={`flex ${collapsed ? 'justify-center' : 'items-start justify-between'} gap-2 px-1`}
+          className={`flex ${collapsed ? 'justify-center' : 'items-start justify-between'} gap-1.5 ${collapsed ? '' : 'pt-1 pl-1.5'}`}
         >
           {!collapsed ? (
             <button
@@ -47,11 +47,11 @@ export function AppSidebar({
               className="min-w-0 rounded-lg text-left outline-none transition hover:opacity-85"
               onClick={onPressBrand}
             >
-              <p className="text-[14px] font-semibold tracking-tight text-[var(--app-accent-strong)]">
-                DaniPhoto
+              <p className="text-[19px] font-semibold leading-tight tracking-tight text-[var(--app-accent-strong)]">
+                Dani Photo
               </p>
-              <p className="mt-0.5 text-[12px] text-[var(--app-muted)]">
-                organizer
+              <p className="mt-0.5 text-[14px] text-[var(--app-muted)]">
+                Organizer
               </p>
             </button>
           ) : null}
@@ -70,7 +70,7 @@ export function AppSidebar({
           </Button>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1.5" aria-label="주요 메뉴">
+        <nav className="flex flex-1 flex-col gap-0.5" aria-label="주요 메뉴">
           {items.map((item) =>
             collapsed ? (
               <Button
@@ -78,7 +78,7 @@ export function AppSidebar({
                 aria-label={item.label}
                 variant="ghost"
                 isIconOnly
-                className={`h-11 w-11 self-center rounded-xl border-transparent bg-transparent transition-colors ${
+                className={`h-9 w-9 self-center rounded-xl border-transparent bg-transparent transition-colors ${
                   item.isActive
                     ? 'text-[var(--app-accent-strong)]'
                     : 'text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
@@ -92,15 +92,15 @@ export function AppSidebar({
                 key={item.key}
                 aria-label={item.label}
                 variant="ghost"
-                className={`h-11 w-full justify-start rounded-xl border-transparent px-[18px] text-[15px] font-medium transition-colors ${
+                className={`h-9 w-full justify-start rounded-xl border-transparent px-2 text-[13px] font-medium transition-colors ${
                   item.isActive
                     ? 'bg-transparent text-[var(--app-accent-strong)]'
                     : 'bg-transparent text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
                 }`}
                 onPress={item.onPress}
               >
-                <span className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 items-center justify-center">
+                <span className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center [&_svg]:h-[18px] [&_svg]:w-[18px]">
                     {item.icon}
                   </span>
                   <span>{item.label}</span>
@@ -110,14 +110,14 @@ export function AppSidebar({
           )}
         </nav>
 
-        <div className="mt-auto border-t border-[var(--app-border)] pt-2">
+        <div className="mt-auto border-t border-[var(--app-border)] pt-1">
           <Button
             aria-label="설정 열기"
             variant="ghost"
             className={`${
               collapsed
-                ? 'h-11 w-11 self-center rounded-xl border-transparent bg-transparent text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
-                : 'h-11 w-full justify-start rounded-xl border-transparent px-[18px] text-[15px] font-medium text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
+                ? 'h-9 w-9 self-center rounded-xl border-transparent bg-transparent text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
+                : 'h-9 w-full justify-start rounded-xl border-transparent px-2 text-[13px] font-medium text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
             }`}
             isIconOnly={collapsed}
             onPress={onOpenSettings}
@@ -125,9 +125,9 @@ export function AppSidebar({
             {collapsed ? (
               <SettingsIcon className="h-5 w-5" />
             ) : (
-              <span className="flex items-center gap-3">
-                <span className="flex h-6 w-6 items-center justify-center">
-                  <SettingsIcon className="h-5 w-5" />
+              <span className="flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center">
+                  <SettingsIcon className="h-[18px] w-[18px]" />
                 </span>
                 <span>설정</span>
               </span>

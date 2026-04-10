@@ -11,17 +11,7 @@ import {
   type UiThemeId
 } from '@presentation/renderer/theme/themePresets'
 
-interface SettingsPanelSectionsProps {
-  compact?: boolean
-}
-
-function ThemePaletteButton({
-  themeId,
-  compact
-}: {
-  themeId: UiThemeId
-  compact: boolean
-}) {
+function ThemePaletteButton({ themeId }: { themeId: UiThemeId }) {
   const currentThemeId = useUiPreferencesStore((state) => state.themeId)
   const setThemeId = useUiPreferencesStore((state) => state.setThemeId)
   const preset = UI_THEME_PRESETS.find((item) => item.id === themeId)
@@ -35,31 +25,24 @@ function ThemePaletteButton({
   return (
     <button
       type="button"
-      className={`w-full rounded-[16px] border p-2.5 text-left transition ${
+      className={`w-full rounded-lg border p-1.5 text-left transition ${
         isSelected
           ? 'border-[var(--app-accent)] bg-[var(--app-surface-strong)]'
           : 'border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-strong)]'
       }`}
       onClick={() => setThemeId(themeId)}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-medium text-[var(--app-foreground)]">{preset.name}</p>
-          <p className="mt-1 text-xs text-[var(--app-muted)]">
-            {preset.description}
-          </p>
-        </div>
-        {isSelected ? (
-          <span className="rounded-full bg-[var(--app-accent)] px-2 py-1 text-[11px] font-semibold text-[var(--app-accent-foreground)]">
-            선택됨
-          </span>
-        ) : null}
+      <div>
+        <p className="text-[13px] font-medium text-[var(--app-foreground)]">{preset.name}</p>
+        <p className="mt-0.5 text-[11px] leading-snug text-[var(--app-muted)]">
+          {preset.description}
+        </p>
       </div>
-      <div className={`mt-2 grid gap-1.5 ${compact ? 'grid-cols-5' : 'grid-cols-5'}`}>
+      <div className="mt-1 grid grid-cols-5 gap-0.5">
         {preset.colors.map((color) => (
           <span
             key={color}
-            className="h-7 rounded-xl border border-white/60"
+            className="h-4 rounded-md border border-white/60"
             style={{ backgroundColor: color }}
           />
         ))}
@@ -68,9 +51,7 @@ function ThemePaletteButton({
   )
 }
 
-export function SettingsPanelSections({
-  compact = false
-}: SettingsPanelSectionsProps) {
+export function SettingsPanelSections() {
   const {
     outputRoot,
     isLoadingIndex,
@@ -83,36 +64,31 @@ export function SettingsPanelSections({
   const sourceBadge = getLoadSourceBadge(loadSource)
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1.5">
       <Card className="app-surface-card border-0 shadow-none">
-        <div className="space-y-3 px-4 py-4">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--app-accent-strong)]">
-              Output
-            </p>
-            <h3 className="text-lg font-semibold text-[var(--app-foreground)]">
-              출력 폴더
-            </h3>
-            <p className="text-sm text-[var(--app-muted)]">
+        <div className="space-y-1.5 px-2 py-2">
+          <div>
+            <h3 className="text-base font-semibold text-[var(--app-foreground)]">출력 폴더</h3>
+            <p className="mt-0.5 text-[11px] leading-snug text-[var(--app-muted)]">
               파일 목록과 지도는 같은 출력 루트를 사용합니다.
             </p>
           </div>
 
-          <div className="rounded-[16px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-muted)]">
+          <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-[12px] text-[var(--app-muted)]">
             {outputRoot || '아직 선택되지 않았습니다.'}
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1">
             <Button
               variant="primary"
-              className="rounded-xl bg-[var(--app-button)] text-[var(--app-button-foreground)]"
+              className="h-7 rounded-lg bg-[var(--app-button)] px-2 text-[12px] text-[var(--app-button-foreground)]"
               onPress={() => void selectOutputRoot()}
             >
               출력 폴더 선택
             </Button>
             <Button
               variant="secondary"
-              className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-[var(--app-foreground)]"
+              className="h-7 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-[12px] text-[var(--app-foreground)]"
               isDisabled={!outputRoot || isLoadingIndex}
               onPress={() => void reloadLibraryIndex()}
             >
@@ -120,7 +96,7 @@ export function SettingsPanelSections({
             </Button>
             <Button
               variant="ghost"
-              className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-[var(--app-foreground)]"
+              className="h-7 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-[12px] text-[var(--app-foreground)]"
               isDisabled={!outputRoot || isLoadingIndex}
               onPress={() => void reloadFolderStructureOnly()}
             >
@@ -131,40 +107,26 @@ export function SettingsPanelSections({
       </Card>
 
       <Card className="app-surface-card border-0 shadow-none">
-        <div className="space-y-3 px-4 py-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--app-surface-strong)] text-[var(--app-accent-strong)]">
-              <SparklesIcon className="h-5 w-5" />
+        <div className="space-y-1.5 px-2 py-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--app-surface-strong)] text-[var(--app-accent-strong)]">
+              <SparklesIcon className="h-3.5 w-3.5" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-semibold text-[var(--app-foreground)]">
-                감성 컬러 세트
-              </h3>
-              <p className="text-sm text-[var(--app-muted)]">
-                앱 셸과 설정 패널 중심으로 톤을 바꿉니다.
-              </p>
-              <p className="text-[11px] text-[var(--app-muted)]">
-                미리보기 순서: 배경 / 강조 / 삭제 / 버튼 / 텍스트
-              </p>
-            </div>
+            <h3 className="text-base font-semibold text-[var(--app-foreground)]">테마 선택</h3>
           </div>
 
-          <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid gap-1 md:grid-cols-2">
             {UI_THEME_PRESETS.map((preset) => (
-              <ThemePaletteButton
-                key={preset.id}
-                themeId={preset.id}
-                compact={compact}
-              />
+              <ThemePaletteButton key={preset.id} themeId={preset.id} />
             ))}
           </div>
         </div>
       </Card>
 
       {sourceBadge ? (
-        <div className={`rounded-[16px] border px-3 py-2 text-sm ${sourceBadge.tone}`}>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-full border border-current/20 bg-white/70 px-3 py-1 text-xs font-semibold">
+        <div className={`rounded-lg border px-2 py-1.5 text-[11px] ${sourceBadge.tone}`}>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="rounded-full border border-current/20 bg-white/70 px-1.5 py-0 text-[10px] font-semibold">
               {sourceBadge.label}
             </span>
             <p>{sourceBadge.description}</p>
@@ -173,7 +135,7 @@ export function SettingsPanelSections({
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-[16px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
           {errorMessage}
         </div>
       ) : null}

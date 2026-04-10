@@ -23,24 +23,30 @@ function BaseIcon({ title, children, ...props }: IconProps) {
   )
 }
 
+/** 사이드바: 사진 정리하기 — 겹친 사진 프레임(뒤·앞) + 앞쪽에 풍경·텍스트 줄 */
 export function OrganizeIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
-      <path d="M4 7.5h7l2 2H20" />
-      <path d="M4 7.5V17a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9.5a2 2 0 0 0-2-2H4Z" />
-      <path d="M9 12h6" />
-      <path d="M12 9v6" />
+      <path d="M4.5 6.5h8.5a1.5 1.5 0 0 1 1.5 1.5v6.5a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 14.5V8A1.5 1.5 0 0 1 4.5 6.5Z" />
+      <path d="M11.5 9.5h8a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 10 18v-7a1.5 1.5 0 0 1 1.5-1.5Z" />
+      <path d="M13 12.5h5" />
+      <path d="M13 15.5h3.5" />
+      <circle cx="7.5" cy="10" r="1.2" />
+      <path d="m5 14.5 2.5-2 2 1.5 2.5-2" />
     </BaseIcon>
   )
 }
 
+/** 사이드바: 파일 목록 조회 — 목록 + 돋보기 */
 export function FilesIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
-      <path d="M7 4h7l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
-      <path d="M14 4v4h4" />
-      <path d="M9 13h6" />
-      <path d="M9 17h6" />
+      <path d="M4 7h10" />
+      <path d="M4 11h8" />
+      <path d="M4 15h9" />
+      <path d="M4 19h6" />
+      <circle cx="17" cy="15.5" r="3.5" />
+      <path d="m19.5 18 2.5 2.5" />
     </BaseIcon>
   )
 }
@@ -124,6 +130,36 @@ export function ChevronRightIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
       <path d="m9 6 6 6-6 6" />
+    </BaseIcon>
+  )
+}
+
+/** 파일 목록 트리: 접힌 폴더 */
+export function FolderClosedIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M4 7.5h5l1.5 2H19a1 1 0 0 1 1 1V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8.5a1 1 0 0 1 1-1Z" />
+    </BaseIcon>
+  )
+}
+
+/** 파일 목록 트리: 펼친 폴더 */
+export function FolderOpenIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M4 9h5l1.5 2H19a1.5 1.5 0 0 1 1.4 1l1.6 5.5a2 2 0 0 1-1.9 2.5H6a2 2 0 0 1-2-2V10a1 1 0 0 1 1-1Z" />
+      <path d="M4 10 6.5 18.5H18" />
+    </BaseIcon>
+  )
+}
+
+/** 출력 폴더 트리 루트(전체 보기) */
+export function LibraryRootIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M4 10.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.5" />
+      <path d="M4 10.5 12 6h5l2 2h7v2.5" />
+      <path d="M12 6V4a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v2" />
     </BaseIcon>
   )
 }

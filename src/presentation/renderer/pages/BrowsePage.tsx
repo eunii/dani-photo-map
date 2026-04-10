@@ -290,7 +290,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
   ])
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain app-scroll pr-0.5">
       {errorMessage ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
@@ -326,52 +326,68 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
           ) : null}
         </div>
       ) : (
-        <section className="space-y-3">
-          <div className="space-y-2 rounded-[18px] bg-[var(--app-surface-strong)] p-2.5">
-            <MapSearchBar
-              value={searchQuery}
-              resultCount={filteredRecords.length}
-              onChange={setSearchQuery}
-              onClear={() => setSearchQuery('')}
-            />
-
-            <MapFilterBar
-              quickFilter={quickFilter}
-              dateRange={dateRange}
-              onQuickFilterChange={handleQuickFilterChange}
-              onDateRangeChange={handleCustomDateRangeChange}
-              onReset={() => {
-                resetFilters()
-              }}
-            />
+        <section className="flex min-h-0 flex-1 flex-col space-y-3">
+          <div className="shrink-0 rounded-[18px] bg-[var(--app-surface-strong)] p-2.5">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-stretch lg:gap-4">
+              <div className="flex min-h-0 min-w-0 flex-col">
+                <MapSearchBar
+                  value={searchQuery}
+                  resultCount={filteredRecords.length}
+                  onChange={setSearchQuery}
+                  onClear={() => setSearchQuery('')}
+                />
+              </div>
+              <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:h-full">
+                <MapFilterBar
+                  section="dates"
+                  quickFilter={quickFilter}
+                  dateRange={dateRange}
+                  onQuickFilterChange={handleQuickFilterChange}
+                  onDateRangeChange={handleCustomDateRangeChange}
+                  onReset={() => {
+                    resetFilters()
+                  }}
+                />
+                <MapFilterBar
+                  section="quick"
+                  quickFilter={quickFilter}
+                  dateRange={dateRange}
+                  onQuickFilterChange={handleQuickFilterChange}
+                  onDateRangeChange={handleCustomDateRangeChange}
+                  onReset={() => {
+                    resetFilters()
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-1.5 text-xs text-[var(--app-muted)]">
-            <span className="rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1">
+          <div className="flex shrink-0 flex-wrap gap-1.5 text-[11px] text-[var(--app-muted)]">
+            <span className="rounded-full bg-[var(--app-surface-strong)] px-2 py-0.5">
               필터 결과 {filteredRecords.length}개
             </span>
-            <span className="rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1">
+            <span className="rounded-full bg-[var(--app-surface-strong)] px-2 py-0.5">
               지도 가능 {mappedRecords.length}개
             </span>
-            <span className="rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1">
+            <span className="rounded-full bg-[var(--app-surface-strong)] px-2 py-0.5">
               GPS 없는 그룹 {unmappedRecords.length}개
             </span>
-            <span className="rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1">
+            <span className="rounded-full bg-[var(--app-surface-strong)] px-2 py-0.5">
               대표 핀 {markerGroups.length}개
             </span>
             {searchQuery ? (
-              <span className="rounded-full bg-[var(--app-sidebar-hover)] px-2.5 py-1 text-[var(--app-sidebar-hover-text)]">
+              <span className="rounded-full bg-[var(--app-sidebar-hover)] px-2 py-0.5 text-[var(--app-sidebar-hover-text)]">
                 검색: {searchQuery}
               </span>
             ) : null}
             {dateRange.start || dateRange.end ? (
-              <span className="rounded-full bg-[var(--app-sidebar-hover)] px-2.5 py-1 text-[var(--app-sidebar-hover-text)]">
+              <span className="rounded-full bg-[var(--app-sidebar-hover)] px-2 py-0.5 text-[var(--app-sidebar-hover-text)]">
                 날짜: {dateRange.start ?? '시작'} ~ {dateRange.end ?? '종료'}
               </span>
             ) : null}
           </div>
 
-          <div className="grid gap-2 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,460px)]">
+          <div className="grid min-h-0 flex-1 gap-2 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,460px)] xl:items-stretch">
             <div className="relative h-[min(68vh,720px)] min-h-[520px] overflow-hidden rounded-[18px] bg-[var(--app-surface-strong)]">
               <PhotoGroupMap
                 sourceGroups={mapCanvasGroups}
@@ -403,14 +419,14 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
               />
             </div>
 
-            <div className="min-w-0 space-y-2">
-              <div className="flex flex-wrap gap-1.5 rounded-[16px] bg-[var(--app-surface-strong)] p-1.5">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden xl:max-h-[min(68vh,720px)] xl:min-h-[520px]">
+              <div className="flex shrink-0 flex-wrap gap-1.5">
                 <button
                   type="button"
-                  className={`rounded-xl px-3 py-1.5 text-sm font-medium ${
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-medium ${
                     panelTab === 'photos'
                       ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
-                      : 'bg-[var(--app-surface)] text-[var(--app-foreground)]'
+                      : 'bg-[var(--app-surface-strong)] text-[var(--app-foreground)]'
                   }`}
                   onClick={() => setPanelTab('photos')}
                 >
@@ -418,10 +434,10 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
                 </button>
                 <button
                   type="button"
-                  className={`rounded-xl px-3 py-1.5 text-sm font-medium ${
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-medium ${
                     panelTab === 'details'
                       ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
-                      : 'bg-[var(--app-surface)] text-[var(--app-foreground)]'
+                      : 'bg-[var(--app-surface-strong)] text-[var(--app-foreground)]'
                   }`}
                   onClick={() => setPanelTab('details')}
                   disabled={!selectedGroupDetail}
@@ -429,38 +445,41 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
                   그룹 상세 편집
                 </button>
               </div>
-
               {panelTab === 'details' ? (
-                <GroupDetailPanel
-                  group={selectedGroupDetail ?? undefined}
-                  allGroups={(libraryIndex?.groups ?? []).map((group) => ({
-                    id: group.id,
-                    title: group.title,
-                    photoCount: group.photoCount,
-                    representativeGps: group.representativeGps
-                  }))}
-                  outputRoot={libraryIndex?.outputRoot ?? outputRoot}
-                  loadSource={loadSource}
-                  isSaving={isSavingGroup}
-                  isMovingPhotos={isMovingGroupPhotos}
-                  onSave={handleSaveGroup}
-                  onMovePhotos={handleMoveGroupPhotos}
-                />
+                <div className="app-scroll min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+                  <GroupDetailPanel
+                    group={selectedGroupDetail ?? undefined}
+                    allGroups={(libraryIndex?.groups ?? []).map((group) => ({
+                      id: group.id,
+                      title: group.title,
+                      photoCount: group.photoCount,
+                      representativeGps: group.representativeGps
+                    }))}
+                    outputRoot={libraryIndex?.outputRoot ?? outputRoot}
+                    loadSource={loadSource}
+                    isSaving={isSavingGroup}
+                    isMovingPhotos={isMovingGroupPhotos}
+                    onSave={handleSaveGroup}
+                    onMovePhotos={handleMoveGroupPhotos}
+                  />
+                </div>
               ) : (
-                <MapPhotoSidebar
-                  outputRoot={libraryIndex?.outputRoot ?? outputRoot}
-                  selectedGroup={selectedGroup}
-                  selectedGroupDetail={selectedGroupDetail}
-                  selectedPhotoPinCount={selectedPhotoPins.length}
-                  selectedPhotoPinMaxCount={SELECTED_GROUP_PHOTO_PIN_MAX_COUNT}
-                  photoPinMinZoom={SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM}
-                  isLoadingGroupDetail={isLoadingGroupDetail}
-                  groupDetailErrorMessage={groupDetailErrorMessage}
-                  filteredGroups={filteredRecords}
-                  unmappedGroups={unmappedRecords}
-                  onSelectGroup={handleSelectGroup}
-                  onPreviewPhoto={setPreviewPhotoId}
-                />
+                <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
+                  <MapPhotoSidebar
+                    outputRoot={libraryIndex?.outputRoot ?? outputRoot}
+                    selectedGroup={selectedGroup}
+                    selectedGroupDetail={selectedGroupDetail}
+                    selectedPhotoPinCount={selectedPhotoPins.length}
+                    selectedPhotoPinMaxCount={SELECTED_GROUP_PHOTO_PIN_MAX_COUNT}
+                    photoPinMinZoom={SELECTED_GROUP_PHOTO_PIN_MIN_ZOOM}
+                    isLoadingGroupDetail={isLoadingGroupDetail}
+                    groupDetailErrorMessage={groupDetailErrorMessage}
+                    filteredGroups={filteredRecords}
+                    unmappedGroups={unmappedRecords}
+                    onSelectGroup={handleSelectGroup}
+                    onPreviewPhoto={setPreviewPhotoId}
+                  />
+                </div>
               )}
             </div>
           </div>

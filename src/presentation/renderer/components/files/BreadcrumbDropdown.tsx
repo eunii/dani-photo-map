@@ -37,7 +37,7 @@ export function BreadcrumbDropdown({
         className="min-w-[240px] rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel)] p-1"
       >
         <Dropdown.Menu
-          aria-label={`${label} 하위 폴더`}
+          aria-label={`${label} 동위 폴더`}
           onAction={(key) => {
             if (key === CURRENT_KEY) {
               onNavigate(currentPathSegments)
@@ -73,11 +73,11 @@ export function BreadcrumbDropdown({
             {options.length === 0 ? (
               <Dropdown.Item
                 id="__empty__"
-                textValue="하위 폴더 없음"
+                textValue="동위 폴더 없음"
                 className="rounded-xl"
               >
                 <div className="py-1 text-sm text-[var(--app-muted)]">
-                  하위 폴더가 없습니다.
+                  같은 단계의 다른 폴더가 없습니다.
                 </div>
               </Dropdown.Item>
             ) : (
