@@ -1,7 +1,17 @@
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
-import { Button, Input } from '@heroui/react'
+import {
+  Badge,
+  Button,
+  Card,
+  ScrollShadow,
+  SearchField,
+  Spinner,
+  Text,
+  Toolbar,
+  Tooltip
+} from '@heroui/react'
 
 import {
   ChevronRightIcon,
@@ -10,7 +20,6 @@ import {
   KpiLocationUnknownIcon,
   KpiPhotosIcon,
   MapIcon,
-  SearchIcon
 } from '@presentation/renderer/components/app/AppIcons'
 import {
   getLoadSourceBadge,
@@ -105,37 +114,60 @@ function SummaryCard({
   value,
   description,
   valueClassName,
-  icon
+  icon,
+  compact
 }: {
   label: string
   value: string
   description: string
   valueClassName?: string
   icon?: ReactNode
+  compact?: boolean
 }) {
   return (
-    <div className="app-surface-card rounded-[20px] px-4 py-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+    <Card
+      className={`app-surface-card border-0 shadow-none ${
+        compact ? 'rounded-xl px-2 py-1.5' : 'rounded-[20px] px-4 py-3'
+      }`}
+    >
+      <Card.Header
+        className={`flex flex-row items-start justify-between gap-1.5 p-0 pb-0 ${compact ? '' : ''}`}
+      >
+        <Card.Title
+          className={`font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)] ${
+            compact ? 'text-[9px]' : 'text-[10px]'
+          }`}
+        >
           {label}
-        </p>
+        </Card.Title>
         {icon ? (
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--app-surface-strong)] text-[var(--app-accent-strong)]">
+          <span
+            className={`flex shrink-0 items-center justify-center rounded-lg bg-[var(--app-surface-strong)] text-[var(--app-accent-strong)] ${
+              compact ? 'h-7 w-7' : 'h-9 w-9 rounded-xl'
+            }`}
+          >
             {icon}
           </span>
         ) : null}
-      </div>
-      <p
-        className={`mt-1.5 font-semibold tracking-tight text-[var(--app-foreground)] ${
-          valueClassName ?? 'text-[22px]'
-        }`}
-      >
-        {value}
-      </p>
-      <p className="mt-1 text-[11px] leading-5 text-[var(--app-muted)]">
-        {description}
-      </p>
-    </div>
+      </Card.Header>
+      <Card.Content className={`p-0 ${compact ? 'pt-0.5' : 'pt-2'}`}>
+        <p
+          className={`font-semibold tracking-tight text-[var(--app-foreground)] ${
+            valueClassName ??
+            (compact ? 'text-[16px] leading-tight' : 'text-[22px]')
+          }`}
+        >
+          {value}
+        </p>
+        <Card.Description
+          className={`leading-snug text-[var(--app-muted)] ${
+            compact ? 'mt-0.5 text-[10px]' : 'mt-1 text-[11px] leading-5'
+          }`}
+        >
+          {description}
+        </Card.Description>
+      </Card.Content>
+    </Card>
   )
 }
 
@@ -157,11 +189,11 @@ function YearBar({
   return (
     <button
       type="button"
-      className={`w-full rounded-[16px] px-3 text-left transition ${
-        compact ? 'py-1.5' : 'py-2'
+      className={`w-full rounded-xl px-2 text-left transition ${
+        compact ? 'py-1' : 'py-2'
       } ${
         isSelected
-          ? 'bg-[var(--app-surface-strong)]'
+          ? 'bg-[var(--app-surface-strong)] ring-1 ring-[color:color-mix(in_srgb,var(--app-accent)_40%,transparent)]'
           : 'hover:bg-[var(--app-surface-strong)]'
       }`}
       onClick={onPress}
@@ -171,23 +203,21 @@ function YearBar({
           compact ? 'mb-1' : 'mb-1.5'
         }`}
       >
-        <span
-          className={`font-medium text-[var(--app-foreground)] ${
-            compact ? 'text-[13px]' : 'text-sm'
-          }`}
+        <Text
+          size={compact ? 'sm' : 'base'}
+          className="font-medium text-[var(--app-foreground)]"
         >
           {year}
-        </span>
-        <span
-          className={`text-[var(--app-muted)] ${
-            compact ? 'text-[10px]' : 'text-[11px]'
-          }`}
+        </Text>
+        <Text
+          size={compact ? 'xs' : 'sm'}
+          className="tabular-nums text-[var(--app-muted)]"
         >
           {photoCount.toLocaleString()}장
-        </span>
+        </Text>
       </div>
       <div
-        className={`overflow-hidden rounded-full bg-[var(--app-surface-strong)] ${
+        className={`relative overflow-hidden rounded-full bg-[var(--app-surface-strong)] ${
           compact ? 'h-1' : 'h-1.5'
         }`}
       >
@@ -197,6 +227,135 @@ function YearBar({
         />
       </div>
     </button>
+  )
+}
+
+type YearStat = { year: string; photoCount: number }
+
+function YearVolumeTimeSeriesChart({
+  stats,
+  selectedYear,
+  onSelectYear
+}: {
+  stats: YearStat[]
+  selectedYear: 'all' | string
+  onSelectYear: (year: string) => void
+}) {
+  const gradId = `spark-${useId().replace(/:/g, '')}`
+  const chronological = useMemo(
+    () =>
+      [...stats].sort((a, b) =>
+        a.year.localeCompare(b.year, undefined, {
+          numeric: true,
+          sensitivity: 'base'
+        })
+      ),
+    [stats]
+  )
+  const maxCount = Math.max(1, ...chronological.map((s) => s.photoCount))
+  const n = chronological.length
+
+  if (n === 0) {
+    return (
+      <Text size="xs" className="text-[var(--app-muted)]">
+        연도 데이터 없음
+      </Text>
+    )
+  }
+
+  const w = 120
+  const h = 34
+  const padX = 2
+  const padY = 3
+  const innerW = w - padX * 2
+  const innerH = h - padY * 2
+  const points = chronological.map((item, i) => {
+    const x =
+      n === 1 ? padX + innerW / 2 : padX + (i / (n - 1)) * innerW
+    const y = padY + innerH - (item.photoCount / maxCount) * innerH
+    return { ...item, x, y }
+  })
+  const linePts = points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
+  const bottomY = h - padY
+  const first = points[0]
+  const last = points[n - 1]
+  const areaD =
+    n > 1 && first && last
+      ? `M ${first.x},${bottomY} L ${points.map((p) => `${p.x},${p.y}`).join(' ')} L ${last.x},${bottomY} Z`
+      : ''
+
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-0.5">
+      <div className="relative w-full">
+        <svg
+          viewBox={`0 0 ${w} ${h}`}
+          className="pointer-events-none h-8 w-full text-[var(--app-accent)]"
+          preserveAspectRatio="none"
+          aria-hidden
+        >
+          <defs>
+            <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.32" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0.04" />
+            </linearGradient>
+          </defs>
+          {n > 1 ? <path d={areaD} fill={`url(#${gradId})`} /> : null}
+          {n > 1 ? (
+            <polyline
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              points={linePts}
+            />
+          ) : first ? (
+            <circle cx={first.x} cy={first.y} r="2.5" fill="currentColor" />
+          ) : null}
+          {points.map((p) => (
+            <circle
+              key={p.year}
+              cx={p.x}
+              cy={p.y}
+              r={selectedYear === p.year ? 2.6 : 1.6}
+              className="pointer-events-none"
+              fill="var(--app-surface-strong)"
+              stroke="currentColor"
+              strokeWidth={selectedYear === p.year ? 1.1 : 0.7}
+            />
+          ))}
+        </svg>
+        <div className="absolute inset-0 flex min-h-[36px]">
+          {chronological.map((item) => (
+            <button
+              key={item.year}
+              type="button"
+              className="min-w-0 flex-1 opacity-0"
+              title={`${item.year}년 · ${item.photoCount.toLocaleString()}장`}
+              aria-label={`${item.year}년 ${item.photoCount.toLocaleString()}장 선택`}
+              onClick={() => onSelectYear(item.year)}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="flex justify-between gap-px px-0.5">
+        {chronological.map((item) => (
+          <button
+            key={`lbl-${item.year}`}
+            type="button"
+            className={`min-w-0 flex-1 truncate text-center text-[8px] tabular-nums transition ${
+              selectedYear === item.year
+                ? 'font-semibold text-[var(--app-accent-strong)]'
+                : 'text-[var(--app-muted)] hover:text-[var(--app-foreground)]'
+            }`}
+            title={`${item.year}년 · ${item.photoCount.toLocaleString()}장`}
+            onClick={() => onSelectYear(item.year)}
+          >
+            {item.year}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -262,7 +421,10 @@ export function DashboardPage({
         })
       )
   }, [allRows])
-  const maxYearPhotoCount = yearPhotoStats[0]?.photoCount ?? 1
+  const maxYearPhotoCount = Math.max(
+    1,
+    ...yearPhotoStats.map((item) => item.photoCount)
+  )
   const yearChartCompact = yearPhotoStats.length > 10
 
   const summary = useMemo(() => {
@@ -315,221 +477,252 @@ export function DashboardPage({
 
   if (!outputRoot) {
     return (
-      <div className="app-surface-card flex h-full min-h-0 flex-col items-center justify-center rounded-[20px] px-6 py-8 text-center">
-        <p className="text-base font-semibold text-[var(--app-foreground)]">
-          출력 폴더를 먼저 설정하세요.
-        </p>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--app-muted)]">
-          메인 대시보드는 정리된 라이브러리의 폴더 구조와 대표 썸네일을
-          요약해서 보여줍니다. 설정에서 출력 폴더를 지정하면 바로 사용할 수
-          있습니다.
-        </p>
+      <Card className="app-surface-card flex h-full min-h-0 flex-col items-center justify-center rounded-[20px] border-0 px-6 py-8 text-center shadow-none">
+        <Card.Header className="flex flex-col items-center p-0">
+          <Card.Title className="text-base font-semibold text-[var(--app-foreground)]">
+            출력 폴더를 먼저 설정하세요.
+          </Card.Title>
+          <Card.Description className="mt-2 max-w-xl text-sm leading-6 text-[var(--app-muted)]">
+            메인 대시보드는 정리된 라이브러리의 폴더 구조와 대표 썸네일을
+            요약해서 보여줍니다. 설정에서 출력 폴더를 지정하면 바로 사용할 수
+            있습니다.
+          </Card.Description>
+        </Card.Header>
         {onNavigateToSettings ? (
-          <Button
-            variant="primary"
-            className="mt-4 rounded-xl bg-[var(--app-button)] text-[var(--app-button-foreground)]"
-            onPress={onNavigateToSettings}
-          >
-            설정으로 이동
-          </Button>
+          <Card.Footer className="mt-4 p-0">
+            <Button
+              variant="primary"
+              className="rounded-xl bg-[var(--app-button)] text-[var(--app-button-foreground)]"
+              onPress={onNavigateToSettings}
+            >
+              설정으로 이동
+            </Button>
+          </Card.Footer>
         ) : null}
-      </div>
+      </Card>
     )
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2.5">
-      <div className="grid min-h-0 gap-2.5 xl:grid-cols-[minmax(0,1.2fr)_320px] xl:items-stretch">
-        <section className="app-surface-card app-grid-dots relative min-h-0 overflow-hidden rounded-[24px] px-4 py-4">
+    <div className="flex h-full min-h-0 flex-col gap-1.5">
+      <div className="grid min-h-0 shrink-0 gap-1.5 xl:grid-cols-[minmax(0,1fr)_minmax(220px,280px)] xl:items-stretch">
+        <Card className="app-surface-card app-grid-dots relative min-h-0 overflow-hidden rounded-[16px] border-0 shadow-none">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.55),transparent_40%)]" />
-          <div className="relative grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="min-w-0">
-              <div className="inline-flex items-center rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-accent-strong)]">
-                Home
-              </div>
-              <h2 className="mt-3 text-[28px] font-semibold tracking-tight text-[var(--app-foreground)]">
-                사진 라이브러리 홈
-              </h2>
-              <p className="mt-2 max-w-[44rem] text-[13px] leading-6 text-[var(--app-muted)]">
-                연도별로 정리된 최하위 폴더를 빠르게 훑고, 원하는 위치를 클릭해서
-                바로 파일 목록으로 들어갈 수 있습니다.
-              </p>
+          <Card.Content className="relative space-y-2 px-2 py-2">
+            <Toolbar className="min-w-0 flex-wrap justify-end gap-1.5 border-0 p-0">
+              <Button
+                variant="primary"
+                className="h-8 rounded-xl bg-[var(--app-button)] px-3 text-[12px] text-[var(--app-button-foreground)]"
+                onPress={onNavigateToOrganize}
+              >
+                새 사진 정리
+              </Button>
+              <Button
+                variant="ghost"
+                className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-[12px] text-[var(--app-foreground)]"
+                onPress={onNavigateToBrowse}
+              >
+                지도 보기
+              </Button>
+            </Toolbar>
 
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Button
-                  variant="primary"
-                  className="h-9 rounded-xl bg-[var(--app-button)] px-3.5 text-[13px] text-[var(--app-button-foreground)]"
-                  onPress={onNavigateToOrganize}
-                >
-                  새 사진 정리
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="h-9 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 text-[13px] text-[var(--app-foreground)]"
-                  onPress={onNavigateToBrowse}
-                >
-                  지도 보기
-                </Button>
-                <div className="rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1 text-[11px] text-[var(--app-muted)]">
-                  위치 미확인 경로 {summary.unknownRowCount.toLocaleString()}개
-                </div>
-                {loadSourceBadge ? (
-                  <div
-                    className={`rounded-full border px-2.5 py-1 text-[11px] ${loadSourceBadge.tone}`}
-                    title={loadSourceBadge.description}
-                  >
-                    {loadSourceBadge.label}
-                  </div>
-                ) : null}
-              </div>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+              <SummaryCard
+                compact
+                label="전체 그룹"
+                value={summary.totalGroupCount.toLocaleString()}
+                description="저장된 그룹"
+                icon={<KpiGroupsIcon className="h-3.5 w-3.5" />}
+              />
+              <SummaryCard
+                compact
+                label="전체 사진"
+                value={summary.totalPhotoCount.toLocaleString()}
+                description="총 사진 수"
+                icon={<KpiPhotosIcon className="h-3.5 w-3.5" />}
+              />
+              <SummaryCard
+                compact
+                label="위치 미확인"
+                value={summary.unknownGroupCount.toLocaleString()}
+                description="GPS 검토 그룹"
+                icon={<KpiLocationUnknownIcon className="h-3.5 w-3.5" />}
+              />
+              <SummaryCard
+                compact
+                label="마지막 갱신"
+                value={formatGeneratedAtLabel(libraryIndex?.generatedAt)}
+                description={`${filteredRows.length.toLocaleString()}개 폴더`}
+                valueClassName="text-[13px] leading-snug"
+                icon={<KpiClockIcon className="h-3.5 w-3.5" />}
+              />
             </div>
 
-            <div className="rounded-[20px] border border-[var(--app-border)] bg-[color:color-mix(in_srgb,var(--app-surface-strong)_72%,white_28%)] p-3.5">
-              <label className="block">
-                <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)]">
-                  <SearchIcon className="h-3.5 w-3.5" />
-                  폴더 검색
-                </span>
-                <Input
-                  aria-label="폴더 경로 검색"
-                  placeholder="예: 서울, 2024 > 12, seoul"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)]"
-                />
-              </label>
-              <p className="mt-2 text-[11px] leading-5 text-[var(--app-muted)]">
-                전체 경로를 기준으로 like 검색합니다.
-              </p>
-
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                <Button
-                  variant={selectedYear === 'all' ? 'primary' : 'ghost'}
-                  className={`h-8 rounded-full px-3 text-xs ${
-                    selectedYear === 'all'
-                      ? 'bg-[var(--app-button)] text-[var(--app-button-foreground)]'
-                      : 'border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]'
-                  }`}
-                  onPress={() => setSelectedYear('all')}
+            <div className="flex flex-wrap items-center gap-1">
+              <Badge
+                size="sm"
+                variant="soft"
+                className="rounded-full bg-[var(--app-surface-strong)] px-1.5 py-0.5 text-[10px] font-normal text-[var(--app-muted)]"
+              >
+                위치 미확인 경로 {summary.unknownRowCount.toLocaleString()}개
+              </Badge>
+              {loadSourceBadge ? (
+                <Badge
+                  size="sm"
+                  variant="soft"
+                  className={`rounded-full border px-1.5 py-0.5 text-[10px] font-normal ${loadSourceBadge.tone}`}
+                  title={loadSourceBadge.description}
                 >
-                  전체
-                </Button>
-                {yearOptions.map((year) => (
-                  <Button
-                    key={year}
-                    variant={selectedYear === year ? 'primary' : 'ghost'}
-                    className={`h-8 rounded-full px-3 text-xs ${
-                      selectedYear === year
-                        ? 'bg-[var(--app-button)] text-[var(--app-button-foreground)]'
-                        : 'border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]'
-                    }`}
-                    onPress={() => setSelectedYear(year)}
-                  >
-                    {year}
-                  </Button>
+                  {loadSourceBadge.label}
+                </Badge>
+              ) : null}
+            </div>
+          </Card.Content>
+        </Card>
+
+        <Card className="app-surface-card flex max-h-[min(26vh,220px)] min-h-0 flex-col rounded-[16px] border-0 shadow-none xl:max-h-[min(30vh,260px)]">
+          <Card.Content className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden p-2">
+            <div className="flex shrink-0 items-center justify-end">
+              <Badge size="sm" variant="soft" className="tabular-nums">
+                {selectedYear === 'all' ? '전체' : `${selectedYear}년`}
+              </Badge>
+            </div>
+            <div className="shrink-0 border-b border-[var(--app-border)] pb-1.5">
+              <YearVolumeTimeSeriesChart
+                stats={yearPhotoStats}
+                selectedYear={selectedYear}
+                onSelectYear={(year) => setSelectedYear(year)}
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-0.5 [-ms-overflow-style:none] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color:color-mix(in_srgb,var(--app-border)_70%,transparent)]">
+              <div className="space-y-1 pb-0.5">
+                {yearPhotoStats.map((item) => (
+                  <YearBar
+                    key={item.year}
+                    year={item.year}
+                    photoCount={item.photoCount}
+                    ratio={item.photoCount / maxYearPhotoCount}
+                    isSelected={selectedYear === item.year}
+                    compact={yearChartCompact}
+                    onPress={() => setSelectedYear(item.year)}
+                  />
                 ))}
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="app-surface-card flex min-h-0 max-h-[min(42vh,320px)] flex-col rounded-[24px] px-4 py-4 xl:max-h-[min(52vh,420px)] xl:min-h-[200px]">
-          <div className="flex shrink-0 items-start justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)]">
-                Year Volume
-              </p>
-              <h3 className="mt-1 text-[17px] font-semibold text-[var(--app-foreground)]">
-                연도별 사진 분포
-              </h3>
-              <p className="mt-1 text-[11px] leading-4 text-[var(--app-muted)]">
-                연도 {yearPhotoStats.length}개
-                {yearPhotoStats.length > 8
-                  ? ' · 긴 기간은 목록을 스크롤하거나 상단 연도 칩으로 바로 이동하세요.'
-                  : ' · 아래에서 연도별 비중을 확인할 수 있습니다.'}
-              </p>
-            </div>
-            <div className="shrink-0 rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1 text-[11px] text-[var(--app-muted)]">
-              {selectedYear === 'all' ? '전체 보기' : `${selectedYear}년 선택`}
-            </div>
-          </div>
-
-          <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-0.5 [-ms-overflow-style:none] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color:color-mix(in_srgb,var(--app-border)_70%,transparent)]">
-            <div className="space-y-1.5 pb-0.5">
-              {yearPhotoStats.map((item) => (
-                <YearBar
-                  key={item.year}
-                  year={item.year}
-                  photoCount={item.photoCount}
-                  ratio={item.photoCount / maxYearPhotoCount}
-                  isSelected={selectedYear === item.year}
-                  compact={yearChartCompact}
-                  onPress={() => setSelectedYear(item.year)}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
+          </Card.Content>
+        </Card>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          label="전체 그룹"
-          value={summary.totalGroupCount.toLocaleString()}
-          description="라이브러리에 저장된 그룹"
-          icon={<KpiGroupsIcon className="h-4 w-4" />}
-        />
-        <SummaryCard
-          label="전체 사진"
-          value={summary.totalPhotoCount.toLocaleString()}
-          description="현재 출력 라이브러리 총 사진 수"
-          icon={<KpiPhotosIcon className="h-4 w-4" />}
-        />
-        <SummaryCard
-          label="위치 미확인"
-          value={summary.unknownGroupCount.toLocaleString()}
-          description="GPS 검토가 필요한 그룹"
-          icon={<KpiLocationUnknownIcon className="h-4 w-4" />}
-        />
-        <SummaryCard
-          label="마지막 갱신"
-          value={formatGeneratedAtLabel(libraryIndex?.generatedAt)}
-          description={`${filteredRows.length.toLocaleString()}개 폴더 표시 중`}
-          valueClassName="text-[13px] leading-6"
-          icon={<KpiClockIcon className="h-4 w-4" />}
-        />
-      </div>
-
-      <section className="app-surface-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px]">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--app-border)] px-3.5 py-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)]">
-              Folder Index
-            </p>
-            <h3 className="mt-0.5 text-[16px] font-semibold text-[var(--app-foreground)]">
-              사진이 있는 폴더
-            </h3>
-          </div>
-          <div className="rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1 text-[11px] text-[var(--app-muted)]">
-            {visibleRows.length.toLocaleString()} / {filteredRows.length.toLocaleString()}
-          </div>
-        </div>
-
+      <Card className="app-surface-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border-0 shadow-none">
         {!libraryIndex && isLoadingIndex ? (
-          <div className="flex flex-1 items-center justify-center px-4 py-10 text-sm text-[var(--app-muted)]">
-            라이브러리 인덱스를 불러오는 중입니다.
-          </div>
+          <Card.Content className="flex flex-1 flex-col items-center justify-center px-4 py-10">
+            <Spinner size="lg" />
+            <Text className="mt-3 text-sm text-[var(--app-muted)]">
+              라이브러리 인덱스를 불러오는 중입니다.
+            </Text>
+          </Card.Content>
         ) : errorMessage ? (
-          <div className="flex flex-1 items-center justify-center px-4 py-10 text-sm text-[var(--app-danger)]">
-            {errorMessage}
-          </div>
-        ) : filteredRows.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center px-4 py-10 text-sm text-[var(--app-muted)]">
-            {searchQuery.trim()
-              ? '검색어와 일치하는 폴더 경로가 없습니다.'
-              : '표시할 폴더 경로가 없습니다.'}
-          </div>
+          <Card.Content className="flex flex-1 items-center justify-center px-4 py-10">
+            <Text className="text-sm text-[var(--app-danger)]">{errorMessage}</Text>
+          </Card.Content>
         ) : (
+          <>
+            <Toolbar className="min-w-0 shrink-0 flex-col flex-wrap gap-1.5 border-b border-[var(--app-border)] px-2 py-1.5 lg:flex-row lg:items-center">
+              <div className="flex min-w-0 w-full items-center gap-1 lg:min-w-[220px] lg:max-w-[min(100%,440px)] lg:flex-[1.15]">
+                <SearchField
+                  aria-label="폴더 경로 검색"
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  className="min-w-0 flex-1"
+                >
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input
+                      placeholder="경로·제목·지역·동행·메모 검색 — 예: 서울, 2024"
+                      className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)]"
+                    />
+                    <SearchField.ClearButton />
+                  </SearchField.Group>
+                </SearchField>
+                <Tooltip>
+                  <Tooltip.Trigger>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      isIconOnly
+                      size="sm"
+                      className="h-9 w-9 shrink-0 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)]"
+                      aria-label="검색 범위 안내"
+                    >
+                      <span className="text-[13px] font-semibold">?</span>
+                    </Button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Content className="max-w-xs text-xs">
+                    경로·제목·지역·동행·메모 등으로 검색합니다.
+                  </Tooltip.Content>
+                </Tooltip>
+              </div>
+
+              <ScrollShadow
+                orientation="horizontal"
+                size={28}
+                className="min-h-[36px] min-w-0 w-full lg:flex-1"
+                hideScrollBar={false}
+              >
+                <div className="flex w-max min-w-0 flex-nowrap items-center gap-1.5 py-0.5">
+                  <Text
+                    size="xs"
+                    className="mr-1 shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--app-muted)]"
+                  >
+                    연도
+                  </Text>
+                  <Button
+                    variant={selectedYear === 'all' ? 'primary' : 'secondary'}
+                    className={`h-8 shrink-0 rounded-full px-3 text-xs font-medium ${
+                      selectedYear === 'all'
+                        ? 'bg-[var(--app-button)] text-[var(--app-button-foreground)]'
+                        : 'border border-[var(--app-border)] bg-[var(--app-surface-strong)] text-[var(--app-foreground)]'
+                    }`}
+                    onPress={() => setSelectedYear('all')}
+                  >
+                    전체
+                  </Button>
+                  {yearOptions.map((year) => (
+                    <Button
+                      key={year}
+                      variant={selectedYear === year ? 'primary' : 'secondary'}
+                      className={`h-8 shrink-0 rounded-full px-3 text-xs font-medium ${
+                        selectedYear === year
+                          ? 'bg-[var(--app-button)] text-[var(--app-button-foreground)]'
+                          : 'border border-[var(--app-border)] bg-[var(--app-surface-strong)] text-[var(--app-foreground)]'
+                      }`}
+                      onPress={() => setSelectedYear(year)}
+                    >
+                      {year}
+                    </Button>
+                  ))}
+                </div>
+              </ScrollShadow>
+
+              <Badge
+                size="sm"
+                variant="soft"
+                className="shrink-0 tabular-nums lg:ml-auto"
+              >
+                {visibleRows.length.toLocaleString()} /{' '}
+                {filteredRows.length.toLocaleString()}
+              </Badge>
+            </Toolbar>
+
+            {filteredRows.length === 0 ? (
+              <Card.Content className="flex flex-1 items-center justify-center px-4 py-10">
+                <Text className="text-sm text-[var(--app-muted)]">
+                  {searchQuery.trim()
+                    ? '검색어와 일치하는 폴더 경로가 없습니다.'
+                    : '표시할 폴더 경로가 없습니다.'}
+                </Text>
+              </Card.Content>
+            ) : (
           <div
             ref={scrollContainerRef}
             className="min-h-0 flex-1 overflow-auto"
@@ -666,8 +859,10 @@ export function DashboardPage({
               </div>
             </div>
           </div>
+            )}
+          </>
         )}
-      </section>
+      </Card>
     </div>
   )
 }

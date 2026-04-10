@@ -34,9 +34,8 @@ const ROUTE_META: Record<
   { title: string; description: string; statusLabel: string }
 > = {
   dashboard: {
-    title: '메인 대시보드',
-    description:
-      '정리된 라이브러리의 전체 폴더 경로를 검색하고 원하는 폴더로 바로 이동합니다.',
+    title: '사진 라이브러리 홈',
+    description: '',
     statusLabel: 'Library Overview'
   },
   organize: {
