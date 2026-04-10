@@ -142,7 +142,7 @@ export function resolveMissingGpsOutputFolderSegment(
     case 'week':
       return resolveMonthWeekSegment(photo)
     case 'day':
-      return photo.capturedAt?.day ?? '00'
+      return null
     case 'month':
     default:
       return null

@@ -100,7 +100,7 @@ describe('assignGroupDisplayTitledOutputRelativePaths', () => {
     )
   })
 
-  it('puts missing-gps photos into day folders when daily grouping is selected', async () => {
+  it('keeps missing-gps daily grouping output under year/month', async () => {
     const listDirectoryFileNames = vi.fn().mockResolvedValue([])
     const dailyPhoto = photo({
       id: 'daily',
@@ -126,7 +126,7 @@ describe('assignGroupDisplayTitledOutputRelativePaths', () => {
       fileSystem: { listDirectoryFileNames }
     })
 
-    expect(map.get('daily')).toBe('2026/04/10/2026-04-10_100000_daily.jpg')
+    expect(map.get('daily')).toBe('2026/04/2026-04-10_100000_daily.jpg')
   })
 
   it('applies selected basis folders to gps-backed photos too', async () => {
@@ -158,6 +158,6 @@ describe('assignGroupDisplayTitledOutputRelativePaths', () => {
       fileSystem: { listDirectoryFileNames }
     })
 
-    expect(map.get('gps')).toBe('2026/04/10/seoul/2026-04-10_100000_gps.jpg')
+    expect(map.get('gps')).toBe('2026/04/seoul/2026-04-10_100000_gps.jpg')
   })
 })
