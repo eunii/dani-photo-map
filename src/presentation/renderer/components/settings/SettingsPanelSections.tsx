@@ -143,6 +143,9 @@ export function SettingsPanelSections({
               <p className="text-sm text-[var(--app-muted)]">
                 앱 셸과 설정 패널 중심으로 톤을 바꿉니다.
               </p>
+              <p className="text-[11px] text-[var(--app-muted)]">
+                미리보기 순서: 배경 / 강조 / 삭제 / 버튼 / 텍스트
+              </p>
             </div>
           </div>
 

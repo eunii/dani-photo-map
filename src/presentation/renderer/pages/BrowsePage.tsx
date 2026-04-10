@@ -371,7 +371,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
             ) : null}
           </div>
 
-          <div className="grid gap-2.5 xl:grid-cols-[minmax(0,1.35fr)_minmax(380px,500px)]">
+          <div className="grid gap-2 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,460px)]">
             <div className="relative h-[min(68vh,720px)] min-h-[520px] overflow-hidden rounded-[18px] bg-[var(--app-surface-strong)]">
               <PhotoGroupMap
                 sourceGroups={mapCanvasGroups}

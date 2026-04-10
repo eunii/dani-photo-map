@@ -3,7 +3,7 @@
 
 :root {
   color: #778873;
-  background-color: #fafaf8;
+  background-color: #fbfbf9;
   font-family: Inter, "Segoe UI", sans-serif;
   --theme-background: #f7f4ea;
   --theme-accent: #a8bba3;
@@ -12,8 +12,8 @@
   --theme-text: #778873;
   --accent: var(--theme-accent);
   --accent-foreground: #ffffff;
-  --background: color-mix(in srgb, var(--theme-background) 28%, white 72%);
-  --border: color-mix(in srgb, var(--theme-accent) 32%, #d8ddd2 68%);
+  --background: color-mix(in srgb, var(--theme-background) 14%, white 86%);
+  --border: color-mix(in srgb, var(--theme-accent) 18%, #dde3d7 82%);
   --foreground: var(--theme-text);
   --muted: color-mix(in srgb, var(--theme-text) 82%, white 18%);
   --surface: #ffffff;
@@ -23,10 +23,10 @@
   --radius: 0.625rem;
   --field-radius: 0.75rem;
   --app-background: var(--background);
-  --app-panel: color-mix(in srgb, var(--surface) 96%, var(--theme-background) 4%);
+  --app-panel: color-mix(in srgb, var(--surface) 98%, var(--theme-background) 2%);
   --app-surface: var(--surface);
-  --app-surface-strong: color-mix(in srgb, var(--theme-background) 26%, white 74%);
-  --app-sidebar: color-mix(in srgb, var(--theme-background) 46%, white 54%);
+  --app-surface-strong: color-mix(in srgb, var(--theme-background) 18%, white 82%);
+  --app-sidebar: color-mix(in srgb, var(--theme-background) 72%, white 28%);
   --app-border: var(--border);
   --app-foreground: var(--foreground);
   --app-muted: color-mix(in srgb, var(--theme-text) 72%, white 28%);
@@ -37,9 +37,9 @@
   --app-button-foreground: #ffffff;
   --app-danger: var(--theme-danger);
   --app-danger-foreground: color-mix(in srgb, var(--theme-danger) 52%, #5a1f1f 48%);
-  --app-sidebar-hover: color-mix(in srgb, var(--theme-accent) 24%, white 76%);
-  --app-sidebar-hover-text: var(--theme-accent);
-  --app-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  --app-sidebar-hover: color-mix(in srgb, var(--theme-accent) 20%, white 80%);
+  --app-sidebar-hover-text: color-mix(in srgb, var(--theme-accent) 62%, var(--theme-text) 38%);
+  --app-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
 }
 
 :root[data-theme='olive-mist'] {
@@ -90,11 +90,7 @@ body,
 
 body {
   min-width: 320px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--theme-background) 18%, white 82%) 0%,
-    color-mix(in srgb, var(--theme-background) 10%, white 90%) 100%
-  );
+  background: color-mix(in srgb, var(--theme-background) 12%, white 88%);
 }
 
 body,
@@ -106,21 +102,21 @@ textarea {
 }
 
 .app-surface-card {
-  background: color-mix(in srgb, var(--app-surface) 98%, var(--theme-background) 2%);
+  background: color-mix(in srgb, var(--app-surface) 99%, var(--theme-background) 1%);
   border: 1px solid var(--app-border);
   box-shadow: var(--app-shadow);
 }
 
 .app-sidebar-surface {
-  background: color-mix(in srgb, var(--theme-background) 64%, white 36%);
-  border: 1px solid var(--app-border);
+  background: var(--app-sidebar);
+  border: 1px solid color-mix(in srgb, var(--app-border) 88%, transparent 12%);
   box-shadow: none;
 }
 
 .app-page-section {
-  background: color-mix(in srgb, var(--app-surface) 98%, var(--theme-background) 2%);
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .app-grid-dots {

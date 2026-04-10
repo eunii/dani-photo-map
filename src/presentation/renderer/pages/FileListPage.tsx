@@ -770,31 +770,31 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                     ))}
                   </nav>
                   {pathSegments.length > 0 && libraryIndex ? (
-                    <button
-                      type="button"
-                      className="shrink-0 rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    <Button
+                      variant="ghost"
+                      className="h-7 shrink-0 rounded-[10px] border border-[var(--app-danger)] bg-[var(--app-danger)] px-2.5 text-[11px] font-medium text-[var(--app-danger-foreground)] disabled:opacity-50"
                       disabled={
                         isDeletingFolder || isDeletingPhotos || isMovingPhotos
                       }
-                      onClick={() => setDeleteFolderConfirmOpen(true)}
+                      onPress={() => setDeleteFolderConfirmOpen(true)}
                     >
                       폴더 삭제
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
 
                 {libraryIndex && groupAtPath ? (
                   <div className="flex flex-col gap-1.5 px-2 py-1.5 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between lg:gap-3">
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center rounded-md bg-violet-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        <Button
+                          variant="primary"
+                          className="h-7 rounded-[10px] bg-[var(--app-button)] px-2.5 text-xs font-medium text-[var(--app-button-foreground)] disabled:opacity-60"
                           disabled={
                             selectedForMove.size === 0 ||
                             isMovingPhotos ||
                             folderCount === 0
                           }
-                          onClick={() => {
+                          onPress={() => {
                             const first = moveDestinationFolderOptions[0]
                             if (first) {
                               setDestinationSelect(first.groupId)
@@ -809,15 +809,15 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                           {selectedForMove.size > 0
                             ? `선택 ${selectedForMove.size}장 이동`
                             : '폴더로 이동'}
-                        </button>
+                        </Button>
                         {canRenameGroupFolderFromTree ? (
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          <Button
+                            variant="ghost"
+                            className="h-7 rounded-[10px] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-foreground)] disabled:opacity-50"
                             disabled={
                               groupsInCurrentFolder.length === 0 || isRenaming
                             }
-                            onClick={() => {
+                            onPress={() => {
                               const first = groupsInCurrentFolder[0]
                               if (!first || !libraryIndex) {
                                 return
@@ -835,38 +835,38 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                             }}
                           >
                             이름 변경
-                          </button>
+                          </Button>
                         ) : null}
                     </div>
                     <div className="hidden w-px shrink-0 self-stretch bg-[var(--app-border)] lg:block" aria-hidden />
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:justify-end">
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        <Button
+                          variant="ghost"
+                          className="h-7 rounded-[10px] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-foreground)] disabled:opacity-50"
                           disabled={visibleRows.length === 0}
-                          onClick={() => toggleSelectAllVisible()}
+                          onPress={() => toggleSelectAllVisible()}
                         >
                           {allVisibleSelected ? '목록 선택 해제' : '목록 전체 선택'}
-                        </button>
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-900 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="h-7 rounded-[10px] border border-[var(--app-danger)] bg-[var(--app-danger)] px-2.5 text-xs font-medium text-[var(--app-danger-foreground)] disabled:opacity-50"
                           disabled={
                             selectedForMove.size === 0 ||
                             isDeletingPhotos ||
                             isDeletingFolder ||
                             folderCount === 0
                           }
-                          onClick={() => setDeletePhotosConfirmOpen(true)}
+                          onPress={() => setDeletePhotosConfirmOpen(true)}
                         >
                           선택 삭제
-                        </button>
+                        </Button>
                     </div>
                   </div>
                 ) : null}
               </div>
 
-              <div className="grid min-h-0 w-full min-w-0 gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)] lg:items-start">
+              <div className="grid min-h-0 w-full min-w-0 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(220px,290px)] lg:items-start">
                 <div className="min-h-0 min-w-0 overflow-hidden rounded-[16px] bg-[var(--app-surface)]">
                   <div className="border-b border-[var(--app-border)] px-2.5 py-1.5">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -891,7 +891,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                     </p>
                   ) : (
                     <>
-                      <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-4">
+                        <div className="grid grid-cols-2 gap-1.5 p-1.5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                         {visibleRows.map((row) => {
                           const isSelected = row.photo.id === selectedPhotoId
                           const thumb =
@@ -908,12 +908,12 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                           return (
                             <div
                               key={row.photo.id}
-                              className={`[content-visibility:auto] flex min-w-0 flex-col overflow-hidden rounded-[14px] text-left transition-colors ${
+                                className={`[content-visibility:auto] flex min-w-0 flex-col overflow-hidden rounded-[12px] text-left transition-colors ${
                                 isSelected
                                   ? 'bg-[var(--app-sidebar-hover)] ring-1 ring-[var(--app-accent)]'
                                   : 'bg-[var(--app-surface)] hover:bg-[var(--app-surface-strong)]'
                               }`}
-                              style={{ containIntrinsicSize: '180px 220px' }}
+                                style={{ containIntrinsicSize: '180px 204px' }}
                             >
                               <div className="relative aspect-square w-full bg-[var(--app-surface-strong)]">
                                 <label className="absolute left-1.5 top-1.5 z-10 flex cursor-pointer items-center rounded bg-white/88 p-1">
@@ -950,13 +950,13 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                               <button
                                 type="button"
                                 onClick={() => setSelectedPhotoId(row.photo.id)}
-                                className="w-full min-w-0 flex-1 px-2 py-1.5 text-left"
+                                    className="w-full min-w-0 flex-1 px-2 py-1 text-left"
                               >
-                                <p className="truncate text-xs font-medium text-slate-900">
+                                    <p className="truncate text-[11px] font-medium leading-4 text-[var(--app-foreground)]">
                                   {row.photo.sourceFileName}
                                 </p>
                                 <p
-                                  className="mt-0.5 truncate text-[11px] text-slate-500"
+                                      className="mt-0.5 truncate text-[10px] leading-4 text-[var(--app-muted)]"
                                   title={
                                     `${formatCapturedLabel(row.photo.capturedAtIso)} · ${row.groupDisplayTitle}`
                                   }
@@ -1049,7 +1049,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
 
       {moveDialogOpen && libraryIndex && outputRoot ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--app-foreground)_22%,transparent)]/40 p-3 backdrop-blur-[2px]"
           role="dialog"
           aria-modal
           aria-labelledby="move-to-folder-dialog-title"
@@ -1060,16 +1060,16 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
           }}
         >
           <div
-            className="w-full max-w-lg max-h-[min(90vh,720px)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            className="max-h-[min(88vh,720px)] w-full max-w-[560px] overflow-y-auto rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)]"
             onClick={(event) => event.stopPropagation()}
           >
             <h2
               id="move-to-folder-dialog-title"
-              className="text-lg font-semibold text-slate-900"
+              className="text-base font-semibold text-[var(--app-foreground)]"
             >
               폴더로 이동
             </h2>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm leading-6 text-[var(--app-muted)]">
               선택한 {selectedForMove.size}장의 목적지입니다.{' '}
               {moveDestinationUsesChildFolders ? (
                 <>
@@ -1083,15 +1083,15 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                 </>
               )}
             </p>
-            <p className="mt-2 text-xs leading-relaxed text-slate-500">
+            <p className="mt-2 text-xs leading-5 text-[var(--app-muted)]">
               드롭다운에서 고르면 아래 입력란에 같은 이름이 채워집니다. 직접 고칠 수도
               있으며, 동일한 이름의 폴더가 있으면 합쳐집니다.
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-[var(--app-muted)]">
               지금 보는 경로:{' '}
               <span className="font-medium text-slate-700">{breadcrumbPathLabel}</span>
             </p>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-[var(--app-muted)]">
               {moveDestinationUsesChildFolders
                 ? '하위 목록 기준 (현재 경로): '
                 : '동위 목록 기준 부모 경로: '}
@@ -1101,11 +1101,11 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
             </p>
 
             <div className="mt-4 space-y-2">
-              <label className="block text-sm font-medium text-slate-800">
+              <label className="block text-sm font-medium text-[var(--app-foreground)]">
                 목적지 —{' '}
                 {moveDestinationUsesChildFolders ? '하위 폴더' : '동위 폴더'}
                 <select
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  className="mt-1 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none"
                   disabled={isMovingPhotos}
                   value={
                     destinationSelect === DEST_CUSTOM ? '' : destinationSelect
@@ -1126,7 +1126,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                 </select>
               </label>
               {moveDestinationFolderOptions.length === 0 ? (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs leading-5 text-[var(--app-muted)]">
                   {moveDestinationUsesChildFolders
                     ? '이 경로 아래에 다른 폴더가 없을 수 있습니다. 「년·월만」을 고르거나 아래에 새 이름을 입력하세요.'
                     : '같은 상위에 등록된 다른 폴더가 없을 수 있습니다. 「년·월만」을 고르거나 아래에 새 이름을 입력하세요.'}
@@ -1134,7 +1134,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
               ) : null}
             </div>
 
-            <label className="mt-4 block text-sm text-slate-700">
+            <label className="mt-4 block text-sm text-[var(--app-foreground)]">
               <span className="mb-1 block font-medium">
                 폴더 이름 (드롭다운 선택 시 자동 입력 · 수정 가능)
               </span>
@@ -1146,11 +1146,11 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                 }
                 disabled={isMovingPhotos}
                 placeholder="예: 주말산책"
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                className="mt-1 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none"
               />
               {destinationSelect === DEST_CUSTOM &&
               manualDestinationFolder.trim().length > 0 ? (
-                <span className="mt-1 block text-xs text-amber-800">
+                <span className="mt-1 block text-xs text-[var(--app-accent-strong)]">
                   목록에 없는 이름이면 새 폴더로 만듭니다.
                 </span>
               ) : null}
@@ -1159,7 +1159,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+                className="rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-medium text-[var(--app-foreground)] disabled:opacity-50"
                 disabled={isMovingPhotos}
                 onClick={() => setMoveDialogOpen(false)}
               >
@@ -1167,7 +1167,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
               </button>
               <button
                 type="button"
-                className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+                className="rounded-[12px] bg-[var(--app-button)] px-3.5 py-2 text-sm font-medium text-[var(--app-button-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={
                   isMovingPhotos ||
                   (manualDestinationFolder.trim().length === 0 &&
@@ -1184,7 +1184,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
 
       {renameDialogOpen && libraryIndex && outputRoot ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--app-foreground)_22%,transparent)]/40 p-3 backdrop-blur-[2px]"
           role="dialog"
           aria-modal
           aria-labelledby="rename-folder-dialog-title"
@@ -1195,23 +1195,23 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
           }}
         >
           <div
-            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            className="w-full max-w-[460px] rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)]"
             onClick={(event) => event.stopPropagation()}
           >
             <h2
               id="rename-folder-dialog-title"
-              className="text-lg font-semibold text-slate-900"
+              className="text-base font-semibold text-[var(--app-foreground)]"
             >
               이름 변경
             </h2>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm leading-6 text-[var(--app-muted)]">
               이 경로 목록에 나온 폴더(그룹)의 표시 이름을 바꿉니다. 파일이 디스크에서
               해당 이름 폴더로 다시 정리될 수 있습니다.
             </p>
-            <label className="mt-4 block text-sm text-slate-700">
+            <label className="mt-4 block text-sm text-[var(--app-foreground)]">
               <span className="mb-1 block font-medium">대상 폴더</span>
               <select
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                className="mt-1 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none"
                 disabled={isRenaming}
                 value={renameTargetGroupId}
                 onChange={(event) => {
@@ -1232,17 +1232,17 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                 ))}
               </select>
             </label>
-            <label className="mt-3 block text-sm text-slate-700">
+            <label className="mt-3 block text-sm text-[var(--app-foreground)]">
               <span className="mb-1 block font-medium">새 이름</span>
               <input
                 type="text"
                 value={renameNewTitle}
                 onChange={(event) => setRenameNewTitle(event.target.value)}
                 disabled={isRenaming}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                className="mt-1 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none"
               />
             </label>
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="mt-4 rounded-[14px] bg-[var(--app-surface-strong)] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-medium text-slate-900">
@@ -1272,7 +1272,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                     {renamePreviewRows.slice(0, 6).map((row) => (
                       <div
                         key={row.photoId}
-                        className="rounded-lg border border-slate-200 bg-white p-3"
+                        className="rounded-[12px] bg-[var(--app-surface)] p-3"
                       >
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-medium text-slate-900">
@@ -1316,7 +1316,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+                className="rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-medium text-[var(--app-foreground)] disabled:opacity-50"
                 disabled={isRenaming}
                 onClick={() => setRenameDialogOpen(false)}
               >
@@ -1324,7 +1324,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
               </button>
               <button
                 type="button"
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+                className="rounded-[12px] bg-[var(--app-button)] px-3.5 py-2 text-sm font-medium text-[var(--app-button-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isRenaming || !renameTargetGroupId}
                 onClick={() => void handleConfirmRename()}
               >
@@ -1337,7 +1337,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
 
       {deletePhotosConfirmOpen && outputRoot ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--app-foreground)_22%,transparent)]/40 p-3 backdrop-blur-[2px]"
           role="dialog"
           aria-modal
           aria-labelledby="delete-photos-dialog-title"
@@ -1348,23 +1348,23 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
           }}
         >
           <div
-            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            className="w-full max-w-[430px] rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)]"
             onClick={(event) => event.stopPropagation()}
           >
             <h2
               id="delete-photos-dialog-title"
-              className="text-lg font-semibold text-slate-900"
+              className="text-base font-semibold text-[var(--app-foreground)]"
             >
               선택한 파일 삭제
             </h2>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
               선택한 {selectedForMove.size}장을 출력 폴더에서 지우고 index.json에서도
               제거합니다. 이 작업은 되돌릴 수 없습니다.
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+                className="rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-medium text-[var(--app-foreground)] disabled:opacity-50"
                 disabled={isDeletingPhotos}
                 onClick={() => setDeletePhotosConfirmOpen(false)}
               >
@@ -1372,7 +1372,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
               </button>
               <button
                 type="button"
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-red-300"
+                className="rounded-[12px] bg-[var(--app-danger)] px-3.5 py-2 text-sm font-medium text-[var(--app-danger-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isDeletingPhotos}
                 onClick={() => void handleConfirmDeletePhotos()}
               >
@@ -1385,7 +1385,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
 
       {deleteFolderConfirmOpen && outputRoot ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--app-foreground)_22%,transparent)]/40 p-3 backdrop-blur-[2px]"
           role="dialog"
           aria-modal
           aria-labelledby="delete-folder-dialog-title"
@@ -1396,28 +1396,28 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
           }}
         >
           <div
-            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            className="w-full max-w-[430px] rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)]"
             onClick={(event) => event.stopPropagation()}
           >
             <h2
               id="delete-folder-dialog-title"
-              className="text-lg font-semibold text-slate-900"
+              className="text-base font-semibold text-[var(--app-foreground)]"
             >
               폴더 삭제
             </h2>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
               현재 트리 위치{' '}
               <span className="font-medium text-slate-800">{breadcrumbPathLabel}</span>
               와 그 아래에 있는 모든 파일·하위 폴더를 디스크에서 지우고, 해당하는 사진을
               index.json에서 제거합니다. 이 작업은 되돌릴 수 없습니다.
             </p>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-[var(--app-muted)]">
               (이 경로 합계 약 {subtreeCount}장이 인덱스에서 사라질 수 있습니다.)
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+                className="rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-medium text-[var(--app-foreground)] disabled:opacity-50"
                 disabled={isDeletingFolder}
                 onClick={() => setDeleteFolderConfirmOpen(false)}
               >
@@ -1425,7 +1425,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
               </button>
               <button
                 type="button"
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-red-300"
+                className="rounded-[12px] bg-[var(--app-danger)] px-3.5 py-2 text-sm font-medium text-[var(--app-danger-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isDeletingFolder}
                 onClick={() => void handleConfirmDeleteFolder()}
               >

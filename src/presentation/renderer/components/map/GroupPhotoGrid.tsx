@@ -30,7 +30,7 @@ export function GroupPhotoGrid({
 
   return (
     <div
-      className={`grid gap-3 ${
+      className={`grid gap-2 ${
         compact
           ? 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5'
           : 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
@@ -48,14 +48,14 @@ export function GroupPhotoGrid({
           <button
             type="button"
             key={photo.id}
-            className={`overflow-hidden rounded-t-xl rounded-b-none border bg-white text-left transition ${
+            className={`overflow-hidden rounded-t-[14px] rounded-b-none text-left transition ${
               selectedPhotoId === photo.id
-                ? 'border-blue-400 ring-2 ring-blue-200'
-                : 'border-slate-200 hover:border-slate-300'
+                ? 'bg-[var(--app-sidebar-hover)] ring-1 ring-[var(--app-accent)]'
+                : 'bg-[var(--app-surface)] hover:bg-[var(--app-surface-strong)]'
             }`}
             onClick={() => onPhotoClick?.(photo.id)}
           >
-            <div className="aspect-square bg-slate-100">
+            <div className="aspect-square bg-[var(--app-surface-strong)]">
               {thumbnailUrl ? (
                 <img
                   src={thumbnailUrl}
@@ -70,7 +70,7 @@ export function GroupPhotoGrid({
               )}
             </div>
             <div className="px-1.5 py-1">
-              <p className="truncate text-[11px] leading-tight font-medium text-slate-900">
+              <p className="truncate text-[11px] leading-tight font-medium text-[var(--app-foreground)]">
                 {photo.sourceFileName}
               </p>
             </div>
