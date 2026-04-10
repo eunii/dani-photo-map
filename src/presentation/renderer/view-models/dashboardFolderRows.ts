@@ -9,14 +9,19 @@ export interface DashboardFolderRow {
   representativeThumbnailRelativePath?: string
   searchText: string
   yearSegment: string
-}
-
-function pathStartsWith(path: string[], prefix: string[]): boolean {
-  if (prefix.length > path.length) {
-    return false
+  displayTitle: string
+  regionLabel: string
+  earliestCapturedAtIso?: string
+  latestCapturedAtIso?: string
+  isUnknownLocation: boolean
+  gpsBreakdown: {
+    exactGpsCount: number
+    inferredGpsCount: number
+    missingGpsCount: number
   }
-
-  return prefix.every((segment, index) => segment === path[index])
+  hasMapPin: boolean
+  companionsShort: string
+  hasNotes: boolean
 }
 
 function pathKey(pathSegments: string[]): string {
@@ -55,8 +60,42 @@ function buildFullPathLabel(pathSegments: string[]): string {
   return pathSegments.map(formatPathSegmentLabel).join(' > ')
 }
 
-function buildSearchText(pathSegments: string[]): string {
-  return [buildFullPathLabel(pathSegments), ...pathSegments].join(' ').toLowerCase()
+function buildSearchText(group: GroupSummary, fullPathLabel: string): string {
+  const companionText = group.companions.join(' ')
+  const notesText = group.notes?.trim() ?? ''
+
+  return [
+    fullPathLabel,
+    ...group.pathSegments,
+    group.displayTitle,
+    group.title,
+    group.regionLabel,
+    companionText,
+    notesText,
+    group.searchText
+  ]
+    .join(' ')
+    .toLowerCase()
+}
+
+const COMPANION_PREVIEW_MAX = 28
+
+function buildCompanionsShort(group: GroupSummary): string {
+  if (group.companions.length === 0) {
+    return '—'
+  }
+
+  const [first, second, ...rest] = group.companions
+  const head = [first, second].filter(Boolean).join(', ')
+
+  if (rest.length === 0) {
+    return head.length > COMPANION_PREVIEW_MAX
+      ? `${head.slice(0, COMPANION_PREVIEW_MAX)}…`
+      : head
+  }
+
+  const base = second ? `${first}, ${second}` : first ?? ''
+  return `${base} +${rest.length}`
 }
 
 export function buildDashboardFolderRows(
@@ -75,14 +114,25 @@ export function buildDashboardFolderRows(
       continue
     }
 
+    const fullPathLabel = buildFullPathLabel(group.pathSegments)
+
     rows.set(key, {
       pathSegments: group.pathSegments,
-      fullPathLabel: buildFullPathLabel(group.pathSegments),
+      fullPathLabel,
       photoCount: group.photoCount,
       representativeThumbnailRelativePath:
         group.representativeThumbnailRelativePath,
-      searchText: buildSearchText(group.pathSegments),
-      yearSegment: group.pathSegments[0] ?? '기타'
+      searchText: buildSearchText(group, fullPathLabel),
+      yearSegment: group.pathSegments[0] ?? '기타',
+      displayTitle: group.displayTitle || group.title,
+      regionLabel: group.regionLabel,
+      earliestCapturedAtIso: group.earliestCapturedAtIso,
+      latestCapturedAtIso: group.latestCapturedAtIso,
+      isUnknownLocation: group.isUnknownLocation,
+      gpsBreakdown: { ...group.gpsBreakdown },
+      hasMapPin: group.pinLocation !== null,
+      companionsShort: buildCompanionsShort(group),
+      hasNotes: Boolean(group.notes?.trim())
     })
   }
 
@@ -105,13 +155,8 @@ export function filterDashboardFolderRows(
 }
 
 export function countRowsWithUnknownLocation(
-  groups: GroupSummary[],
+  _groups: GroupSummary[],
   rows: DashboardFolderRow[]
 ): number {
-  return rows.filter((row) =>
-    groups.some(
-      (group) =>
-        group.isUnknownLocation && pathStartsWith(group.pathSegments, row.pathSegments)
-    )
-  ).length
+  return rows.filter((row) => row.isUnknownLocation).length
 }

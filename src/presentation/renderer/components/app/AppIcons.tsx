@@ -119,3 +119,53 @@ export function SparklesIcon(props: IconProps) {
     </BaseIcon>
   )
 }
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="m9 6 6 6-6 6" />
+    </BaseIcon>
+  )
+}
+
+/** KPI: 그룹 수 */
+export function KpiGroupsIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M6 6.5h5a2 2 0 0 1 2 2V17H6a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2Z" />
+      <path d="M13 8.5h5a2 2 0 0 1 2 2V17h-7v-8.5Z" />
+    </BaseIcon>
+  )
+}
+
+/** KPI: 사진 수 */
+export function KpiPhotosIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <rect x="4" y="5" width="16" height="14" rx="2" />
+      <circle cx="9" cy="10" r="1.5" />
+      <path d="m4 16 5-5 4 4 3-3 4 4" />
+    </BaseIcon>
+  )
+}
+
+/** KPI: 위치 미확인 */
+export function KpiLocationUnknownIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M12 21s7-4.5 7-11a7 7 0 1 0-14 0c0 6.5 7 11 7 11Z" />
+      <path d="M9 9h6" />
+      <path d="M12 12v4" />
+    </BaseIcon>
+  )
+}
+
+/** KPI: 마지막 갱신 */
+export function KpiClockIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4l3 2" />
+    </BaseIcon>
+  )
+}

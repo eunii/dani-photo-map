@@ -198,8 +198,8 @@ export function App() {
   ]
 
   return (
-    <main className="min-h-screen px-2 py-2 lg:px-3 lg:py-3">
-      <section className="mx-auto flex min-h-[calc(100vh-0.5rem)] w-full max-w-[min(99vw,1700px)] gap-3 lg:min-h-[calc(100vh-0.75rem)]">
+    <main className="h-screen overflow-hidden px-1.5 py-1.5 lg:px-2 lg:py-2">
+      <section className="mx-auto flex h-full w-full max-w-[min(99vw,1700px)] gap-2.5">
         <AppSidebar
           collapsed={sidebarCollapsed}
           onToggleCollapsed={toggleSidebarCollapsed}
@@ -214,7 +214,7 @@ export function App() {
           }))}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
           <AppTopbar
             title={routeMeta.title}
             description={routeMeta.description}
@@ -222,7 +222,7 @@ export function App() {
             onOpenSettings={openSettings}
           />
 
-          <section className="app-page-section min-h-0 flex-1 rounded-[18px] p-1 lg:p-2">
+          <section className="app-page-section min-h-0 flex-1 overflow-hidden rounded-[18px] p-0.5 lg:p-1">
             {route === 'dashboard' ? (
               <DashboardPage
                 onNavigateToBrowse={() => navigate('browse')}
@@ -248,7 +248,7 @@ export function App() {
             )}
           </section>
 
-          <footer className="px-1 py-1">
+          <footer className="shrink-0 px-0.5 py-0.5">
             <p className="text-xs text-[var(--app-muted)]">
               원본은 수정하지 않고, 정리 결과는 출력 폴더와
               `.photo-organizer/index.json`에 저장됩니다.

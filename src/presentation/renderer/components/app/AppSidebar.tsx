@@ -37,7 +37,7 @@ export function AppSidebar({
         collapsed ? 'w-[72px]' : 'w-[228px]'
       } rounded-[18px]`}
     >
-      <div className="flex h-full min-h-[calc(100vh-0.5rem)] flex-col gap-2.5 p-2.5">
+      <div className="flex h-full flex-col gap-2 p-2">
         <div
           className={`flex ${collapsed ? 'justify-center' : 'items-start justify-between'} gap-2 px-1`}
         >
