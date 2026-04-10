@@ -236,7 +236,7 @@ export function OutputFolderTreePanel({
               : 'border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] hover:bg-[var(--app-surface)]/90'
           }`}
           aria-expanded={expandableKeys.size > 0 ? treeFullyExpanded : undefined}
-          title={
+          aria-label={
             expandableKeys.size === 0
               ? '루트로 이동'
               : treeFullyExpanded

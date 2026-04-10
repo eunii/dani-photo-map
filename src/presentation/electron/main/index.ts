@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, Notification, dialog, ipcMain } from 'electron'
 
 import { defaultMissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
 import {
@@ -33,6 +33,58 @@ import type {
   ScanPhotoLibraryRequest,
   UpdatePhotoGroupRequest
 } from '@shared/types/preload'
+
+type OrganizeTaskKind = 'preview-load' | 'scan-save'
+
+function focusMainWindow(): void {
+  const mainWindow = BrowserWindow.getAllWindows()[0]
+
+  if (!mainWindow) {
+    return
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore()
+  }
+
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function showOrganizeTaskNotification(params: {
+  kind: OrganizeTaskKind
+  ok: boolean
+  body: string
+}): void {
+  if (!Notification.isSupported()) {
+    return
+  }
+
+  const title =
+    params.kind === 'preview-load'
+      ? params.ok
+        ? '정리 후보 불러오기 완료'
+        : '정리 후보 불러오기 실패'
+      : params.ok
+        ? '사진 정리 완료'
+        : '사진 정리 실패'
+
+  const notification = new Notification({
+    title,
+    body: params.body,
+    silent: false
+  })
+
+  notification.on('click', () => {
+    focusMainWindow()
+  })
+
+  notification.show()
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '알 수 없는 오류'
+}
 
 function registerIpcHandlers(): void {
   ipcMain.removeHandler(photoAppInvokeChannels.selectDirectory)
@@ -108,12 +160,28 @@ function registerIpcHandlers(): void {
     photoAppInvokeChannels.previewPendingOrganization,
     async (_event, command: PreviewPendingOrganizationRequest) => {
       const useCase = createPreviewPendingOrganizationUseCase()
+      try {
+        const result = await useCase.execute({
+          ...command,
+          missingGpsGroupingBasis:
+            command.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
+        })
 
-      return useCase.execute({
-        ...command,
-        missingGpsGroupingBasis:
-          command.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
-      })
+        showOrganizeTaskNotification({
+          kind: 'preview-load',
+          ok: true,
+          body: `신규 대상 ${result.pendingPhotoCount}장, 그룹 ${result.groups.length}개`
+        })
+
+        return result
+      } catch (error) {
+        showOrganizeTaskNotification({
+          kind: 'preview-load',
+          ok: false,
+          body: toErrorMessage(error)
+        })
+        throw error
+      }
     }
   )
 
@@ -122,16 +190,32 @@ function registerIpcHandlers(): void {
     photoAppInvokeChannels.scanPhotoLibrary,
     async (event, command: ScanPhotoLibraryRequest) => {
       const useCase = createScanPhotoLibraryUseCase(command)
+      try {
+        const result = await useCase.execute({
+          ...command,
+          missingGpsGroupingBasis:
+            command.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
+        }, {
+          onScanProgress: (payload) => {
+            event.sender.send(photoAppEventChannels.scanPhotoLibraryProgress, payload)
+          }
+        })
 
-      return useCase.execute({
-        ...command,
-        missingGpsGroupingBasis:
-          command.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
-      }, {
-        onScanProgress: (payload) => {
-          event.sender.send(photoAppEventChannels.scanPhotoLibraryProgress, payload)
-        }
-      })
+        showOrganizeTaskNotification({
+          kind: 'scan-save',
+          ok: true,
+          body: `복사 ${result.copiedCount}장, 경고 ${result.warningCount}건, 오류 ${result.failureCount}건`
+        })
+
+        return result
+      } catch (error) {
+        showOrganizeTaskNotification({
+          kind: 'scan-save',
+          ok: false,
+          body: toErrorMessage(error)
+        })
+        throw error
+      }
     }
   )
 
@@ -211,6 +295,10 @@ function createMainWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.dani.photomap')
+  }
+
   registerIpcHandlers()
   createMainWindow()
 

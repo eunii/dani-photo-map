@@ -599,6 +599,7 @@ export function OrganizePage({
 
   const saveJobQueueRef = useRef(saveJobQueue)
   const mergedBulkSummaryRef = useRef<ScanPhotoLibrarySummary | null>(null)
+  const summarySectionRef = useRef<HTMLDivElement | null>(null)
   const cancelRemainingBulkJobsRef = useRef(false)
   const bulkSaveStartIndexRef = useRef(0)
   const bulkRunTotalPhotosRef = useRef<number | null>(null)
@@ -815,6 +816,22 @@ export function OrganizePage({
 
   const savePipelineBusy =
     runningSaveTarget !== null || saveJobQueue.length > 0
+
+  useEffect(() => {
+    if (!summary) {
+      return
+    }
+
+    setResultActionMessage('정리가 완료되었습니다. 아래 실행 결과를 확인하세요.')
+
+    requestAnimationFrame(() => {
+      summarySectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      })
+      summarySectionRef.current?.focus()
+    })
+  }, [summary])
 
   const wizardGroup =
     orderedPreviewGroups.length > 0
@@ -1999,7 +2016,11 @@ export function OrganizePage({
       ) : null}
 
       {summary ? (
-        <div className="w-full shrink-0 pb-1">
+        <div
+          ref={summarySectionRef}
+          tabIndex={-1}
+          className="w-full shrink-0 pb-1 outline-none"
+        >
         <section className="rounded-[28px] border border-[color:color-mix(in_srgb,var(--app-accent)_26%,var(--app-border)_74%)] bg-[color:color-mix(in_srgb,var(--app-accent)_10%,var(--app-surface)_90%)] p-5">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
