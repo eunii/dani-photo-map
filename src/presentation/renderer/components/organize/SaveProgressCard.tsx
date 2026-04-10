@@ -7,6 +7,8 @@ interface SaveProgressGroupLine {
   title: string
   phase: SaveGroupPhase
   linePct: number
+  processedCount?: number
+  totalCount?: number
 }
 
 interface SaveProgressCardProps {
@@ -124,6 +126,10 @@ export function SaveProgressCard({
         <ul className="mt-2 space-y-2">
           {groupLines.map((line) => {
             const safeLinePct = clampPercent(line.linePct)
+            const hasCount =
+              typeof line.processedCount === 'number' &&
+              typeof line.totalCount === 'number' &&
+              line.totalCount >= 0
             return (
               <li key={line.key}>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -146,6 +152,11 @@ export function SaveProgressCard({
                     style={{ width: `${safeLinePct}%` }}
                   />
                 </div>
+                {hasCount ? (
+                  <p className="mt-1 text-[11px] text-[var(--app-muted)]">
+                    {line.processedCount} / {line.totalCount}장
+                  </p>
+                ) : null}
               </li>
             )
           })}

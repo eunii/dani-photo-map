@@ -865,7 +865,49 @@ export function OrganizePage({
       setBulkSaveActive(true)
       setPhotosSavedCount(organizeJobStatus.progress.completed)
       setPhotoFlowTotal(organizeJobStatus.progress.total)
-      setRunningSaveTarget(organizeJobStatus.progress.currentGroupKey ?? null)
+      const currentGroupKey = organizeJobStatus.progress.currentGroupKey ?? null
+      setRunningSaveTarget(currentGroupKey)
+      if (currentGroupKey) {
+        const startIndex = bulkRunStartIndex ?? 0
+        const targetGroups = orderedPreviewGroups.slice(startIndex)
+        let offset = 0
+        let found = false
+        const nextPhaseByKey: Record<string, GroupSavePhase> = {}
+
+        for (let i = 0; i < orderedPreviewGroups.length; i += 1) {
+          const group = orderedPreviewGroups[i]
+          if (!group) {
+            continue
+          }
+          if (i < startIndex) {
+            nextPhaseByKey[group.groupKey] = 'idle'
+            continue
+          }
+          nextPhaseByKey[group.groupKey] = 'queued'
+        }
+
+        for (const group of targetGroups) {
+          if (group.groupKey === currentGroupKey) {
+            setActiveSaveJobMeta({
+              progressOffsetBeforeJob: offset,
+              groupPhotoCount: group.photoCount
+            })
+            nextPhaseByKey[group.groupKey] = 'saving'
+            found = true
+            break
+          }
+          nextPhaseByKey[group.groupKey] = 'done'
+          offset += group.photoCount
+        }
+
+        if (found) {
+          setGroupSavePhaseByKey(nextPhaseByKey)
+        } else {
+          setActiveSaveJobMeta(null)
+        }
+      } else {
+        setActiveSaveJobMeta(null)
+      }
       return
     }
 
@@ -1758,11 +1800,29 @@ export function OrganizePage({
               activeSaveJobMeta,
               photosSavedCount
             )
+            const lineProcessedCount =
+              phase === 'done'
+                ? g.photoCount
+                : phase === 'saving' &&
+                    runningSaveTarget === g.groupKey &&
+                    activeSaveJobMeta &&
+                    activeSaveJobMeta.groupPhotoCount > 0
+                  ? Math.min(
+                      g.photoCount,
+                      Math.max(
+                        0,
+                        photosSavedCount -
+                          activeSaveJobMeta.progressOffsetBeforeJob
+                      )
+                    )
+                  : 0
             return {
               key: g.groupKey,
               title: effectiveGroupTitle(g, groupTitleInputs),
               phase,
-              linePct
+              linePct,
+              processedCount: lineProcessedCount,
+              totalCount: g.photoCount
             }
           })
 
@@ -1805,11 +1865,29 @@ export function OrganizePage({
               activeSaveJobMeta,
               photosSavedCount
             )
+            const lineProcessedCount =
+              phase === 'done'
+                ? g.photoCount
+                : phase === 'saving' &&
+                    runningSaveTarget === g.groupKey &&
+                    activeSaveJobMeta &&
+                    activeSaveJobMeta.groupPhotoCount > 0
+                  ? Math.min(
+                      g.photoCount,
+                      Math.max(
+                        0,
+                        photosSavedCount -
+                          activeSaveJobMeta.progressOffsetBeforeJob
+                      )
+                    )
+                  : 0
             return {
               key: g.groupKey,
               title: effectiveGroupTitle(g, groupTitleInputs),
               phase,
-              linePct
+              linePct,
+              processedCount: lineProcessedCount,
+              totalCount: g.photoCount
             }
           })
 
