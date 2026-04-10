@@ -826,8 +826,7 @@ export function OrganizePage({
 
   const savePipelineBusy =
     runningSaveTarget !== null ||
-    saveJobQueue.length > 0 ||
-    organizeJobStatus.phase === 'save-running'
+    saveJobQueue.length > 0
 
   useEffect(() => {
     if (organizeJobStatus.phase === 'preview-running') {
