@@ -266,6 +266,7 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
           outputRoot: request.outputRoot,
           ...step.snapshotPayload,
           copyGroupKeysInThisRun: step.copyGroupKeysInThisRun,
+          copySourcePathsInThisRun: step.copySourcePathsInThisRun,
           missingGpsGroupingBasis:
             step.snapshotPayload.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
         },
@@ -445,19 +446,8 @@ function registerIpcHandlers(): void {
           }
         })
 
-        showOrganizeTaskNotification({
-          kind: 'scan-save',
-          ok: true,
-          body: `복사 ${result.copiedCount}장, 경고 ${result.warningCount}건, 오류 ${result.failureCount}건`
-        })
-
         return result
       } catch (error) {
-        showOrganizeTaskNotification({
-          kind: 'scan-save',
-          ok: false,
-          body: toErrorMessage(error)
-        })
         throw error
       }
     }

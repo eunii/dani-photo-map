@@ -48,7 +48,9 @@ export const scanPhotoLibraryCommandSchema = z.object({
     )
     .optional(),
   /** If set, only photos whose logical groupKey is in this list are copied this run (wizard steps). Omit for full copy. */
-  copyGroupKeysInThisRun: z.array(z.string().min(1)).optional()
+  copyGroupKeysInThisRun: z.array(z.string().min(1)).optional(),
+  /** If set, only photos whose normalized sourcePath is in this list are copied this run. */
+  copySourcePathsInThisRun: z.array(z.string().min(1)).optional()
 })
 
 export type ScanPhotoLibraryCommand = z.input<

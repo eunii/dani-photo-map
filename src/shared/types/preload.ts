@@ -51,6 +51,8 @@ export interface ScanPhotoLibraryRequest {
   }>
   /** When set, only these preview group keys are copied to output in this scan (Organize wizard). */
   copyGroupKeysInThisRun?: string[]
+  /** When set, only these source paths are copied to output in this scan (stable organize wizard target). */
+  copySourcePathsInThisRun?: string[]
 }
 
 export interface LoadLibraryIndexRequest {
@@ -79,6 +81,7 @@ export interface OrganizeJobPreviewStartRequest {
 
 export interface OrganizeJobSaveStepRequest {
   copyGroupKeysInThisRun: string[]
+  copySourcePathsInThisRun: string[]
   progressOffsetBeforeJob: number
   groupPhotoCount: number
   snapshotPayload: Pick<

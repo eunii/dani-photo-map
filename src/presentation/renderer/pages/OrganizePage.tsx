@@ -547,6 +547,7 @@ export function OrganizePage({
   const [saveJobQueue, setSaveJobQueue] = useState<
     Array<{
       copyGroupKeysInThisRun: string[]
+      copySourcePathsInThisRun: string[]
       isLastStep: boolean
       snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
       progressOffsetBeforeJob: number
@@ -813,6 +814,10 @@ export function OrganizePage({
     issueStageFilter,
     summary
   ])
+  const summarySkippedCount = summary
+    ? summary.skippedUnchangedCount + summary.skippedExistingCount + summary.duplicateCount
+    : 0
+  const summaryProblemCount = summary ? summary.warningCount + summary.failureCount : 0
 
   const hasPendingPreviewGroups = (previewResult?.groups.length ?? 0) > 0
 
@@ -1036,7 +1041,8 @@ export function OrganizePage({
           sourceRoot,
           outputRoot,
           ...nextJob.snapshotPayload,
-          copyGroupKeysInThisRun: nextJob.copyGroupKeysInThisRun
+          copyGroupKeysInThisRun: nextJob.copyGroupKeysInThisRun,
+          copySourcePathsInThisRun: nextJob.copySourcePathsInThisRun
         })
         const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
 
@@ -1289,7 +1295,7 @@ export function OrganizePage({
     }
   }
 
-  function enqueueSaveAllGroups(): void {
+  function enqueueSaveAllGroups(options?: { fromStart?: boolean }): void {
     if (!sourceRoot || !outputRoot) {
       setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
       return
@@ -1322,10 +1328,9 @@ export function OrganizePage({
     bulkSaveActiveRef.current = true
     setBulkSaveActive(true)
 
-    const startIndex = Math.min(
-      wizardStepIndex,
-      Math.max(0, orderedPreviewGroups.length - 1)
-    )
+    const startIndex = options?.fromStart
+      ? 0
+      : Math.min(wizardStepIndex, Math.max(0, orderedPreviewGroups.length - 1))
     bulkSaveStartIndexRef.current = startIndex
     setBulkRunStartIndex(startIndex)
 
@@ -1351,6 +1356,7 @@ export function OrganizePage({
 
     const jobs: Array<{
       copyGroupKeysInThisRun: string[]
+      copySourcePathsInThisRun: string[]
       isLastStep: boolean
       snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
       progressOffsetBeforeJob: number
@@ -1375,6 +1381,13 @@ export function OrganizePage({
 
       jobs.push({
         copyGroupKeysInThisRun: [group.groupKey],
+        copySourcePathsInThisRun: Array.from(
+          new Set(
+            group.representativePhotos
+              .map((photo) => normalizePathSeparators(photo.sourcePath))
+              .filter((sourcePath) => sourcePath.length > 0)
+          )
+        ),
         isLastStep: index >= orderedPreviewGroups.length - 1,
         snapshotPayload,
         progressOffsetBeforeJob
@@ -1399,6 +1412,7 @@ export function OrganizePage({
         totalPhotoCount: totalPhotosInThisBulk,
         steps: jobs.map((job, index) => ({
           copyGroupKeysInThisRun: job.copyGroupKeysInThisRun,
+          copySourcePathsInThisRun: job.copySourcePathsInThisRun,
           progressOffsetBeforeJob: job.progressOffsetBeforeJob,
           groupPhotoCount:
             orderedPreviewGroups[startIndex + index]?.photoCount ?? 0,
@@ -1494,6 +1508,13 @@ export function OrganizePage({
       ...previous,
       {
         copyGroupKeysInThisRun: [currentGroup.groupKey],
+        copySourcePathsInThisRun: Array.from(
+          new Set(
+            currentGroup.representativePhotos
+              .map((photo) => normalizePathSeparators(photo.sourcePath))
+              .filter((sourcePath) => sourcePath.length > 0)
+          )
+        ),
         isLastStep,
         snapshotPayload,
         progressOffsetBeforeJob
@@ -1654,7 +1675,17 @@ export function OrganizePage({
                     }
                     onPress={() => enqueueSaveAllGroups()}
                   >
-                    이후 그룹 전체 저장하기
+                    현재 그룹부터 끝까지 저장
+                  </Button>
+                ) : null}
+                {hasPendingPreviewGroups && orderedPreviewGroups.length > 1 ? (
+                  <Button
+                    variant="secondary"
+                    className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[12px] text-[var(--app-foreground)]"
+                    isDisabled={isLoadingPreview || savePipelineBusy}
+                    onPress={() => enqueueSaveAllGroups({ fromStart: true })}
+                  >
+                    처음부터 전체 저장
                   </Button>
                 ) : null}
               </>
@@ -2121,41 +2152,70 @@ export function OrganizePage({
               <h2 className="text-sm font-semibold text-[var(--app-foreground)]">
                 실행 결과
               </h2>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                  summaryProblemCount === 0
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-amber-100 text-amber-700'
+                }`}
+              >
+                {summaryProblemCount === 0
+                  ? '문제 없음'
+                  : `확인 필요 ${summaryProblemCount}건`}
+              </span>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
-                <p className="text-xs text-[var(--app-muted)]">스캔 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.scannedCount}
-                </p>
+            <div className="rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+              <p className="text-sm text-[var(--app-foreground)]">
+                원본 <span className="font-semibold">{summary.scannedCount}</span>장 확인 ·
+                새로 저장 <span className="font-semibold">{summary.copiedCount}</span>장 ·
+                건너뜀 <span className="font-semibold">{summarySkippedCount}</span>장 ·
+                문제 <span className="font-semibold">{summaryProblemCount}</span>건
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--app-muted)]">
+                확인
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
+                <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+                  <p className="text-xs text-[var(--app-muted)]">확인한 원본</p>
+                  <p className="text-xl font-semibold text-[var(--app-foreground)]">
+                    {summary.scannedCount}
+                  </p>
+                </div>
+                <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+                  <p className="text-xs text-[var(--app-muted)]">그룹 수</p>
+                  <p className="text-xl font-semibold text-[var(--app-foreground)]">
+                    {summary.groupCount}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
-                <p className="text-xs text-[var(--app-muted)]">증분 스킵 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.skippedUnchangedCount}
-                </p>
-              </div>
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
-                <p className="text-xs text-[var(--app-muted)]">유지 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.keptCount}
-                </p>
-              </div>
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
-                <p className="text-xs text-[var(--app-muted)]">신규 복사 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.copiedCount}
-                </p>
-              </div>
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
-                <p className="text-xs text-[var(--app-muted)]">그룹 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.groupCount}
-                </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--app-muted)]">
+                저장
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
+                <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+                  <p className="text-xs text-[var(--app-muted)]">새로 저장된 사진</p>
+                  <p className="text-xl font-semibold text-[var(--app-foreground)]">
+                    {summary.copiedCount}
+                  </p>
+                </div>
+                <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+                  <p className="text-xs text-[var(--app-muted)]">참고: 유지 처리</p>
+                  <p className="text-xl font-semibold text-[var(--app-foreground)]">
+                    {summary.keptCount}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--app-muted)]">
+                건너뜀
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <button
                 type="button"
                 className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
@@ -2163,13 +2223,16 @@ export function OrganizePage({
                     ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
                     : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
                 }`}
+                disabled={summary.duplicateCount === 0}
                 onClick={() => handleToggleScanResultDetail('inBatchDup')}
               >
-                <p className="text-xs text-[var(--app-muted)]">중복 (같은 실행 내)</p>
+                <p className="text-xs text-[var(--app-muted)]">같은 파일 중복</p>
                 <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.duplicateCount}
                 </p>
-                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 쌍 비교</p>
+                {summary.duplicateCount > 0 ? (
+                  <p className="mt-1 text-[11px] text-[var(--app-muted)]">자세히 보기</p>
+                ) : null}
               </button>
               <button
                 type="button"
@@ -2178,9 +2241,10 @@ export function OrganizePage({
                     ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
                     : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
                 }`}
+                disabled={summary.skippedUnchangedCount === 0}
                 onClick={() => handleToggleScanResultDetail('incrementalSkip')}
               >
-                <p className="text-xs text-[var(--app-muted)]">증분 스킵 (준비 단계)</p>
+                <p className="text-xs text-[var(--app-muted)]">변경 없음(건너뜀)</p>
                 <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.skippedUnchangedCount}
                 </p>
@@ -2195,14 +2259,25 @@ export function OrganizePage({
                     ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
                     : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
                 }`}
+                disabled={summary.skippedExistingCount === 0}
                 onClick={() => handleToggleScanResultDetail('existingSkip')}
               >
-                <p className="text-xs text-[var(--app-muted)]">기존 출력과 동일 (스킵)</p>
+                <p className="text-xs text-[var(--app-muted)]">이미 출력에 있음</p>
                 <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.skippedExistingCount}
                 </p>
-                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 경로 비교</p>
+                {summary.skippedExistingCount > 0 ? (
+                  <p className="mt-1 text-[11px] text-[var(--app-muted)]">자세히 보기</p>
+                ) : null}
               </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--app-muted)]">
+                문제
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
               <button
                 type="button"
                 className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
@@ -2210,13 +2285,16 @@ export function OrganizePage({
                     ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
                     : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
                 }`}
+                disabled={summary.warningCount === 0}
                 onClick={() => handleToggleScanResultDetail('warnings')}
               >
                 <p className="text-xs text-[var(--app-muted)]">경고 수</p>
                 <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.warningCount}
                 </p>
-                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 목록</p>
+                {summary.warningCount > 0 ? (
+                  <p className="mt-1 text-[11px] text-[var(--app-muted)]">목록 보기</p>
+                ) : null}
               </button>
               <button
                 type="button"
@@ -2225,14 +2303,18 @@ export function OrganizePage({
                     ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
                     : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
                 }`}
+                disabled={summary.failureCount === 0}
                 onClick={() => handleToggleScanResultDetail('failures')}
               >
                 <p className="text-xs text-[var(--app-muted)]">실패 수</p>
                 <p className="text-xl font-semibold text-[var(--app-foreground)]">
                   {summary.failureCount}
                 </p>
-                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 목록</p>
+                {summary.failureCount > 0 ? (
+                  <p className="mt-1 text-[11px] text-[var(--app-muted)]">목록 보기</p>
+                ) : null}
               </button>
+              </div>
             </div>
 
             {openScanResultDetail === 'inBatchDup' ? (

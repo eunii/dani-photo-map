@@ -173,13 +173,24 @@ export class ScanPhotoLibraryUseCase {
       validatedCommand.groupMetadataOverrides ?? []
     )
     const copyKeys = validatedCommand.copyGroupKeysInThisRun
+    const copySourcePathSet =
+      validatedCommand.copySourcePathsInThisRun !== undefined
+        ? new Set(
+            validatedCommand.copySourcePathsInThisRun.map((sourcePath) =>
+              normalizePathSeparators(sourcePath)
+            )
+          )
+        : undefined
     const copyFilter =
-      copyKeys !== undefined
-        ? { keys: new Set(copyKeys), photoIdToGroupKey }
+      copySourcePathSet !== undefined
+        ? { sourcePathSet: copySourcePathSet }
+        : copyKeys !== undefined
+          ? { keys: new Set(copyKeys), photoIdToGroupKey }
         : undefined
 
     const finalizedScanResult =
-      copyKeys !== undefined && copyKeys.length === 0
+      (copySourcePathSet !== undefined && copySourcePathSet.size === 0) ||
+      (copySourcePathSet === undefined && copyKeys !== undefined && copyKeys.length === 0)
         ? {
             copiedPhotos: [] as Photo[],
             copiedCount: 0,
@@ -458,13 +469,21 @@ export class ScanPhotoLibraryUseCase {
           keys: Set<string>
           photoIdToGroupKey: Map<string, string>
         }
+      | {
+          sourcePathSet: Set<string>
+        }
       | undefined,
     photoIdToGroupFileLabel: Map<string, string>,
     onScanProgress?: ScanPhotoLibraryExecuteOptions['onScanProgress']
   ): Promise<FinalizedScanResult> {
-    const photosForCanonical = copyFilter?.keys.size
+    const photosForCanonical = copyFilter
       ? preparedPhotoRecords
           .filter((record) => {
+            if ('sourcePathSet' in copyFilter) {
+              return copyFilter.sourcePathSet.has(
+                normalizePathSeparators(record.context.sourcePath)
+              )
+            }
             const key = copyFilter.photoIdToGroupKey.get(record.photo.id)
 
             return key !== undefined && copyFilter.keys.has(key)
@@ -478,8 +497,13 @@ export class ScanPhotoLibraryUseCase {
     const inBatchDuplicateDetails: InBatchDuplicateDetail[] = []
     const existingOutputSkipDetails: ExistingOutputSkipDetail[] = []
 
-    const recordsToFinalize = copyFilter?.keys.size
+    const recordsToFinalize = copyFilter
       ? preparedPhotoRecords.filter((record) => {
+          if ('sourcePathSet' in copyFilter) {
+            return copyFilter.sourcePathSet.has(
+              normalizePathSeparators(record.context.sourcePath)
+            )
+          }
           const groupKey = copyFilter.photoIdToGroupKey.get(record.photo.id)
 
           return (
