@@ -144,7 +144,7 @@ export function MapPhotoSidebar({
                   </div>
                 ) : selectedGroupDetail ? (
                   <GroupPhotoGrid
-                    group={selectedGroupDetail}
+                    photos={selectedGroupDetail.photos}
                     outputRoot={outputRoot}
                     compact={false}
                     selectedPhotoId={selectedPhotoId}

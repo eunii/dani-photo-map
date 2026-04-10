@@ -18,6 +18,10 @@ import {
   createScanPhotoLibraryUseCase,
   createUpdatePhotoGroupUseCase
 } from '@presentation/electron/main/factories/createPhotoAppUseCases'
+import {
+  photoAppEventChannels,
+  photoAppInvokeChannels
+} from '@shared/ipc/photoAppChannels'
 import type {
   DeleteOutputFolderSubtreeRequest,
   DeletePhotosFromLibraryRequest,
@@ -30,23 +34,10 @@ import type {
   UpdatePhotoGroupRequest
 } from '@shared/types/preload'
 
-const IPC_CHANNELS = {
-  selectDirectory: 'photo-app/select-directory',
-  loadLibraryIndex: 'photo-app/load-library-index',
-  loadLibraryGroupDetail: 'photo-app/load-library-group-detail',
-  previewPendingOrganization: 'photo-app/preview-pending-organization',
-  scanPhotoLibrary: 'photo-app/scan-photo-library',
-  scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress',
-  updatePhotoGroup: 'photo-app/update-photo-group',
-  movePhotosToGroup: 'photo-app/move-photos-to-group',
-  deletePhotosFromLibrary: 'photo-app/delete-photos-from-library',
-  deleteOutputFolderSubtree: 'photo-app/delete-output-folder-subtree'
-} as const
-
 function registerIpcHandlers(): void {
-  ipcMain.removeHandler(IPC_CHANNELS.selectDirectory)
+  ipcMain.removeHandler(photoAppInvokeChannels.selectDirectory)
   ipcMain.handle(
-    IPC_CHANNELS.selectDirectory,
+    photoAppInvokeChannels.selectDirectory,
     async (_event, options: DirectorySelectionOptions) => {
       const result = await dialog.showOpenDialog({
         title: options.title,
@@ -58,9 +49,9 @@ function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.removeHandler(IPC_CHANNELS.loadLibraryIndex)
+  ipcMain.removeHandler(photoAppInvokeChannels.loadLibraryIndex)
   ipcMain.handle(
-    IPC_CHANNELS.loadLibraryIndex,
+    photoAppInvokeChannels.loadLibraryIndex,
     async (_event, command: LoadLibraryIndexRequest) => {
       const useCase = createLoadLibraryIndexUseCase()
       const result = await useCase.execute({
@@ -83,9 +74,9 @@ function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.removeHandler(IPC_CHANNELS.loadLibraryGroupDetail)
+  ipcMain.removeHandler(photoAppInvokeChannels.loadLibraryGroupDetail)
   ipcMain.handle(
-    IPC_CHANNELS.loadLibraryGroupDetail,
+    photoAppInvokeChannels.loadLibraryGroupDetail,
     async (_event, command: LoadLibraryGroupDetailRequest) => {
       const useCase = createLoadLibraryGroupDetailUseCase()
       const result = await useCase.execute(command)
@@ -112,9 +103,9 @@ function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.removeHandler(IPC_CHANNELS.previewPendingOrganization)
+  ipcMain.removeHandler(photoAppInvokeChannels.previewPendingOrganization)
   ipcMain.handle(
-    IPC_CHANNELS.previewPendingOrganization,
+    photoAppInvokeChannels.previewPendingOrganization,
     async (_event, command: PreviewPendingOrganizationRequest) => {
       const useCase = createPreviewPendingOrganizationUseCase()
 
@@ -126,9 +117,9 @@ function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.removeHandler(IPC_CHANNELS.scanPhotoLibrary)
+  ipcMain.removeHandler(photoAppInvokeChannels.scanPhotoLibrary)
   ipcMain.handle(
-    IPC_CHANNELS.scanPhotoLibrary,
+    photoAppInvokeChannels.scanPhotoLibrary,
     async (event, command: ScanPhotoLibraryRequest) => {
       const useCase = createScanPhotoLibraryUseCase(command)
 
@@ -138,15 +129,15 @@ function registerIpcHandlers(): void {
           command.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
       }, {
         onScanProgress: (payload) => {
-          event.sender.send(IPC_CHANNELS.scanPhotoLibraryProgress, payload)
+          event.sender.send(photoAppEventChannels.scanPhotoLibraryProgress, payload)
         }
       })
     }
   )
 
-  ipcMain.removeHandler(IPC_CHANNELS.updatePhotoGroup)
+  ipcMain.removeHandler(photoAppInvokeChannels.updatePhotoGroup)
   ipcMain.handle(
-    IPC_CHANNELS.updatePhotoGroup,
+    photoAppInvokeChannels.updatePhotoGroup,
     async (_event, command: UpdatePhotoGroupRequest) => {
       const useCase = createUpdatePhotoGroupUseCase()
       const index = await useCase.execute(command)
@@ -155,9 +146,9 @@ function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.removeHandler(IPC_CHANNELS.movePhotosToGroup)
+  ipcMain.removeHandler(photoAppInvokeChannels.movePhotosToGroup)
   ipcMain.handle(
-    IPC_CHANNELS.movePhotosToGroup,
+    photoAppInvokeChannels.movePhotosToGroup,
     async (_event, command: MovePhotosToGroupRequest) => {
       const useCase = createMovePhotosToGroupUseCase()
       const index = await useCase.execute(command)
@@ -166,9 +157,9 @@ function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.removeHandler(IPC_CHANNELS.deletePhotosFromLibrary)
+  ipcMain.removeHandler(photoAppInvokeChannels.deletePhotosFromLibrary)
   ipcMain.handle(
-    IPC_CHANNELS.deletePhotosFromLibrary,
+    photoAppInvokeChannels.deletePhotosFromLibrary,
     async (_event, command: DeletePhotosFromLibraryRequest) => {
       const useCase = createDeletePhotosFromLibraryUseCase()
       const index = await useCase.execute(command)
@@ -177,9 +168,9 @@ function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.removeHandler(IPC_CHANNELS.deleteOutputFolderSubtree)
+  ipcMain.removeHandler(photoAppInvokeChannels.deleteOutputFolderSubtree)
   ipcMain.handle(
-    IPC_CHANNELS.deleteOutputFolderSubtree,
+    photoAppInvokeChannels.deleteOutputFolderSubtree,
     async (_event, command: DeleteOutputFolderSubtreeRequest) => {
       const useCase = createDeleteOutputFolderSubtreeUseCase()
       const index = await useCase.execute(command)

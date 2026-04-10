@@ -18,7 +18,7 @@ export async function deletePhotosFromLibraryIpc(
     return app.invokePhotoApp(
       'photo-app/delete-photos-from-library',
       request
-    ) as Promise<LibraryIndexView>
+    )
   }
   throw new Error(RESTART_HINT)
 }
@@ -34,7 +34,7 @@ export async function deleteOutputFolderSubtreeIpc(
     return app.invokePhotoApp(
       'photo-app/delete-output-folder-subtree',
       request
-    ) as Promise<LibraryIndexView>
+    )
   }
   throw new Error(RESTART_HINT)
 }

@@ -1,7 +1,7 @@
 import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
-import type { GroupDetail } from '@shared/types/preload'
+import type { GroupPhotoSummary } from '@shared/types/preload'
 
-export function getGpsBadge(photo: GroupDetail['photos'][number]): string {
+export function getGpsBadge(photo: GroupPhotoSummary): string {
   if (photo.originalGps) {
     return '정확 GPS'
   }
@@ -12,7 +12,7 @@ export function getGpsBadge(photo: GroupDetail['photos'][number]): string {
 }
 
 interface GroupPhotoGridProps {
-  group: GroupDetail
+  photos: GroupPhotoSummary[]
   outputRoot?: string
   compact?: boolean
   selectedPhotoId?: string
@@ -20,13 +20,13 @@ interface GroupPhotoGridProps {
 }
 
 export function GroupPhotoGrid({
-  group,
+  photos,
   outputRoot,
   compact = false,
   selectedPhotoId,
   onPhotoClick
 }: GroupPhotoGridProps) {
-  const photos = compact ? group.photos.slice(0, 8) : group.photos
+  const visiblePhotos = compact ? photos.slice(0, 8) : photos
 
   return (
     <div
@@ -36,7 +36,7 @@ export function GroupPhotoGrid({
           : 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
       }`}
     >
-      {photos.map((photo) => {
+      {visiblePhotos.map((photo) => {
         const thumbnailUrl =
           outputRoot &&
           toOutputFileUrl(

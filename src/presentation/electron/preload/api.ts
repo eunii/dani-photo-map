@@ -2,23 +2,19 @@ import { pathToFileURL } from 'node:url'
 
 import { ipcRenderer } from 'electron'
 
+import {
+  photoAppEventChannels,
+  photoAppInvokeChannels,
+  type PhotoAppInvokeChannel
+} from '@shared/ipc/photoAppChannels'
 import type {
+  PhotoAppInvokeRequestMap,
+  PhotoAppInvokeResponseMap,
   PreloadBridge,
   ScanPhotoLibraryProgressPayload
 } from '@shared/types/preload'
 
-const IPC_CHANNELS = {
-  selectDirectory: 'photo-app/select-directory',
-  loadLibraryIndex: 'photo-app/load-library-index',
-  loadLibraryGroupDetail: 'photo-app/load-library-group-detail',
-  previewPendingOrganization: 'photo-app/preview-pending-organization',
-  scanPhotoLibrary: 'photo-app/scan-photo-library',
-  scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress',
-  updatePhotoGroup: 'photo-app/update-photo-group',
-  movePhotosToGroup: 'photo-app/move-photos-to-group',
-  deletePhotosFromLibrary: 'photo-app/delete-photos-from-library',
-  deleteOutputFolderSubtree: 'photo-app/delete-output-folder-subtree'
-} as const
+const ALLOWED_INVOKE_CHANNELS = new Set<string>(Object.values(photoAppInvokeChannels))
 
 export const preloadBridge: PreloadBridge = {
   async getAppInfo() {
@@ -40,19 +36,19 @@ export const preloadBridge: PreloadBridge = {
     return pathToFileURL(trimmed).href
   },
   async selectDirectory(options) {
-    return ipcRenderer.invoke(IPC_CHANNELS.selectDirectory, options)
+    return ipcRenderer.invoke(photoAppInvokeChannels.selectDirectory, options)
   },
   async loadLibraryIndex(request) {
-    return ipcRenderer.invoke(IPC_CHANNELS.loadLibraryIndex, request)
+    return ipcRenderer.invoke(photoAppInvokeChannels.loadLibraryIndex, request)
   },
   async loadLibraryGroupDetail(request) {
-    return ipcRenderer.invoke(IPC_CHANNELS.loadLibraryGroupDetail, request)
+    return ipcRenderer.invoke(photoAppInvokeChannels.loadLibraryGroupDetail, request)
   },
   async previewPendingOrganization(request) {
-    return ipcRenderer.invoke(IPC_CHANNELS.previewPendingOrganization, request)
+    return ipcRenderer.invoke(photoAppInvokeChannels.previewPendingOrganization, request)
   },
   async scanPhotoLibrary(request) {
-    return ipcRenderer.invoke(IPC_CHANNELS.scanPhotoLibrary, request)
+    return ipcRenderer.invoke(photoAppInvokeChannels.scanPhotoLibrary, request)
   },
   onScanPhotoLibraryProgress(handler) {
     const listener = (
@@ -62,26 +58,29 @@ export const preloadBridge: PreloadBridge = {
       handler(payload)
     }
 
-    ipcRenderer.on(IPC_CHANNELS.scanPhotoLibraryProgress, listener)
+    ipcRenderer.on(photoAppEventChannels.scanPhotoLibraryProgress, listener)
 
     return () => {
-      ipcRenderer.removeListener(IPC_CHANNELS.scanPhotoLibraryProgress, listener)
+      ipcRenderer.removeListener(photoAppEventChannels.scanPhotoLibraryProgress, listener)
     }
   },
   async updatePhotoGroup(request) {
-    return ipcRenderer.invoke(IPC_CHANNELS.updatePhotoGroup, request)
+    return ipcRenderer.invoke(photoAppInvokeChannels.updatePhotoGroup, request)
   },
   async movePhotosToGroup(request) {
-    return ipcRenderer.invoke(IPC_CHANNELS.movePhotosToGroup, request)
+    return ipcRenderer.invoke(photoAppInvokeChannels.movePhotosToGroup, request)
   },
   async deletePhotosFromLibrary(request) {
-    return ipcRenderer.invoke(IPC_CHANNELS.deletePhotosFromLibrary, request)
+    return ipcRenderer.invoke(photoAppInvokeChannels.deletePhotosFromLibrary, request)
   },
   async deleteOutputFolderSubtree(request) {
-    return ipcRenderer.invoke(IPC_CHANNELS.deleteOutputFolderSubtree, request)
+    return ipcRenderer.invoke(photoAppInvokeChannels.deleteOutputFolderSubtree, request)
   },
-  async invokePhotoApp(channel: string, payload: unknown) {
-    if (typeof channel !== 'string' || !channel.startsWith('photo-app/')) {
+  async invokePhotoApp<TChannel extends PhotoAppInvokeChannel>(
+    channel: TChannel,
+    payload: PhotoAppInvokeRequestMap[TChannel]
+  ): Promise<PhotoAppInvokeResponseMap[TChannel]> {
+    if (!ALLOWED_INVOKE_CHANNELS.has(channel)) {
       throw new Error('Invalid IPC channel')
     }
     return ipcRenderer.invoke(channel, payload)

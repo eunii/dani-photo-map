@@ -167,11 +167,7 @@ export function MapBottomSheet({
                     </div>
 
                     <GroupPhotoGrid
-                      group={{
-                        ...selectedGroup.group,
-                        photoIds: [],
-                        photos: []
-                      }}
+                      photos={[]}
                       outputRoot={outputRoot}
                       compact={state !== 'full'}
                     />

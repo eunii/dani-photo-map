@@ -5,6 +5,7 @@ import type {
 } from '@application/dto/ScanPhotoLibraryResult'
 import type { MissingGpsCategory } from '@domain/entities/Photo'
 import type { MissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
+import type { PhotoAppInvokeChannel } from '@shared/ipc/photoAppChannels'
 
 export type { ScanPhotoLibraryProgressPayload }
 export type { ExistingOutputSkipDetail, InBatchDuplicateDetail }
@@ -288,6 +289,30 @@ export interface PreviewPendingOrganizationResult {
   groups: PendingOrganizationPreviewGroup[]
 }
 
+export interface PhotoAppInvokeRequestMap {
+  'photo-app/select-directory': DirectorySelectionOptions
+  'photo-app/load-library-index': LoadLibraryIndexRequest
+  'photo-app/load-library-group-detail': LoadLibraryGroupDetailRequest
+  'photo-app/preview-pending-organization': PreviewPendingOrganizationRequest
+  'photo-app/scan-photo-library': ScanPhotoLibraryRequest
+  'photo-app/update-photo-group': UpdatePhotoGroupRequest
+  'photo-app/move-photos-to-group': MovePhotosToGroupRequest
+  'photo-app/delete-photos-from-library': DeletePhotosFromLibraryRequest
+  'photo-app/delete-output-folder-subtree': DeleteOutputFolderSubtreeRequest
+}
+
+export interface PhotoAppInvokeResponseMap {
+  'photo-app/select-directory': string | null
+  'photo-app/load-library-index': LoadLibraryIndexResult
+  'photo-app/load-library-group-detail': LoadLibraryGroupDetailResult
+  'photo-app/preview-pending-organization': PreviewPendingOrganizationResult
+  'photo-app/scan-photo-library': ScanPhotoLibrarySummary
+  'photo-app/update-photo-group': LibraryIndexView
+  'photo-app/move-photos-to-group': LibraryIndexView
+  'photo-app/delete-photos-from-library': LibraryIndexView
+  'photo-app/delete-output-folder-subtree': LibraryIndexView
+}
+
 export interface PreloadBridge {
   getAppInfo: () => Promise<AppInfo>
   ping: () => Promise<string>
@@ -323,7 +348,10 @@ export interface PreloadBridge {
     request: DeleteOutputFolderSubtreeRequest
   ) => Promise<LibraryIndexView>
   /**
-   * `photo-app/` 로 시작하는 IPC만 허용. 프리로드에 개별 메서드가 없을 때도 동작합니다.
+   * 등록된 invoke 채널만 허용합니다. 프리로드에 개별 메서드가 없을 때도 동작합니다.
    */
-  invokePhotoApp: (channel: string, payload: unknown) => Promise<unknown>
+  invokePhotoApp: <TChannel extends PhotoAppInvokeChannel>(
+    channel: TChannel,
+    payload: PhotoAppInvokeRequestMap[TChannel]
+  ) => Promise<PhotoAppInvokeResponseMap[TChannel]>
 }

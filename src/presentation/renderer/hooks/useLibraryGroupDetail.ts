@@ -32,11 +32,11 @@ async function loadLibraryGroupDetail(
   }
 
   if (typeof app.invokePhotoApp === 'function') {
-    const result = (await app.invokePhotoApp('photo-app/load-library-group-detail', {
+    const result = await app.invokePhotoApp('photo-app/load-library-group-detail', {
       outputRoot,
       groupId: group.id,
       pathSegments: group.pathSegments
-    })) as { group?: GroupDetail | null }
+    })
 
     return result.group ?? null
   }
