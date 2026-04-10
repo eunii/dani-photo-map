@@ -2,84 +2,83 @@
 @import "tailwindcss";
 
 :root {
-  color: #4f5f4b;
-  background-color: #f1f3e0;
+  color: #778873;
+  background-color: #fafaf8;
   font-family: Inter, "Segoe UI", sans-serif;
-  --accent: #a1bc98;
+  --theme-background: #f7f4ea;
+  --theme-accent: #a8bba3;
+  --theme-danger: #ebd9d1;
+  --theme-button: #b87c4c;
+  --theme-text: #778873;
+  --accent: var(--theme-accent);
   --accent-foreground: #ffffff;
-  --background: #f1f3e0;
-  --border: #d2dcb6;
-  --foreground: #778873;
-  --muted: #778873;
+  --background: color-mix(in srgb, var(--theme-background) 28%, white 72%);
+  --border: color-mix(in srgb, var(--theme-accent) 32%, #d8ddd2 68%);
+  --foreground: var(--theme-text);
+  --muted: color-mix(in srgb, var(--theme-text) 82%, white 18%);
   --surface: #ffffff;
-  --surface-secondary: #f1f3e0;
-  --surface-tertiary: #d2dcb6;
+  --surface-secondary: color-mix(in srgb, var(--theme-background) 40%, white 60%);
+  --surface-tertiary: color-mix(in srgb, var(--theme-accent) 18%, white 82%);
   --overlay: #ffffff;
-  --radius: 0.75rem;
-  --field-radius: 1rem;
+  --radius: 0.625rem;
+  --field-radius: 0.75rem;
   --app-background: var(--background);
-  --app-panel: color-mix(in srgb, var(--surface) 92%, white 8%);
+  --app-panel: color-mix(in srgb, var(--surface) 96%, var(--theme-background) 4%);
   --app-surface: var(--surface);
-  --app-surface-strong: color-mix(in srgb, var(--surface-secondary) 68%, white 32%);
-  --app-sidebar: color-mix(in srgb, var(--surface) 82%, var(--surface-secondary) 18%);
+  --app-surface-strong: color-mix(in srgb, var(--theme-background) 26%, white 74%);
+  --app-sidebar: color-mix(in srgb, var(--theme-background) 46%, white 54%);
   --app-border: var(--border);
   --app-foreground: var(--foreground);
-  --app-muted: color-mix(in srgb, var(--muted) 88%, white 12%);
-  --app-accent: var(--accent);
-  --app-accent-strong: color-mix(in srgb, var(--accent) 76%, black 24%);
+  --app-muted: color-mix(in srgb, var(--theme-text) 72%, white 28%);
+  --app-accent: var(--theme-accent);
+  --app-accent-strong: color-mix(in srgb, var(--theme-accent) 70%, black 30%);
   --app-accent-foreground: var(--accent-foreground);
+  --app-button: var(--theme-button);
+  --app-button-foreground: #ffffff;
+  --app-danger: var(--theme-danger);
+  --app-danger-foreground: color-mix(in srgb, var(--theme-danger) 52%, #5a1f1f 48%);
+  --app-sidebar-hover: color-mix(in srgb, var(--theme-accent) 24%, white 76%);
+  --app-sidebar-hover-text: var(--theme-accent);
+  --app-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
 }
 
 :root[data-theme='olive-mist'] {
-  --accent: #a1bc98;
+  --theme-background: #f7f4ea;
+  --theme-accent: #a8bba3;
+  --theme-danger: #ebd9d1;
+  --theme-button: #b87c4c;
+  --theme-text: #778873;
   --accent-foreground: #ffffff;
-  --background: #f1f3e0;
-  --border: #d2dcb6;
-  --foreground: #778873;
-  --muted: #778873;
-  --surface: #ffffff;
-  --surface-secondary: #f1f3e0;
-  --surface-tertiary: #d2dcb6;
-  --overlay: #ffffff;
 }
 
 :root[data-theme='violet-night'] {
-  --accent: #9400ff;
+  --theme-background: #f6f8ff;
+  --theme-accent: #9400ff;
+  --theme-danger: #f2c6de;
+  --theme-button: #27005d;
+  --theme-text: #39225c;
   --accent-foreground: #ffffff;
-  --background: #e4f1ff;
-  --border: #bfd8f8;
-  --foreground: #2f2460;
-  --muted: #6d63a0;
-  --surface: #ffffff;
-  --surface-secondary: #eef5ff;
-  --surface-tertiary: #d9e8ff;
-  --overlay: #ffffff;
+  --app-button-foreground: #ffffff;
 }
 
 :root[data-theme='stone-coast'] {
-  --accent: #89a8b2;
+  --theme-background: #f1f0e8;
+  --theme-accent: #89a8b2;
+  --theme-danger: #d9b8ae;
+  --theme-button: #b3c8cf;
+  --theme-text: #5e7178;
   --accent-foreground: #ffffff;
-  --background: #f1f0e8;
-  --border: #d2d8d8;
-  --foreground: #586d75;
-  --muted: #7a8b91;
-  --surface: #ffffff;
-  --surface-secondary: #edf1ef;
-  --surface-tertiary: #dfe7e4;
-  --overlay: #ffffff;
+  --app-button-foreground: #5e7178;
 }
 
 :root[data-theme='rose-powder'] {
-  --accent: #f2bed1;
-  --accent-foreground: #7d4d63;
-  --background: #f9f5f6;
-  --border: #f1d6df;
-  --foreground: #8f6172;
-  --muted: #af8391;
-  --surface: #ffffff;
-  --surface-secondary: #fdf2f5;
-  --surface-tertiary: #f8e8ee;
-  --overlay: #ffffff;
+  --theme-background: #f9f5f6;
+  --theme-accent: #f2bed1;
+  --theme-danger: #e8a0b3;
+  --theme-button: #fdcedf;
+  --theme-text: #8e6171;
+  --accent-foreground: #ffffff;
+  --app-button-foreground: #8e6171;
 }
 
 html,
@@ -91,9 +90,11 @@ body,
 
 body {
   min-width: 320px;
-  background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--app-accent) 18%, transparent) 0, transparent 28%),
-    linear-gradient(180deg, color-mix(in srgb, var(--app-background) 92%, white 8%) 0%, var(--app-background) 100%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--theme-background) 18%, white 82%) 0%,
+    color-mix(in srgb, var(--theme-background) 10%, white 90%) 100%
+  );
 }
 
 body,
@@ -105,26 +106,21 @@ textarea {
 }
 
 .app-surface-card {
-  background: color-mix(in srgb, var(--app-surface) 90%, white 10%);
+  background: color-mix(in srgb, var(--app-surface) 98%, var(--theme-background) 2%);
   border: 1px solid var(--app-border);
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--app-shadow);
 }
 
 .app-sidebar-surface {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--app-sidebar) 90%, white 10%) 0%,
-      color-mix(in srgb, var(--app-surface) 90%, var(--app-sidebar) 10%) 100%
-    );
+  background: color-mix(in srgb, var(--theme-background) 64%, white 36%);
   border: 1px solid var(--app-border);
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+  box-shadow: none;
 }
 
 .app-page-section {
-  background: color-mix(in srgb, var(--app-surface) 92%, white 8%);
+  background: color-mix(in srgb, var(--app-surface) 98%, var(--theme-background) 2%);
   border: 1px solid var(--app-border);
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--app-shadow);
 }
 
 .app-grid-dots {

@@ -35,9 +35,9 @@ function ThemePaletteButton({
   return (
     <button
       type="button"
-      className={`w-full rounded-[24px] border p-3 text-left transition ${
+      className={`w-full rounded-[16px] border p-2.5 text-left transition ${
         isSelected
-          ? 'border-[var(--app-accent)] bg-[var(--app-surface-strong)] shadow-[0_10px_30px_rgba(0,0,0,0.08)]'
+          ? 'border-[var(--app-accent)] bg-[var(--app-surface-strong)]'
           : 'border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-strong)]'
       }`}
       onClick={() => setThemeId(themeId)}
@@ -55,11 +55,11 @@ function ThemePaletteButton({
           </span>
         ) : null}
       </div>
-      <div className={`mt-3 grid gap-2 ${compact ? 'grid-cols-4' : 'grid-cols-4'}`}>
+      <div className={`mt-2 grid gap-1.5 ${compact ? 'grid-cols-5' : 'grid-cols-5'}`}>
         {preset.colors.map((color) => (
           <span
             key={color}
-            className="h-9 rounded-2xl border border-white/60"
+            className="h-7 rounded-xl border border-white/60"
             style={{ backgroundColor: color }}
           />
         ))}
@@ -83,9 +83,9 @@ export function SettingsPanelSections({
   const sourceBadge = getLoadSourceBadge(loadSource)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Card className="app-surface-card border-0 shadow-none">
-        <div className="space-y-4 px-5 py-5">
+        <div className="space-y-3 px-4 py-4">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--app-accent-strong)]">
               Output
@@ -98,21 +98,21 @@ export function SettingsPanelSections({
             </p>
           </div>
 
-          <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm text-[var(--app-muted)]">
+          <div className="rounded-[16px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-muted)]">
             {outputRoot || '아직 선택되지 않았습니다.'}
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button
               variant="primary"
-              className="rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
+              className="rounded-xl bg-[var(--app-button)] text-[var(--app-button-foreground)]"
               onPress={() => void selectOutputRoot()}
             >
               출력 폴더 선택
             </Button>
             <Button
               variant="secondary"
-              className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
+              className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-[var(--app-foreground)]"
               isDisabled={!outputRoot || isLoadingIndex}
               onPress={() => void reloadLibraryIndex()}
             >
@@ -120,7 +120,7 @@ export function SettingsPanelSections({
             </Button>
             <Button
               variant="ghost"
-              className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
+              className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-[var(--app-foreground)]"
               isDisabled={!outputRoot || isLoadingIndex}
               onPress={() => void reloadFolderStructureOnly()}
             >
@@ -131,9 +131,9 @@ export function SettingsPanelSections({
       </Card>
 
       <Card className="app-surface-card border-0 shadow-none">
-        <div className="space-y-4 px-5 py-5">
+        <div className="space-y-3 px-4 py-4">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--app-surface-strong)] text-[var(--app-accent-strong)]">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--app-surface-strong)] text-[var(--app-accent-strong)]">
               <SparklesIcon className="h-5 w-5" />
             </div>
             <div className="space-y-1">
@@ -146,7 +146,7 @@ export function SettingsPanelSections({
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-2 md:grid-cols-2">
             {UI_THEME_PRESETS.map((preset) => (
               <ThemePaletteButton
                 key={preset.id}
@@ -159,7 +159,7 @@ export function SettingsPanelSections({
       </Card>
 
       {sourceBadge ? (
-        <div className={`rounded-[24px] border px-4 py-3 text-sm ${sourceBadge.tone}`}>
+        <div className={`rounded-[16px] border px-3 py-2 text-sm ${sourceBadge.tone}`}>
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full border border-current/20 bg-white/70 px-3 py-1 text-xs font-semibold">
               {sourceBadge.label}
@@ -170,7 +170,7 @@ export function SettingsPanelSections({
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-[24px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-[16px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {errorMessage}
         </div>
       ) : null}

@@ -32,26 +32,28 @@ export function AppSidebar({
   return (
     <Card
       className={`app-sidebar-surface shrink-0 border-0 shadow-none transition-[width] duration-200 ${
-        collapsed ? 'w-[88px]' : 'w-[272px]'
+        collapsed ? 'w-[72px]' : 'w-[220px]'
       }`}
     >
-      <div className="flex h-full min-h-[calc(100vh-2rem)] flex-col gap-5 p-3">
-        <div className="flex items-center justify-between gap-2 px-1">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--app-accent-strong)]">
-              {collapsed ? 'DPM' : 'Dani Photo Map'}
-            </p>
-            {!collapsed ? (
-              <p className="mt-1 text-xs text-[var(--app-muted)]">
-                사진 정리와 지도 탐색
+      <div className="flex h-full min-h-[calc(100vh-0.5rem)] flex-col gap-3 p-2">
+        <div
+          className={`flex ${collapsed ? 'justify-center' : 'items-start justify-between'} gap-2 px-1`}
+        >
+          {!collapsed ? (
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--app-accent-strong)]">
+                Dani Photo Map
               </p>
-            ) : null}
-          </div>
+              <p className="mt-0.5 text-[11px] text-[var(--app-muted)]">
+                organizer
+              </p>
+            </div>
+          ) : null}
           <Button
             isIconOnly
             aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
             variant="ghost"
-            className="border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
+            className="h-9 w-9 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
             onPress={onToggleCollapsed}
           >
             {collapsed ? (
@@ -62,46 +64,68 @@ export function AppSidebar({
           </Button>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-2" aria-label="주요 메뉴">
-          {items.map((item) => (
-            <Button
-              key={item.key}
-              aria-label={item.label}
-              variant={item.isActive ? 'primary' : 'ghost'}
-              className={`h-12 justify-start rounded-2xl px-3 text-sm ${
-                item.isActive
-                  ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
-                  : 'bg-transparent text-[var(--app-foreground)] hover:bg-[var(--app-surface-strong)]'
-              } ${collapsed ? 'justify-center px-0' : ''}`}
-              isIconOnly={collapsed}
-              onPress={item.onPress}
-            >
-              <span className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-black/5">
-                  {item.icon}
+        <nav className="flex flex-1 flex-col gap-1.5" aria-label="주요 메뉴">
+          {items.map((item) =>
+            collapsed ? (
+              <Button
+                key={item.key}
+                aria-label={item.label}
+                variant="ghost"
+                isIconOnly
+                className={`h-10 w-10 self-center rounded-xl border text-[var(--app-foreground)] ${
+                  item.isActive
+                    ? 'border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
+                    : 'border-transparent bg-transparent hover:border-[var(--app-border)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
+                }`}
+                onPress={item.onPress}
+              >
+                {item.icon}
+              </Button>
+            ) : (
+              <Button
+                key={item.key}
+                aria-label={item.label}
+                variant="ghost"
+                className={`h-11 justify-start rounded-xl px-4 text-[15px] font-medium ${
+                  item.isActive
+                    ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
+                    : 'bg-transparent text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
+                }`}
+                onPress={item.onPress}
+              >
+                <span className="flex items-center gap-3">
+                  <span className="flex h-5 w-5 items-center justify-center">
+                    {item.icon}
+                  </span>
+                  <span>{item.label}</span>
                 </span>
-                {!collapsed ? <span>{item.label}</span> : null}
-              </span>
-            </Button>
-          ))}
+              </Button>
+            )
+          )}
         </nav>
 
-        <div className="mt-auto border-t border-[var(--app-border)] pt-3">
+        <div className="mt-auto border-t border-[var(--app-border)] pt-2">
           <Button
             aria-label="설정 열기"
-            variant="secondary"
-            className={`h-12 w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] ${
-              collapsed ? 'justify-center px-0' : 'justify-start px-3'
+            variant="ghost"
+            className={`${
+              collapsed
+                ? 'h-10 w-10 self-center rounded-xl border border-transparent bg-transparent text-[var(--app-foreground)] hover:border-[var(--app-border)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
+                : 'h-11 w-full justify-start rounded-xl px-4 text-[15px] font-medium text-[var(--app-foreground)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-sidebar-hover-text)]'
             }`}
             isIconOnly={collapsed}
             onPress={onOpenSettings}
           >
-            <span className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--app-surface-strong)]">
-                <SettingsIcon className="h-4 w-4" />
+            {collapsed ? (
+              <SettingsIcon className="h-4 w-4" />
+            ) : (
+              <span className="flex items-center gap-3">
+                <span className="flex h-5 w-5 items-center justify-center">
+                  <SettingsIcon className="h-4 w-4" />
+                </span>
+                <span>설정</span>
               </span>
-              {!collapsed ? <span>설정</span> : null}
-            </span>
+            )}
           </Button>
         </div>
       </div>

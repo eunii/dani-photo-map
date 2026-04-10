@@ -632,9 +632,9 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {sourceBadge ? (
-        <section className={`rounded-2xl border px-4 py-3 text-sm ${sourceBadge.tone}`}>
+        <section className={`rounded-[16px] border px-3 py-2 text-sm ${sourceBadge.tone}`}>
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full border border-current/20 bg-white/70 px-3 py-1 text-xs font-semibold">
               {sourceBadge.label}
@@ -645,20 +645,20 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-[16px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {errorMessage}
         </div>
       ) : null}
 
       {groupDetailErrorMessage ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-[16px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {groupDetailErrorMessage}
         </div>
       ) : null}
 
-      <section className="space-y-3">
+      <section className="space-y-2">
         {outputRoot ? (
-          <div className="rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
+          <div className="rounded-[16px] bg-[var(--app-surface-strong)] px-3 py-2">
             <div className="flex flex-wrap items-center gap-3">
             <div className="rounded-full bg-[var(--app-surface)] px-3 py-1 text-xs font-medium text-[var(--app-foreground)]">
               전체 {totalCount}장
@@ -702,7 +702,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
         ) : null}
 
         {!outputRoot ? (
-          <div className="rounded-[28px] border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] p-8 text-center">
+          <div className="rounded-[16px] bg-[var(--app-surface)] p-5 text-center">
             <p className="text-sm font-semibold text-[var(--app-foreground)]">
               출력 폴더를 먼저 설정하세요.
             </p>
@@ -712,7 +712,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
             {onNavigateToSettings ? (
               <Button
                 variant="primary"
-                className="mt-4 rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
+                className="mt-3 rounded-xl bg-[var(--app-button)] text-[var(--app-button-foreground)]"
                 onPress={onNavigateToSettings}
               >
                 설정으로 이동
@@ -720,8 +720,8 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
             ) : null}
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] lg:items-start">
-            <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
+          <div className="grid gap-2.5 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)] lg:items-start">
+            <div className="space-y-2 lg:sticky lg:top-2 lg:self-start">
               <OutputFolderTreePanel
                 folderTreeRoot={folderTree}
                 selectedPathSegments={pathSegments}
@@ -729,9 +729,9 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
               />
             </div>
 
-            <div className="flex min-w-0 flex-col gap-3">
-              <div className="w-full overflow-hidden rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface)]">
-                <div className="flex flex-wrap items-center gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface-strong)] px-3 py-2">
+            <div className="flex min-w-0 flex-col gap-2">
+              <div className="w-full overflow-hidden rounded-[18px] bg-[var(--app-surface)]">
+                <div className="flex flex-wrap items-center gap-2 border-b border-[var(--app-border)] bg-[var(--app-surface-strong)] px-2.5 py-2">
                   <nav
                     className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-xs text-[var(--app-foreground)]"
                     aria-label="폴더 경로"
@@ -784,7 +784,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                 </div>
 
                 {libraryIndex && groupAtPath ? (
-                  <div className="flex flex-col gap-1.5 border-t border-slate-50 px-2 py-1.5 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between lg:gap-3">
+                  <div className="flex flex-col gap-1.5 px-2 py-1.5 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between lg:gap-3">
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                         <button
                           type="button"
@@ -838,7 +838,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                           </button>
                         ) : null}
                     </div>
-                    <div className="hidden w-px shrink-0 self-stretch bg-slate-200 lg:block" aria-hidden />
+                    <div className="hidden w-px shrink-0 self-stretch bg-[var(--app-border)] lg:block" aria-hidden />
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:justify-end">
                         <button
                           type="button"
@@ -866,9 +866,9 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                 ) : null}
               </div>
 
-              <div className="grid min-h-0 w-full min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,380px)] lg:items-start">
-                <div className="min-h-0 min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
-                  <div className="border-b border-slate-100 px-3 py-2">
+              <div className="grid min-h-0 w-full min-w-0 gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)] lg:items-start">
+                <div className="min-h-0 min-w-0 overflow-hidden rounded-[16px] bg-[var(--app-surface)]">
+                  <div className="border-b border-[var(--app-border)] px-2.5 py-1.5">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                       이 폴더의 사진
                     </h3>
@@ -891,7 +891,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                     </p>
                   ) : (
                     <>
-                      <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-3 xl:grid-cols-4">
+                      <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-4">
                         {visibleRows.map((row) => {
                           const isSelected = row.photo.id === selectedPhotoId
                           const thumb =
@@ -908,15 +908,15 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                           return (
                             <div
                               key={row.photo.id}
-                              className={`[content-visibility:auto] flex min-w-0 flex-col overflow-hidden rounded-xl border text-left transition-colors ${
+                              className={`[content-visibility:auto] flex min-w-0 flex-col overflow-hidden rounded-[14px] text-left transition-colors ${
                                 isSelected
-                                  ? 'border-sky-300 bg-sky-50 ring-1 ring-sky-200'
-                                  : 'border-slate-200 bg-white hover:border-slate-300'
+                                  ? 'bg-[var(--app-sidebar-hover)] ring-1 ring-[var(--app-accent)]'
+                                  : 'bg-[var(--app-surface)] hover:bg-[var(--app-surface-strong)]'
                               }`}
                               style={{ containIntrinsicSize: '180px 220px' }}
                             >
-                              <div className="relative aspect-square w-full bg-slate-100">
-                                <label className="absolute left-2 top-2 z-10 flex cursor-pointer items-center rounded bg-white/90 p-1 shadow-sm">
+                              <div className="relative aspect-square w-full bg-[var(--app-surface-strong)]">
+                                <label className="absolute left-1.5 top-1.5 z-10 flex cursor-pointer items-center rounded bg-white/88 p-1">
                                   <input
                                     type="checkbox"
                                     className="h-4 w-4 rounded border-slate-300"
@@ -950,7 +950,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                               <button
                                 type="button"
                                 onClick={() => setSelectedPhotoId(row.photo.id)}
-                                className="w-full min-w-0 flex-1 px-2 py-2 text-left"
+                                className="w-full min-w-0 flex-1 px-2 py-1.5 text-left"
                               >
                                 <p className="truncate text-xs font-medium text-slate-900">
                                   {row.photo.sourceFileName}
@@ -981,16 +981,16 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                   </div>
                 </div>
 
-                <div className="min-h-0 min-w-0 lg:sticky lg:top-4 lg:self-start">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="min-h-0 min-w-0 lg:sticky lg:top-2 lg:self-start">
+                  <div className="rounded-[16px] bg-[var(--app-surface-strong)] p-3">
                     <h2 className="text-sm font-semibold text-slate-900">미리보기</h2>
                     {!selectedRow ? (
-                      <p className="mt-4 text-sm text-slate-600">
+                      <p className="mt-3 text-sm text-slate-600">
                         목록에서 사진을 선택하면 썸네일 미리보기가 표시됩니다.
                       </p>
                     ) : (
-                      <div className="mt-4 space-y-3">
-                        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                      <div className="mt-3 space-y-2.5">
+                        <div className="overflow-hidden rounded-[14px] bg-[var(--app-surface)]">
                           {previewThumbUrl ? (
                             <img
                               src={previewThumbUrl}

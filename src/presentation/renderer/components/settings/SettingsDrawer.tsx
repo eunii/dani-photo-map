@@ -17,16 +17,16 @@ export function SettingsDrawer({
         isOpen={isOpen}
         onOpenChange={onOpenChange}
         variant="blur"
-        className="bg-slate-900/30 backdrop-blur-sm"
+        className="bg-slate-900/18 backdrop-blur-[2px]"
       >
-        <Drawer.Content placement="right" className="p-2 sm:p-4">
+        <Drawer.Content placement="right" className="p-1.5 sm:p-2">
           <Drawer.Dialog
             aria-label="설정 패널"
-            className="h-[calc(100vh-1rem)] w-[min(100%,560px)] rounded-[32px] border border-[var(--app-border)] bg-[var(--app-panel)] text-[var(--app-foreground)] shadow-[0_24px_60px_rgba(15,23,42,0.18)]"
+            className="h-[calc(100vh-0.5rem)] w-[min(100%,480px)] rounded-[22px] border border-[var(--app-border)] bg-[var(--app-panel)] text-[var(--app-foreground)] shadow-[0_10px_28px_rgba(15,23,42,0.10)]"
           >
-            <Drawer.Header className="items-start border-b border-[var(--app-border)] px-5 py-5">
+            <Drawer.Header className="items-start border-b border-[var(--app-border)] px-4 py-3">
               <div className="space-y-1">
-                <Drawer.Heading className="text-xl font-semibold text-[var(--app-foreground)]">
+                <Drawer.Heading className="text-lg font-semibold text-[var(--app-foreground)]">
                   설정
                 </Drawer.Heading>
                 <p className="text-sm text-[var(--app-muted)]">
@@ -36,18 +36,18 @@ export function SettingsDrawer({
               <Drawer.CloseTrigger className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]" />
             </Drawer.Header>
 
-            <Drawer.Body className="px-5 py-5">
+            <Drawer.Body className="px-4 py-3">
               <SettingsPanelSections compact />
             </Drawer.Body>
 
-            <Drawer.Footer className="border-t border-[var(--app-border)] px-5 py-4">
+            <Drawer.Footer className="border-t border-[var(--app-border)] px-4 py-3">
               <div className="flex w-full items-center justify-between gap-3">
                 <p className="text-xs text-[var(--app-muted)]">
                   선택한 테마와 사이드바 상태는 다음 실행에도 유지됩니다.
                 </p>
                 <Button
                   variant="secondary"
-                  className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
+                  className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-[var(--app-foreground)]"
                   onPress={() => onOpenChange(false)}
                 >
                   닫기

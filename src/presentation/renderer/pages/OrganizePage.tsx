@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { Button, Card, Input, TextArea } from '@heroui/react'
+
 import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
 import {
   defaultMissingGpsGroupingBasis,
@@ -1399,62 +1401,92 @@ export function OrganizePage({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold tracking-tight text-slate-900">
-          사진 정리 실행
-        </h2>
-        <p className="text-sm text-slate-600">
-          원본 폴더를 스캔해 그룹별로 정리를 실행합니다.
-        </p>
-      </div>
+      <Card className="app-surface-card border-0 shadow-none">
+        <div className="grid gap-4 px-5 py-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(300px,0.9fr)]">
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--app-accent-strong)]">
+                Source Library
+              </p>
+              <h2 className="text-lg font-semibold text-[var(--app-foreground)]">
+                원본 사진 폴더
+              </h2>
+              <p className="text-sm text-[var(--app-muted)]">
+                원본 폴더를 스캔해 그룹별 정리 후보를 만들고, 메타를 보완한 뒤 저장합니다.
+              </p>
+            </div>
+            <div className="rounded-[24px] border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm text-[var(--app-muted)]">
+              {sourceRoot || '아직 선택되지 않았습니다.'}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                className="rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
+                onPress={() => void selectSourceRoot()}
+              >
+                원본 폴더 선택
+              </Button>
+              {!previewResult ? (
+                <Button
+                  variant="secondary"
+                  className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
+                  isDisabled={isLoadingPreview}
+                  onPress={() => void handlePreview()}
+                >
+                  {isLoadingPreview ? '후보 불러오는 중...' : '정리 시작하기'}
+                </Button>
+              ) : null}
+            </div>
+          </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-slate-900">원본 사진 폴더</h2>
-          <p className="min-h-12 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-600">
-            {sourceRoot || '아직 선택되지 않았습니다.'}
-          </p>
-          <button
-            type="button"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-            onClick={() => void selectSourceRoot()}
-          >
-            원본 폴더 선택
-          </button>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-4">
+              <p className="text-xs text-[var(--app-muted)]">현재 단계</p>
+              <p className="mt-2 text-lg font-semibold text-[var(--app-foreground)]">
+                {previewResult ? '후보 검토 및 저장' : '원본 스캔 준비'}
+              </p>
+            </div>
+            <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-4">
+              <p className="text-xs text-[var(--app-muted)]">출력 폴더</p>
+              <p className="mt-2 line-clamp-3 text-sm font-medium text-[var(--app-foreground)]">
+                {outputRoot || '설정 필요'}
+              </p>
+            </div>
+          </div>
         </div>
-      </section>
+      </Card>
 
       {!outputRoot ? (
-        <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-5">
+        <section className="rounded-[28px] border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-[var(--app-foreground)]">
                 출력 폴더가 설정되지 않았습니다.
               </h2>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-[var(--app-muted)]">
                 공통 출력 폴더는 설정 탭에서 지정합니다.
               </p>
             </div>
             {onNavigateToSettings ? (
-              <button
-                type="button"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
-                onClick={onNavigateToSettings}
+              <Button
+                variant="secondary"
+                className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
+                onPress={onNavigateToSettings}
               >
                 설정으로 이동
-              </button>
+              </Button>
             ) : null}
           </div>
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <section className="rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface)] p-5">
         <div className="space-y-3">
           <div className="space-y-1">
-            <h2 className="text-sm font-semibold text-slate-900">
+            <h2 className="text-sm font-semibold text-[var(--app-foreground)]">
               GPS 없는 사진 그룹 기준
             </h2>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-[var(--app-muted)]">
               GPS 없는 사진만 선택한 기준으로 추천하고 저장합니다. GPS 있는 사진은
               계속 월별로 유지됩니다.
             </p>
@@ -1464,16 +1496,16 @@ export function OrganizePage({
               const isSelected = missingGpsGroupingBasis === option.value
 
               return (
-                <button
+                <Button
                   key={option.value}
-                  type="button"
-                  className={`rounded-full border px-3 py-1.5 text-sm font-medium ${
+                  variant={isSelected ? 'primary' : 'secondary'}
+                  className={`rounded-full ${
                     isSelected
-                      ? 'border-blue-600 bg-blue-50 text-blue-700'
-                      : 'border-slate-300 bg-white text-slate-700'
+                      ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
+                      : 'border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]'
                   }`}
-                  disabled={isLoadingPreview || savePipelineBusy}
-                  onClick={() => {
+                  isDisabled={isLoadingPreview || savePipelineBusy}
+                  onPress={() => {
                     if (option.value === missingGpsGroupingBasis) {
                       return
                     }
@@ -1486,72 +1518,75 @@ export function OrganizePage({
                   }}
                 >
                   {option.label}
-                </button>
+                </Button>
               )
             })}
           </div>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[var(--app-muted)]">
             실제 폴더: `{formatMissingGpsFolderPattern(missingGpsGroupingBasis)}`.
             주별은 `week1`, `week2` 식으로 월 안에서 나뉩니다.
           </p>
         </div>
       </section>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-4">
+        <div className="flex flex-wrap items-center gap-3">
         {!previewResult ? (
-          <button
-            type="button"
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-            disabled={isLoadingPreview}
-            onClick={() => void handlePreview()}
+          <Button
+            variant="primary"
+            className="rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
+            isDisabled={isLoadingPreview}
+            onPress={() => void handlePreview()}
           >
             {isLoadingPreview ? '후보 불러오는 중...' : '정리 시작하기'}
-          </button>
+          </Button>
         ) : (
           <>
             {hasPendingPreviewGroups && orderedPreviewGroups.length > 1 ? (
-              <button
-                type="button"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
-                disabled={savePipelineBusy || wizardStepIndex === 0}
-                onClick={() => setWizardStepIndex((step) => Math.max(0, step - 1))}
+              <Button
+                variant="secondary"
+                className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
+                isDisabled={savePipelineBusy || wizardStepIndex === 0}
+                onPress={() =>
+                  setWizardStepIndex((step) => Math.max(0, step - 1))
+                }
               >
                 이전 그룹
-              </button>
+              </Button>
             ) : null}
-            <button
-              type="button"
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
-              disabled={isLoadingPreview || savePipelineBusy}
-              onClick={() => void handlePreview()}
+            <Button
+              variant="secondary"
+              className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
+              isDisabled={isLoadingPreview || savePipelineBusy}
+              onPress={() => void handlePreview()}
             >
               후보 다시 불러오기
-            </button>
+            </Button>
             {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
-              <button
-                type="button"
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-                disabled={
+              <Button
+                variant="primary"
+                className="rounded-2xl bg-emerald-600 text-white"
+                isDisabled={
                   isLoadingPreview ||
                   savePipelineBusy ||
                   orderedPreviewGroups.length === 0
                 }
-                onClick={() => enqueueSaveAllGroups()}
+                onPress={() => enqueueSaveAllGroups()}
               >
                 이후 그룹 전체 저장하기
-              </button>
+              </Button>
             ) : null}
           </>
         )}
-        <button
-          type="button"
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
-          disabled={!outputRoot}
-          onClick={onNavigateToBrowse}
+        <Button
+          variant="secondary"
+          className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
+          isDisabled={!outputRoot}
+          onPress={onNavigateToBrowse}
         >
           조회 페이지 열기
-        </button>
-        <p className="text-sm text-slate-500">
+        </Button>
+        <p className="text-sm text-[var(--app-muted)]">
           그룹마다 메타를 입력한 뒤 카드에서 한 그룹씩 저장하거나, 위의
           「이후 그룹 전체 저장하기」로 현재 카드 그룹부터 끝까지 입력값을
           한 번에 적용해 순서대로 복사합니다. 진행이 길면 아래 진행 표시를
@@ -1559,21 +1594,22 @@ export function OrganizePage({
           순서상 마지막에 처리됩니다.
         </p>
       </div>
+      </div>
 
       {errorMessage ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-[24px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
         </div>
       ) : null}
       {resultActionMessage ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {resultActionMessage}
         </div>
       ) : null}
 
       {bulkSaveActive && savePipelineBusy ? (
         <section
-          className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"
+          className="rounded-[28px] border border-indigo-200 bg-indigo-50 p-5"
           aria-live="polite"
           aria-busy={runningSaveTarget !== null}
         >
@@ -1581,13 +1617,13 @@ export function OrganizePage({
             <h2 className="text-sm font-semibold text-indigo-900">
               이후 그룹 일괄 저장 진행 중
             </h2>
-            <button
-              type="button"
-              className="shrink-0 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-medium text-indigo-900"
-              onClick={() => cancelRemainingSaveJobs()}
+            <Button
+              variant="secondary"
+              className="shrink-0 rounded-2xl border border-indigo-300 bg-white text-xs font-medium text-indigo-900"
+              onPress={() => cancelRemainingSaveJobs()}
             >
               남은 작업 취소
-            </button>
+            </Button>
           </div>
           <p className="mt-1 text-sm text-indigo-800">
             현재 위저드 위치부터 남은 그룹만 복사·인덱스에 반영합니다. 막대에는
@@ -1624,7 +1660,7 @@ export function OrganizePage({
                   </span>{' '}
                   / {denom} ({overallPct}%)
                 </p>
-                <div className="mt-4 rounded-lg border border-indigo-200 bg-white/70 p-3">
+                <div className="mt-4 rounded-[24px] border border-indigo-200 bg-white/70 p-3">
                   <p className="text-xs font-semibold text-indigo-900">
                     그룹별 진행
                   </p>
@@ -1681,19 +1717,21 @@ export function OrganizePage({
       savePipelineBusy &&
       hasPendingPreviewGroups &&
       !bulkSaveActive ? (
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <h2 className="text-sm font-semibold text-slate-900">저장 진행 중</h2>
-            <button
-              type="button"
-              className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800"
-              onClick={() => cancelRemainingSaveJobs()}
+            <h2 className="text-sm font-semibold text-[var(--app-foreground)]">
+              저장 진행 중
+            </h2>
+            <Button
+              variant="secondary"
+              className="shrink-0 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-xs font-medium text-[var(--app-foreground)]"
+              onPress={() => cancelRemainingSaveJobs()}
             >
               남은 작업 취소
-            </button>
+            </Button>
           </div>
           {prepareProgress ? (
-            <p className="mt-1 text-xs text-slate-600">
+            <p className="mt-1 text-xs text-[var(--app-muted)]">
               원본 읽기·해시 (현재 그룹) {prepareProgress.completed} /{' '}
               {prepareProgress.total}장
             </p>
@@ -1708,7 +1746,7 @@ export function OrganizePage({
 
             return (
               <>
-                <p className="mt-2 text-xs font-medium text-slate-800">
+                <p className="mt-2 text-xs font-medium text-[var(--app-foreground)]">
                   전체 진행 {overallPct}%
                 </p>
                 <progress
@@ -1716,16 +1754,20 @@ export function OrganizePage({
                   max={denom}
                   value={Math.min(photosSavedCount, denom)}
                 />
-                <p className="mt-1 text-xs text-slate-600">
+                <p className="mt-1 text-xs text-[var(--app-muted)]">
                   단위 진행{' '}
-                  <span className="font-medium text-slate-900">{photosSavedCount}</span>{' '}
+                  <span className="font-medium text-[var(--app-foreground)]">
+                    {photosSavedCount}
+                  </span>{' '}
                   / {denom} ({overallPct}%)
                 </p>
               </>
             )
           })()}
-          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs font-semibold text-slate-900">그룹별 진행</p>
+          <div className="mt-3 rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-3">
+            <p className="text-xs font-semibold text-[var(--app-foreground)]">
+              그룹별 진행
+            </p>
             <ul className="mt-2 space-y-2">
               {orderedPreviewGroups.map((g) => {
                 const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
@@ -1740,14 +1782,14 @@ export function OrganizePage({
 
                 return (
                   <li key={g.groupKey}>
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-800">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--app-foreground)]">
                       <span
                         className="min-w-0 flex-1 truncate font-medium"
                         title={titleLabel}
                       >
                         {titleLabel}
                       </span>
-                      <span className="shrink-0 text-slate-700">
+                      <span className="shrink-0 text-[var(--app-muted)]">
                         {linePct}% · {formatGroupSavePhaseLabel(phase)}
                       </span>
                     </div>
@@ -1765,7 +1807,7 @@ export function OrganizePage({
       ) : null}
 
       {previewResult && !hidePreviewPanelWhileSaving ? (
-        <section className="rounded-xl border border-sky-200 bg-sky-50 p-5">
+        <section className="rounded-[28px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-5">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-1">
@@ -1789,14 +1831,14 @@ export function OrganizePage({
                   </p>
                 ) : null}
               </div>
-              <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-sky-700">
+              <div className="rounded-full bg-[var(--app-surface)] px-3 py-1 text-xs font-medium text-[var(--app-accent-strong)]">
                 스캔 후보 {previewResult.scannedCount}장
               </div>
             </div>
 
             {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
-              <div className="rounded-lg border border-sky-200 bg-white p-3">
-                <p className="text-xs font-semibold text-sky-900">
+              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3">
+                <p className="text-xs font-semibold text-[var(--app-accent-strong)]">
                   그룹별 저장 상태
                 </p>
                 <ul className="mt-2 space-y-1.5">
@@ -1809,8 +1851,8 @@ export function OrganizePage({
                         key={g.groupKey}
                         className={`flex flex-wrap items-center justify-between gap-2 text-xs ${
                           phase === 'saving' || isCurrentRun
-                            ? 'font-medium text-sky-900'
-                            : 'text-slate-700'
+                            ? 'font-medium text-[var(--app-accent-strong)]'
+                            : 'text-[var(--app-foreground)]'
                         }`}
                       >
                         <span className="min-w-0 flex-1 truncate" title={titleLabel}>
@@ -1837,9 +1879,12 @@ export function OrganizePage({
                   })}
                 </ul>
                 {totalPhotosInPreview > 0 ? (
-                  <p className="mt-2 text-xs text-sky-800">
+                  <p className="mt-2 text-xs text-[var(--app-muted)]">
                     사진{' '}
-                    <span className="font-medium text-sky-900">{photosSavedCount}</span> /{' '}
+                    <span className="font-medium text-[var(--app-accent-strong)]">
+                      {photosSavedCount}
+                    </span>{' '}
+                    /{' '}
                     {totalPhotosInPreview}장
                     {` (${Math.min(
                       100,
@@ -1884,22 +1929,22 @@ export function OrganizePage({
                   })()
 
                   return (
-                  <article
+                  <Card
                     key={group.groupKey}
-                    className="rounded-xl border border-sky-200 bg-white p-4"
+                    className="app-surface-card rounded-[28px] border-0 p-4 shadow-none"
                   >
                     <div className="space-y-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
-                          <h3 className="text-sm font-semibold text-slate-900">
+                          <h3 className="text-sm font-semibold text-[var(--app-foreground)]">
                             {effectiveGroupTitle(group, groupTitleInputs)}
                           </h3>
-                          <p className="text-sm text-slate-600">
+                          <p className="text-sm text-[var(--app-muted)]">
                             사진 {group.photoCount}장
                             {group.representativeGps ? ' · GPS 기반 그룹' : ' · GPS 없음'}
                           </p>
                           {!group.representativeGps ? (
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-[var(--app-muted)]">
                               현재 기준: {formatMissingGpsGroupingBasisLabel(missingGpsGroupingBasis)}
                               {' · '}
                               실제 폴더: {formatMissingGpsFolderPattern(missingGpsGroupingBasis)}
@@ -1913,12 +1958,12 @@ export function OrganizePage({
                             ) : null}
                           </div>
                           {getAssignmentModeDescription(group) ? (
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-[var(--app-muted)]">
                               {getAssignmentModeDescription(group)}
                             </p>
                           ) : null}
                         </div>
-                        <div className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+                        <div className="rounded-full bg-[var(--app-surface-strong)] px-3 py-1 text-xs font-medium text-[var(--app-accent-strong)]">
                           {group.groupKey}
                         </div>
                       </div>
@@ -1972,7 +2017,7 @@ export function OrganizePage({
                                 <button
                                   key={title}
                                   type="button"
-                                  className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
+                                  className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-3 py-1 text-xs font-medium text-[var(--app-accent-strong)]"
                                   onClick={() =>
                                     setGroupTitleInputs((current) => ({
                                       ...current,
@@ -1985,7 +2030,7 @@ export function OrganizePage({
                               ))}
                             </div>
                           ) : (
-                            <p className="text-sm text-slate-500">
+                            <p className="text-sm text-[var(--app-muted)]">
                               근처 GPS 범위에서 기존 그룹명이 없어 기본 그룹명을
                               사용합니다.
                             </p>
@@ -1993,10 +2038,10 @@ export function OrganizePage({
                         </div>
 
                         <label className="space-y-2">
-                          <span className="text-sm font-medium text-slate-800">
+                          <span className="text-sm font-medium text-[var(--app-foreground)]">
                             그룹명 (저장 시 적용)
                           </span>
-                          <input
+                          <Input
                             value={groupTitleInputs[group.groupKey] ?? ''}
                             onChange={(event) =>
                               setGroupTitleInputs((current) => ({
@@ -2004,16 +2049,16 @@ export function OrganizePage({
                                 [group.groupKey]: event.target.value
                               }))
                             }
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder={group.displayTitle}
+                            className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]"
                           />
                         </label>
 
                         <label className="space-y-2">
-                          <span className="text-sm font-medium text-slate-800">
+                          <span className="text-sm font-medium text-[var(--app-foreground)]">
                             동행인
                           </span>
-                          <input
+                          <Input
                             value={groupCompanionsInputs[group.groupKey] ?? ''}
                             onChange={(event) =>
                               setGroupCompanionsInputs((current) => ({
@@ -2021,16 +2066,16 @@ export function OrganizePage({
                                 [group.groupKey]: event.target.value
                               }))
                             }
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder="예: Alice, Bob"
+                            className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]"
                           />
                         </label>
 
                         <label className="space-y-2">
-                          <span className="text-sm font-medium text-slate-800">
+                          <span className="text-sm font-medium text-[var(--app-foreground)]">
                             메모
                           </span>
-                          <textarea
+                          <TextArea
                             value={groupNotesInputs[group.groupKey] ?? ''}
                             onChange={(event) =>
                               setGroupNotesInputs((current) => ({
@@ -2038,35 +2083,35 @@ export function OrganizePage({
                                 [group.groupKey]: event.target.value
                               }))
                             }
-                            className="min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
                             placeholder="이 그룹에 대한 메모를 남겨두세요."
+                            className="min-h-24 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)]"
                           />
                         </label>
                       </div>
 
                       {hasPendingPreviewGroups ? (
-                        <div className="flex justify-end border-t border-slate-100 pt-4">
-                          <button
-                            type="button"
-                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-                            disabled={saveBusyForThisGroup}
-                            onClick={() => enqueueSaveCurrentGroup()}
+                        <div className="flex justify-end border-t border-[var(--app-border)] pt-4">
+                          <Button
+                            variant="primary"
+                            className="rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
+                            isDisabled={saveBusyForThisGroup}
+                            onPress={() => enqueueSaveCurrentGroup()}
                           >
                             {saveButtonLabel}
-                          </button>
+                          </Button>
                         </div>
                       ) : null}
                     </div>
-                  </article>
+                  </Card>
                   )
                 })()}
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-sky-300 bg-white p-6 text-center">
-                <p className="text-sm font-semibold text-slate-900">
+              <div className="rounded-[24px] border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] p-6 text-center">
+                <p className="text-sm font-semibold text-[var(--app-foreground)]">
                   새로 정리할 파일이 없습니다.
                 </p>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-1 text-sm text-[var(--app-muted)]">
                   현재 원본 폴더의 파일은 출력 폴더에 이미 있거나 중복으로
                   판단되었습니다.
                 </p>
@@ -2077,46 +2122,46 @@ export function OrganizePage({
       ) : null}
 
       {summary ? (
-        <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+        <section className="rounded-[28px] border border-emerald-200 bg-emerald-50 p-5">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-emerald-900">
                 실행 결과
               </h2>
-              <button
-                type="button"
-                className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800"
-                onClick={onNavigateToBrowse}
+              <Button
+                variant="secondary"
+                className="rounded-2xl border border-emerald-300 bg-white text-emerald-800"
+                onPress={onNavigateToBrowse}
               >
                 결과 조회로 이동
-              </button>
+              </Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="rounded-lg bg-white px-4 py-3">
+              <div className="rounded-[24px] bg-white px-4 py-3">
                 <p className="text-xs text-slate-500">스캔 수</p>
                 <p className="text-xl font-semibold text-slate-900">
                   {summary.scannedCount}
                 </p>
               </div>
-              <div className="rounded-lg bg-white px-4 py-3">
+              <div className="rounded-[24px] bg-white px-4 py-3">
                 <p className="text-xs text-slate-500">증분 스킵 수</p>
                 <p className="text-xl font-semibold text-slate-900">
                   {summary.skippedUnchangedCount}
                 </p>
               </div>
-              <div className="rounded-lg bg-white px-4 py-3">
+              <div className="rounded-[24px] bg-white px-4 py-3">
                 <p className="text-xs text-slate-500">유지 수</p>
                 <p className="text-xl font-semibold text-slate-900">
                   {summary.keptCount}
                 </p>
               </div>
-              <div className="rounded-lg bg-white px-4 py-3">
+              <div className="rounded-[24px] bg-white px-4 py-3">
                 <p className="text-xs text-slate-500">신규 복사 수</p>
                 <p className="text-xl font-semibold text-slate-900">
                   {summary.copiedCount}
                 </p>
               </div>
-              <div className="rounded-lg bg-white px-4 py-3">
+              <div className="rounded-[24px] bg-white px-4 py-3">
                 <p className="text-xs text-slate-500">그룹 수</p>
                 <p className="text-xl font-semibold text-slate-900">
                   {summary.groupCount}
@@ -2127,10 +2172,10 @@ export function OrganizePage({
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <button
                 type="button"
-                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
                   openScanResultDetail === 'inBatchDup'
-                    ? 'border-emerald-500 bg-emerald-100'
-                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                    ? 'border-emerald-500 bg-emerald-100 shadow-sm'
+                    : 'border-emerald-100 bg-white hover:bg-emerald-50/40'
                 }`}
                 onClick={() => handleToggleScanResultDetail('inBatchDup')}
               >
@@ -2142,10 +2187,10 @@ export function OrganizePage({
               </button>
               <button
                 type="button"
-                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
                   openScanResultDetail === 'incrementalSkip'
-                    ? 'border-emerald-500 bg-emerald-100'
-                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                    ? 'border-emerald-500 bg-emerald-100 shadow-sm'
+                    : 'border-emerald-100 bg-white hover:bg-emerald-50/40'
                 }`}
                 onClick={() => handleToggleScanResultDetail('incrementalSkip')}
               >
@@ -2159,10 +2204,10 @@ export function OrganizePage({
               </button>
               <button
                 type="button"
-                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
                   openScanResultDetail === 'existingSkip'
-                    ? 'border-emerald-500 bg-emerald-100'
-                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                    ? 'border-emerald-500 bg-emerald-100 shadow-sm'
+                    : 'border-emerald-100 bg-white hover:bg-emerald-50/40'
                 }`}
                 onClick={() => handleToggleScanResultDetail('existingSkip')}
               >
@@ -2174,10 +2219,10 @@ export function OrganizePage({
               </button>
               <button
                 type="button"
-                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
                   openScanResultDetail === 'warnings'
-                    ? 'border-emerald-500 bg-emerald-100'
-                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                    ? 'border-emerald-500 bg-emerald-100 shadow-sm'
+                    : 'border-emerald-100 bg-white hover:bg-emerald-50/40'
                 }`}
                 onClick={() => handleToggleScanResultDetail('warnings')}
               >
@@ -2189,10 +2234,10 @@ export function OrganizePage({
               </button>
               <button
                 type="button"
-                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
                   openScanResultDetail === 'failures'
-                    ? 'border-emerald-500 bg-emerald-100'
-                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                    ? 'border-emerald-500 bg-emerald-100 shadow-sm'
+                    : 'border-emerald-100 bg-white hover:bg-emerald-50/40'
                 }`}
                 onClick={() => handleToggleScanResultDetail('failures')}
               >
@@ -2205,7 +2250,7 @@ export function OrganizePage({
             </div>
 
             {openScanResultDetail === 'inBatchDup' ? (
-              <div className="rounded-lg border border-emerald-200 bg-white p-4">
+              <div className="rounded-[24px] border border-emerald-200 bg-white p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold text-slate-800">
@@ -2222,10 +2267,10 @@ export function OrganizePage({
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    onClick={() =>
+                  <Button
+                    variant="secondary"
+                    className="rounded-2xl border border-[var(--app-border)] bg-white text-xs font-medium text-[var(--app-foreground)]"
+                    onPress={() =>
                       void copyResultDetail(
                         formatDuplicateListForClipboard(reviewedInBatchDuplicates),
                         '중복 검토 목록을 복사했습니다.'
@@ -2233,17 +2278,17 @@ export function OrganizePage({
                     }
                   >
                     목록 복사
-                  </button>
+                  </Button>
                 </div>
                 <label className="mt-3 block space-y-1">
                   <span className="text-[11px] font-medium text-slate-600">
                     sourcePath 검색
                   </span>
-                  <input
+                  <Input
                     value={duplicatePathQuery}
                     onChange={(event) => setDuplicatePathQuery(event.target.value)}
                     placeholder="canonical 또는 duplicate 경로 일부 검색"
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                    className="rounded-2xl border border-[var(--app-border)] bg-white"
                   />
                 </label>
                 <label className="mt-3 block space-y-1">
@@ -2268,7 +2313,7 @@ export function OrganizePage({
                     {reviewedInBatchDuplicates.map((dupGroup) => (
                       <li
                         key={dupGroup.canonicalPhotoId}
-                        className="rounded-md border border-slate-200 p-3"
+                        className="rounded-[20px] border border-slate-200 p-3"
                       >
                         <div className="mb-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
                           <span className="rounded-full bg-slate-100 px-2 py-1">
@@ -2333,7 +2378,7 @@ export function OrganizePage({
             ) : null}
 
             {openScanResultDetail === 'incrementalSkip' ? (
-              <div className="rounded-lg border border-emerald-200 bg-white p-4">
+              <div className="rounded-[24px] border border-emerald-200 bg-white p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold text-slate-800">
@@ -2350,10 +2395,10 @@ export function OrganizePage({
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    onClick={() =>
+                  <Button
+                    variant="secondary"
+                    className="rounded-2xl border border-[var(--app-border)] bg-white text-xs font-medium text-[var(--app-foreground)]"
+                    onPress={() =>
                       void copyResultDetail(
                         formatIncrementalSkipListForClipboard(reviewedIncrementalSkips),
                         '증분 스킵 목록을 복사했습니다.'
@@ -2361,19 +2406,19 @@ export function OrganizePage({
                     }
                   >
                     목록 복사
-                  </button>
+                  </Button>
                 </div>
                 <label className="mt-3 block space-y-1">
                   <span className="text-[11px] font-medium text-slate-600">
                     sourcePath 검색
                   </span>
-                  <input
+                  <Input
                     value={incrementalSkipPathQuery}
                     onChange={(event) =>
                       setIncrementalSkipPathQuery(event.target.value)
                     }
                     placeholder="증분 스킵된 원본 경로 검색"
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                    className="rounded-2xl border border-[var(--app-border)] bg-white"
                   />
                 </label>
                 <label className="mt-3 block space-y-1">
@@ -2400,7 +2445,7 @@ export function OrganizePage({
                     {reviewedIncrementalSkips.map((row, index) => (
                       <li
                         key={`${row.sourcePath}-${index}`}
-                        className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800"
+                        className="rounded-[20px] border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800"
                       >
                         <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
                           <span className="rounded-full bg-white px-2 py-1">
@@ -2427,7 +2472,7 @@ export function OrganizePage({
             ) : null}
 
             {openScanResultDetail === 'existingSkip' ? (
-              <div className="rounded-lg border border-emerald-200 bg-white p-4">
+              <div className="rounded-[24px] border border-emerald-200 bg-white p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold text-slate-800">
@@ -2443,10 +2488,10 @@ export function OrganizePage({
                   </p>
                 </div>
                 <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    onClick={() =>
+                  <Button
+                    variant="secondary"
+                    className="rounded-2xl border border-[var(--app-border)] bg-white text-xs font-medium text-[var(--app-foreground)]"
+                    onPress={() =>
                       void copyResultDetail(
                         formatExistingSkipListForClipboard(reviewedExistingSkips),
                         '기존 출력 스킵 목록을 복사했습니다.'
@@ -2454,29 +2499,29 @@ export function OrganizePage({
                     }
                   >
                     목록 복사
-                  </button>
+                  </Button>
                 </div>
                 <div className="mt-3 grid gap-3 lg:grid-cols-2">
                   <label className="space-y-1">
                     <span className="text-[11px] font-medium text-slate-600">
                       경로 검색
                     </span>
-                    <input
+                    <Input
                       value={existingSkipPathQuery}
                       onChange={(event) => setExistingSkipPathQuery(event.target.value)}
                       placeholder="sourcePath 또는 outputRelativePath 검색"
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                      className="rounded-2xl border border-[var(--app-border)] bg-white"
                     />
                   </label>
                   <label className="space-y-1">
                     <span className="text-[11px] font-medium text-slate-600">
                       SHA-256 검색
                     </span>
-                    <input
+                    <Input
                       value={existingSkipHashQuery}
                       onChange={(event) => setExistingSkipHashQuery(event.target.value)}
                       placeholder="해시 앞부분 검색"
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                      className="rounded-2xl border border-[var(--app-border)] bg-white"
                     />
                   </label>
                 </div>

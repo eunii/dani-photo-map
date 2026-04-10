@@ -1,3 +1,5 @@
+import { Button, Input } from '@heroui/react'
+
 import type {
   DateQuickFilter,
   DateRangeFilter
@@ -32,37 +34,37 @@ export function MapFilterBar({
   const hasRange = Boolean(dateRange.start || dateRange.end)
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
-      <div className="flex flex-wrap gap-2">
+    <div className="space-y-2 rounded-[16px] bg-[var(--app-surface)] px-3 py-2">
+      <div className="flex flex-wrap gap-1.5">
         {QUICK_FILTER_LABELS.map((filter) => (
-          <button
+          <Button
             key={filter.id}
-            type="button"
-            className={`rounded-full px-3 py-2 text-xs font-medium transition ${
+            variant={quickFilter === filter.id ? 'primary' : 'secondary'}
+            className={`rounded-full px-3 text-xs font-medium transition ${
               quickFilter === filter.id
-                ? 'bg-slate-900 text-white'
-                : 'bg-slate-100 text-slate-700'
+                ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
+                : 'border border-[var(--app-border)] bg-[var(--app-surface-strong)] text-[var(--app-foreground)]'
             }`}
-            onClick={() => onQuickFilterChange(filter.id)}
+            onPress={() => onQuickFilterChange(filter.id)}
           >
             {filter.label}
-          </button>
+          </Button>
         ))}
         {(quickFilter !== 'all' || hasRange) && (
-          <button
-            type="button"
-            className="rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700"
-            onClick={onReset}
+          <Button
+            variant="secondary"
+            className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs font-medium text-[var(--app-foreground)]"
+            onPress={onReset}
           >
             필터 초기화
-          </button>
+          </Button>
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-2">
         <label className="space-y-1">
-          <span className="text-xs font-medium text-slate-600">시작일</span>
-          <input
+          <span className="text-xs font-medium text-[var(--app-muted)]">시작일</span>
+          <Input
             type="date"
             value={dateRange.start ?? ''}
             onChange={(event) =>
@@ -71,12 +73,12 @@ export function MapFilterBar({
                 start: event.target.value || undefined
               })
             }
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+            className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)]"
           />
         </label>
         <label className="space-y-1">
-          <span className="text-xs font-medium text-slate-600">종료일</span>
-          <input
+          <span className="text-xs font-medium text-[var(--app-muted)]">종료일</span>
+          <Input
             type="date"
             value={dateRange.end ?? ''}
             onChange={(event) =>
@@ -85,7 +87,7 @@ export function MapFilterBar({
                 end: event.target.value || undefined
               })
             }
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+            className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)]"
           />
         </label>
       </div>

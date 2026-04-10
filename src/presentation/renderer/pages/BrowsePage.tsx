@@ -290,7 +290,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
   ])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {errorMessage ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
@@ -308,7 +308,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
       ) : null}
 
       {!outputRoot ? (
-        <div className="rounded-[28px] border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] p-10 text-center">
+        <div className="rounded-[18px] bg-[var(--app-surface)] p-6 text-center">
           <p className="text-base font-semibold text-[var(--app-foreground)]">
             출력 폴더를 먼저 설정하세요.
           </p>
@@ -318,7 +318,7 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
           {onNavigateToSettings ? (
             <Button
               variant="primary"
-              className="mt-4 rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
+              className="mt-3 rounded-xl bg-[var(--app-button)] text-[var(--app-button-foreground)]"
               onPress={onNavigateToSettings}
             >
               설정으로 이동
@@ -326,8 +326,8 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
           ) : null}
         </div>
       ) : (
-        <section className="space-y-4">
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <section className="space-y-3">
+          <div className="space-y-2 rounded-[18px] bg-[var(--app-surface-strong)] p-2.5">
             <MapSearchBar
               value={searchQuery}
               resultCount={filteredRecords.length}
@@ -346,33 +346,33 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
             />
           </div>
 
-          <div className="flex flex-wrap gap-2 text-xs text-slate-600">
-            <span className="rounded-full bg-slate-100 px-3 py-1.5">
+          <div className="flex flex-wrap gap-1.5 text-xs text-[var(--app-muted)]">
+            <span className="rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1">
               필터 결과 {filteredRecords.length}개
             </span>
-            <span className="rounded-full bg-slate-100 px-3 py-1.5">
+            <span className="rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1">
               지도 가능 {mappedRecords.length}개
             </span>
-            <span className="rounded-full bg-slate-100 px-3 py-1.5">
+            <span className="rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1">
               GPS 없는 그룹 {unmappedRecords.length}개
             </span>
-            <span className="rounded-full bg-slate-100 px-3 py-1.5">
+            <span className="rounded-full bg-[var(--app-surface-strong)] px-2.5 py-1">
               대표 핀 {markerGroups.length}개
             </span>
             {searchQuery ? (
-              <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">
+              <span className="rounded-full bg-[var(--app-sidebar-hover)] px-2.5 py-1 text-[var(--app-sidebar-hover-text)]">
                 검색: {searchQuery}
               </span>
             ) : null}
             {dateRange.start || dateRange.end ? (
-              <span className="rounded-full bg-violet-50 px-3 py-1.5 text-violet-700">
+              <span className="rounded-full bg-[var(--app-sidebar-hover)] px-2.5 py-1 text-[var(--app-sidebar-hover-text)]">
                 날짜: {dateRange.start ?? '시작'} ~ {dateRange.end ?? '종료'}
               </span>
             ) : null}
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,560px)]">
-            <div className="relative h-[min(68vh,720px)] min-h-[560px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+          <div className="grid gap-2.5 xl:grid-cols-[minmax(0,1.35fr)_minmax(380px,500px)]">
+            <div className="relative h-[min(68vh,720px)] min-h-[520px] overflow-hidden rounded-[18px] bg-[var(--app-surface-strong)]">
               <PhotoGroupMap
                 sourceGroups={mapCanvasGroups}
                 markerGroups={markerGroups}
@@ -403,14 +403,14 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
               />
             </div>
 
-            <div className="min-w-0 space-y-3">
-              <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
+            <div className="min-w-0 space-y-2">
+              <div className="flex flex-wrap gap-1.5 rounded-[16px] bg-[var(--app-surface-strong)] p-1.5">
                 <button
                   type="button"
-                  className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                  className={`rounded-xl px-3 py-1.5 text-sm font-medium ${
                     panelTab === 'photos'
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-white text-slate-700'
+                      ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
+                      : 'bg-[var(--app-surface)] text-[var(--app-foreground)]'
                   }`}
                   onClick={() => setPanelTab('photos')}
                 >
@@ -418,10 +418,10 @@ export function BrowsePage({ onNavigateToSettings }: BrowsePageProps) {
                 </button>
                 <button
                   type="button"
-                  className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                  className={`rounded-xl px-3 py-1.5 text-sm font-medium ${
                     panelTab === 'details'
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-white text-slate-700'
+                      ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
+                      : 'bg-[var(--app-surface)] text-[var(--app-foreground)]'
                   }`}
                   onClick={() => setPanelTab('details')}
                   disabled={!selectedGroupDetail}
