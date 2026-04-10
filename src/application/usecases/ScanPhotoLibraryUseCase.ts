@@ -38,6 +38,7 @@ import { mergeGroupsByMatchingTitle } from '@application/services/mergeGroupsByM
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
 import { movePhotosIntoGroup } from '@application/services/movePhotosIntoGroup'
 import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
+import { buildIncrementalSourcePhotoCandidates } from '@application/services/buildIncrementalSourcePhotoCandidates'
 import {
   LIBRARY_INDEX_VERSION,
   type LibraryIndex
@@ -74,6 +75,7 @@ interface ScanPhotoContext {
   photoId: string
   sourcePath: string
   sourceFileName: string
+  sourceFingerprint?: Photo['sourceFingerprint']
 }
 
 interface PreparedPhotoRecord {
@@ -135,13 +137,20 @@ export class ScanPhotoLibraryUseCase {
         }
       })
 
-    const photoPaths = await this.dependencies.fileSystem.listPhotoFiles(
+    const listedPhotoPaths = await this.dependencies.fileSystem.listPhotoFiles(
       paths.sourceRoot
     )
+    const { candidates: sourcePhotoCandidates } =
+      await buildIncrementalSourcePhotoCandidates({
+        listedPhotoPaths,
+        sourceRoot: paths.sourceRoot,
+        storedIndex,
+        fileSystem: this.dependencies.fileSystem
+      })
 
     await this.prepareOutputDirectories(paths.outputRoot)
     const preparedPhotoRecords = await this.preparePhotoRecords(
-      photoPaths,
+      sourcePhotoCandidates,
       validatedCommand.missingGpsGroupingBasis,
       issues,
       onScanProgress
@@ -199,7 +208,7 @@ export class ScanPhotoLibraryUseCase {
     await this.dependencies.libraryIndexStore.save(index)
 
     return {
-      scannedCount: photoPaths.length,
+      scannedCount: listedPhotoPaths.length,
       duplicateCount: finalizedScanResult.duplicateCount,
       keptCount: finalizedScanResult.copiedCount,
       copiedCount: finalizedScanResult.copiedCount,
@@ -266,6 +275,7 @@ export class ScanPhotoLibraryUseCase {
       id: context.photoId,
       sourcePath: context.sourcePath,
       sourceFileName: context.sourceFileName,
+      sourceFingerprint: context.sourceFingerprint,
       sha256,
       duplicateOfPhotoId: undefined,
       capturedAt: metadata.capturedAt,
@@ -289,7 +299,11 @@ export class ScanPhotoLibraryUseCase {
   }
 
   private async preparePhotoRecords(
-    photoPaths: string[],
+    sourcePhotoCandidates: Array<{
+      sourcePath: string
+      sourceFileName: string
+      sourceFingerprint?: Photo['sourceFingerprint']
+    }>,
     missingGpsGroupingBasis: ScanPhotoLibraryCommand['missingGpsGroupingBasis'],
     issues: ScanPhotoLibraryIssue[],
     onScanProgress?: ScanPhotoLibraryExecuteOptions['onScanProgress']
@@ -297,10 +311,10 @@ export class ScanPhotoLibraryUseCase {
     let prepareCompleted = 0
 
     const results = await mapWithConcurrencyLimit(
-      photoPaths,
+      sourcePhotoCandidates,
       PREPARE_PHOTO_CONCURRENCY_LIMIT,
-      async (listedPhotoPath, index): Promise<PreparedPhotoRecordResult> => {
-        const sourcePath = normalizePathSeparators(listedPhotoPath)
+      async (candidate, index): Promise<PreparedPhotoRecordResult> => {
+        const sourcePath = normalizePathSeparators(candidate.sourcePath)
         const localIssues: ScanPhotoLibraryIssue[] = []
 
         try {
@@ -309,7 +323,8 @@ export class ScanPhotoLibraryUseCase {
               {
                 photoId: `photo-${index + 1}`,
                 sourcePath,
-                sourceFileName: getPathBaseName(sourcePath)
+                sourceFileName: candidate.sourceFileName || getPathBaseName(sourcePath),
+                sourceFingerprint: candidate.sourceFingerprint
               },
               missingGpsGroupingBasis,
               localIssues
@@ -321,7 +336,7 @@ export class ScanPhotoLibraryUseCase {
           onScanProgress?.({
             kind: 'prepare',
             completed: prepareCompleted,
-            total: photoPaths.length
+            total: sourcePhotoCandidates.length
           })
         }
       }

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { buildGroupAwarePhotoOutputRelativePath } from '@domain/services/GroupAwarePhotoNamingService'
+import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
 import type {
   GroupDetail,
@@ -13,6 +15,38 @@ interface MoveTargetGroup {
   representativeGps?: {
     latitude: number
     longitude: number
+  }
+}
+
+interface PreviewRenameRow {
+  photoId: string
+  sourceFileName: string
+  currentOutputRelativePath?: string
+  nextOutputRelativePath: string
+  willChange: boolean
+}
+
+function toPreviewTimestamp(capturedAtIso?: string) {
+  if (!capturedAtIso) {
+    return undefined
+  }
+
+  const date = new Date(capturedAtIso)
+
+  if (Number.isNaN(date.getTime())) {
+    return undefined
+  }
+
+  return {
+    iso: capturedAtIso,
+    year: String(date.getUTCFullYear()).padStart(4, '0'),
+    month: String(date.getUTCMonth() + 1).padStart(2, '0'),
+    day: String(date.getUTCDate()).padStart(2, '0'),
+    time: [
+      String(date.getUTCHours()).padStart(2, '0'),
+      String(date.getUTCMinutes()).padStart(2, '0'),
+      String(date.getUTCSeconds()).padStart(2, '0')
+    ].join('')
   }
 }
 
@@ -80,6 +114,62 @@ export function GroupDetailPanel({
       ),
     [allGroups, group?.id]
   )
+  const effectivePreviewTitle = useMemo(() => {
+    const trimmed = title.trim()
+
+    if (trimmed) {
+      return trimmed
+    }
+
+    return group?.displayTitle ?? ''
+  }, [group?.displayTitle, title])
+  const renamePreviewRows = useMemo<PreviewRenameRow[]>(() => {
+    if (!group) {
+      return []
+    }
+
+    return [...group.photos]
+      .sort((left, right) => {
+        const leftIso = left.capturedAtIso ?? ''
+        const rightIso = right.capturedAtIso ?? ''
+
+        if (leftIso !== rightIso) {
+          return leftIso.localeCompare(rightIso)
+        }
+
+        return left.sourceFileName.localeCompare(right.sourceFileName)
+      })
+      .map((photo, index) => {
+        const nextOutputRelativePath = buildGroupAwarePhotoOutputRelativePath(
+          {
+            sourceFileName: photo.sourceFileName,
+            capturedAt: toPreviewTimestamp(photo.capturedAtIso),
+            gps: photo.gps,
+            regionName: photo.regionName,
+            missingGpsCategory: photo.missingGpsCategory
+          },
+          effectivePreviewTitle,
+          index + 1,
+          defaultOrganizationRules
+        )
+
+        return {
+          photoId: photo.id,
+          sourceFileName: photo.sourceFileName,
+          currentOutputRelativePath: photo.outputRelativePath,
+          nextOutputRelativePath,
+          willChange: photo.outputRelativePath !== nextOutputRelativePath
+        }
+      })
+  }, [effectivePreviewTitle, group])
+  const renamePreviewSummary = useMemo(() => {
+    const changedCount = renamePreviewRows.filter((row) => row.willChange).length
+
+    return {
+      changedCount,
+      unchangedCount: Math.max(0, renamePreviewRows.length - changedCount)
+    }
+  }, [renamePreviewRows])
 
   async function handleSave(): Promise<void> {
     if (!group || !onSave) {
@@ -215,6 +305,77 @@ export function GroupDetailPanel({
                   placeholder={group.displayTitle}
                 />
               </label>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">
+                      저장 전 예상 파일명 미리보기
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      현재 입력한 그룹명 기준 예상 결과입니다. 실제 저장 시 같은 폴더에
+                      이미 파일이 있으면 시퀀스 번호가 달라질 수 있습니다.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
+                    <span className="rounded-full bg-slate-100 px-2 py-1">
+                      변경 {renamePreviewSummary.changedCount}장
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">
+                      유지 {renamePreviewSummary.unchangedCount}장
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {renamePreviewRows.length === 0 ? (
+                    <p className="text-sm text-slate-500">미리볼 사진이 없습니다.</p>
+                  ) : (
+                    <>
+                      {renamePreviewRows.slice(0, 8).map((row) => (
+                        <div
+                          key={row.photoId}
+                          className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-slate-900">
+                              {row.sourceFileName}
+                            </p>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                row.willChange
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-slate-200 text-slate-600'
+                              }`}
+                            >
+                              {row.willChange ? '변경 예정' : '변경 없음'}
+                            </span>
+                          </div>
+                          <div className="mt-2 grid gap-2 text-[11px] text-slate-600">
+                            <div>
+                              <p className="font-medium text-slate-500">현재</p>
+                              <p className="break-all">
+                                {row.currentOutputRelativePath ?? '출력 경로 없음'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-500">예상</p>
+                              <p className="break-all text-slate-800">
+                                {row.nextOutputRelativePath}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {renamePreviewRows.length > 8 ? (
+                        <p className="text-xs text-slate-500">
+                          총 {renamePreviewRows.length}장 중 처음 8장만 표시합니다.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </div>
 
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-800">동행인</span>

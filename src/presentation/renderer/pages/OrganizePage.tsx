@@ -10,7 +10,10 @@ import type {
   PreviewPendingOrganizationResult,
   ScanPhotoLibrarySummary
 } from '@shared/types/preload'
-import type { InBatchDuplicateDetail } from '@application/dto/ScanPhotoLibraryResult'
+import type {
+  InBatchDuplicateDetail,
+  ScanPhotoLibraryIssue
+} from '@application/dto/ScanPhotoLibraryResult'
 import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
 
 import {
@@ -33,6 +36,13 @@ const MISSING_GPS_GROUPING_OPTIONS: Array<{
   { value: 'month', label: '월별' },
   { value: 'week', label: '주별' },
   { value: 'day', label: '일별' }
+]
+const SCAN_ISSUE_STAGES: ScanPhotoLibraryIssue['stage'][] = [
+  'metadata-read',
+  'hash',
+  'region-resolve',
+  'copy',
+  'thumbnail'
 ]
 
 function fileUrlFromAbsolutePath(absolutePath: string): string {
@@ -135,6 +145,44 @@ function groupInBatchDuplicateDetails(rows: InBatchDuplicateDetail[]) {
   }))
 }
 
+function formatIssueStageLabel(stage: ScanPhotoLibraryIssue['stage']): string {
+  switch (stage) {
+    case 'metadata-read':
+      return '메타데이터'
+    case 'hash':
+      return '해시'
+    case 'region-resolve':
+      return '지역 해석'
+    case 'copy':
+      return '복사'
+    case 'thumbnail':
+      return '썸네일'
+    default:
+      return stage
+  }
+}
+
+function formatIssueSeverityLabel(
+  severity: ScanPhotoLibraryIssue['severity']
+): string {
+  switch (severity) {
+    case 'warning':
+      return '경고'
+    case 'error':
+      return '실패'
+    default:
+      return severity
+  }
+}
+
+function getIssueSeverityBadgeClass(
+  severity: ScanPhotoLibraryIssue['severity']
+): string {
+  return severity === 'error'
+    ? 'border-red-200 bg-red-50 text-red-700'
+    : 'border-amber-200 bg-amber-50 text-amber-700'
+}
+
 function getMissingGpsCategoryLabel(
   category?: PreviewPendingOrganizationResult['groups'][number]['missingGpsCategory']
 ): string | null {
@@ -186,6 +234,7 @@ function formatMissingGpsFolderPattern(
 }
 
 type GroupSavePhase = 'idle' | 'queued' | 'saving' | 'done' | 'error'
+type IssueSeverityFilter = 'all' | ScanPhotoLibraryIssue['severity']
 
 function formatGroupSavePhaseLabel(phase: GroupSavePhase): string {
   switch (phase) {
@@ -387,6 +436,16 @@ export function OrganizePage({
   const [openScanResultDetail, setOpenScanResultDetail] = useState<
     null | 'inBatchDup' | 'existingSkip' | 'warnings' | 'failures'
   >(null)
+  const [issueSeverityFilter, setIssueSeverityFilter] =
+    useState<IssueSeverityFilter>('all')
+  const [issueStageFilter, setIssueStageFilter] = useState<
+    'all' | ScanPhotoLibraryIssue['stage']
+  >('all')
+  const [issueCodeQuery, setIssueCodeQuery] = useState('')
+  const [issueSourcePathQuery, setIssueSourcePathQuery] = useState('')
+  const [duplicatePathQuery, setDuplicatePathQuery] = useState('')
+  const [existingSkipPathQuery, setExistingSkipPathQuery] = useState('')
+  const [existingSkipHashQuery, setExistingSkipHashQuery] = useState('')
   const [activeSaveJobMeta, setActiveSaveJobMeta] = useState<{
     progressOffsetBeforeJob: number
     groupPhotoCount: number
@@ -438,6 +497,127 @@ export function OrganizePage({
         : [],
     [summary]
   )
+  const reviewedInBatchDuplicates = useMemo(() => {
+    const normalizedPathQuery = duplicatePathQuery.trim().toLocaleLowerCase()
+
+    return groupedInBatchDuplicates
+      .filter((group) => {
+        if (normalizedPathQuery.length === 0) {
+          return true
+        }
+
+        if (
+          group.canonicalSourcePath.toLocaleLowerCase().includes(normalizedPathQuery)
+        ) {
+          return true
+        }
+
+        return group.duplicateSourcePaths.some((path) =>
+          path.toLocaleLowerCase().includes(normalizedPathQuery)
+        )
+      })
+      .sort((left, right) => {
+        if (left.duplicateSourcePaths.length !== right.duplicateSourcePaths.length) {
+          return right.duplicateSourcePaths.length - left.duplicateSourcePaths.length
+        }
+
+        return left.canonicalSourcePath.localeCompare(right.canonicalSourcePath)
+      })
+  }, [duplicatePathQuery, groupedInBatchDuplicates])
+  const reviewedExistingSkips = useMemo(() => {
+    if (!summary) {
+      return []
+    }
+
+    const normalizedPathQuery = existingSkipPathQuery.trim().toLocaleLowerCase()
+    const normalizedHashQuery = existingSkipHashQuery.trim().toLocaleLowerCase()
+
+    return summary.existingOutputSkipDetails
+      .filter((row) => {
+        if (normalizedPathQuery.length === 0) {
+          return true
+        }
+
+        return (
+          row.sourcePath.toLocaleLowerCase().includes(normalizedPathQuery) ||
+          row.existingOutputRelativePath
+            .toLocaleLowerCase()
+            .includes(normalizedPathQuery)
+        )
+      })
+      .filter((row) =>
+        normalizedHashQuery.length === 0
+          ? true
+          : row.sha256.toLocaleLowerCase().includes(normalizedHashQuery)
+      )
+      .sort((left, right) => {
+        if (left.sha256 !== right.sha256) {
+          return left.sha256.localeCompare(right.sha256)
+        }
+
+        return left.sourcePath.localeCompare(right.sourcePath)
+      })
+  }, [existingSkipHashQuery, existingSkipPathQuery, summary])
+  const issueStageOptions = useMemo(() => {
+    if (!summary) {
+      return []
+    }
+
+    const usedStages = new Set(summary.issues.map((issue) => issue.stage))
+
+    return SCAN_ISSUE_STAGES.filter((stage) => usedStages.has(stage))
+  }, [summary])
+  const reviewedIssues = useMemo(() => {
+    if (!summary) {
+      return []
+    }
+
+    const normalizedCodeQuery = issueCodeQuery.trim().toLocaleLowerCase()
+    const normalizedSourcePathQuery = issueSourcePathQuery
+      .trim()
+      .toLocaleLowerCase()
+
+    return summary.issues
+      .filter((issue) =>
+        issueSeverityFilter === 'all'
+          ? true
+          : issue.severity === issueSeverityFilter
+      )
+      .filter((issue) =>
+        issueStageFilter === 'all' ? true : issue.stage === issueStageFilter
+      )
+      .filter((issue) =>
+        normalizedCodeQuery.length === 0
+          ? true
+          : issue.code.toLocaleLowerCase().includes(normalizedCodeQuery)
+      )
+      .filter((issue) =>
+        normalizedSourcePathQuery.length === 0
+          ? true
+          : issue.sourcePath.toLocaleLowerCase().includes(normalizedSourcePathQuery)
+      )
+      .sort((left, right) => {
+        if (left.severity !== right.severity) {
+          return left.severity === 'error' ? -1 : 1
+        }
+
+        if (left.stage !== right.stage) {
+          return left.stage.localeCompare(right.stage)
+        }
+
+        if (left.code !== right.code) {
+          return left.code.localeCompare(right.code)
+        }
+
+        return left.sourcePath.localeCompare(right.sourcePath)
+      })
+  }, [
+    issueCodeQuery,
+    issueSeverityFilter,
+    issueSourcePathQuery,
+    issueStageFilter,
+    summary
+  ])
 
   const hasPendingPreviewGroups = (previewResult?.groups.length ?? 0) > 0
 
@@ -671,6 +851,37 @@ export function OrganizePage({
     totalPhotosInPreview,
     bulkSaveActive
   ])
+
+  function handleToggleScanResultDetail(
+    detail: 'inBatchDup' | 'existingSkip' | 'warnings' | 'failures'
+  ): void {
+    const isClosing = openScanResultDetail === detail
+
+    setOpenScanResultDetail(isClosing ? null : detail)
+
+    if (detail === 'warnings' && !isClosing) {
+      setIssueSeverityFilter('warning')
+      setIssueStageFilter('all')
+      setIssueCodeQuery('')
+      setIssueSourcePathQuery('')
+    }
+
+    if (detail === 'failures' && !isClosing) {
+      setIssueSeverityFilter('error')
+      setIssueStageFilter('all')
+      setIssueCodeQuery('')
+      setIssueSourcePathQuery('')
+    }
+
+    if (detail === 'inBatchDup' && !isClosing) {
+      setDuplicatePathQuery('')
+    }
+
+    if (detail === 'existingSkip' && !isClosing) {
+      setExistingSkipPathQuery('')
+      setExistingSkipHashQuery('')
+    }
+  }
 
   async function selectSourceRoot(): Promise<void> {
     const selectedPath = await window.photoApp.selectDirectory(
@@ -1677,11 +1888,7 @@ export function OrganizePage({
                     ? 'border-emerald-500 bg-emerald-100'
                     : 'border-slate-200 bg-white hover:bg-slate-50'
                 }`}
-                onClick={() =>
-                  setOpenScanResultDetail((current) =>
-                    current === 'inBatchDup' ? null : 'inBatchDup'
-                  )
-                }
+                onClick={() => handleToggleScanResultDetail('inBatchDup')}
               >
                 <p className="text-xs text-slate-500">중복 (같은 실행 내)</p>
                 <p className="text-xl font-semibold text-slate-900">
@@ -1696,11 +1903,7 @@ export function OrganizePage({
                     ? 'border-emerald-500 bg-emerald-100'
                     : 'border-slate-200 bg-white hover:bg-slate-50'
                 }`}
-                onClick={() =>
-                  setOpenScanResultDetail((current) =>
-                    current === 'existingSkip' ? null : 'existingSkip'
-                  )
-                }
+                onClick={() => handleToggleScanResultDetail('existingSkip')}
               >
                 <p className="text-xs text-slate-500">기존 출력과 동일 (스킵)</p>
                 <p className="text-xl font-semibold text-slate-900">
@@ -1715,11 +1918,7 @@ export function OrganizePage({
                     ? 'border-emerald-500 bg-emerald-100'
                     : 'border-slate-200 bg-white hover:bg-slate-50'
                 }`}
-                onClick={() =>
-                  setOpenScanResultDetail((current) =>
-                    current === 'warnings' ? null : 'warnings'
-                  )
-                }
+                onClick={() => handleToggleScanResultDetail('warnings')}
               >
                 <p className="text-xs text-slate-500">경고 수</p>
                 <p className="text-xl font-semibold text-slate-900">
@@ -1734,11 +1933,7 @@ export function OrganizePage({
                     ? 'border-emerald-500 bg-emerald-100'
                     : 'border-slate-200 bg-white hover:bg-slate-50'
                 }`}
-                onClick={() =>
-                  setOpenScanResultDetail((current) =>
-                    current === 'failures' ? null : 'failures'
-                  )
-                }
+                onClick={() => handleToggleScanResultDetail('failures')}
               >
                 <p className="text-xs text-slate-500">실패 수</p>
                 <p className="text-xl font-semibold text-slate-900">
@@ -1750,19 +1945,49 @@ export function OrganizePage({
 
             {openScanResultDetail === 'inBatchDup' ? (
               <div className="rounded-lg border border-emerald-200 bg-white p-4">
-                <p className="text-xs font-semibold text-slate-800">
-                  같은 실행 안에서 동일 파일(해시) — 대표 1장만 저장, 나머지는 복사
-                  생략
-                </p>
-                {groupedInBatchDuplicates.length === 0 ? (
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800">
+                      같은 실행 안에서 동일 파일(해시) 검토
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      canonical 원본과 이번 실행에서 생략된 duplicate 원본을 같이
+                      확인할 수 있습니다.
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    필터 결과 {reviewedInBatchDuplicates.length} / 전체{' '}
+                    {groupedInBatchDuplicates.length}
+                  </p>
+                </div>
+                <label className="mt-3 block space-y-1">
+                  <span className="text-[11px] font-medium text-slate-600">
+                    sourcePath 검색
+                  </span>
+                  <input
+                    value={duplicatePathQuery}
+                    onChange={(event) => setDuplicatePathQuery(event.target.value)}
+                    placeholder="canonical 또는 duplicate 경로 일부 검색"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                  />
+                </label>
+                {reviewedInBatchDuplicates.length === 0 ? (
                   <p className="mt-2 text-sm text-slate-600">해당 없음</p>
                 ) : (
                   <ul className="mt-3 space-y-4">
-                    {groupedInBatchDuplicates.map((dupGroup) => (
+                    {reviewedInBatchDuplicates.map((dupGroup) => (
                       <li
                         key={dupGroup.canonicalPhotoId}
                         className="rounded-md border border-slate-200 p-3"
                       >
+                        <div className="mb-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                          <span className="rounded-full bg-slate-100 px-2 py-1">
+                            canonical 1장
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1">
+                            duplicate {dupGroup.duplicateSourcePaths.length}장
+                          </span>
+                        </div>
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                           <div className="sm:w-2/5">
                             <p className="text-[11px] font-medium text-slate-600">
@@ -1819,18 +2044,61 @@ export function OrganizePage({
 
             {openScanResultDetail === 'existingSkip' ? (
               <div className="rounded-lg border border-emerald-200 bg-white p-4">
-                <p className="text-xs font-semibold text-slate-800">
-                  출력 폴더에 이미 동일 해시가 있어 복사를 건너뜀
-                </p>
-                {summary.existingOutputSkipDetails.length === 0 ? (
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800">
+                      기존 출력과 동일해 건너뛴 항목 검토
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      source 원본과 기존 output 대상 경로를 함께 비교할 수 있습니다.
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    필터 결과 {reviewedExistingSkips.length} / 전체{' '}
+                    {summary.existingOutputSkipDetails.length}
+                  </p>
+                </div>
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="text-[11px] font-medium text-slate-600">
+                      경로 검색
+                    </span>
+                    <input
+                      value={existingSkipPathQuery}
+                      onChange={(event) => setExistingSkipPathQuery(event.target.value)}
+                      placeholder="sourcePath 또는 outputRelativePath 검색"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-[11px] font-medium text-slate-600">
+                      SHA-256 검색
+                    </span>
+                    <input
+                      value={existingSkipHashQuery}
+                      onChange={(event) => setExistingSkipHashQuery(event.target.value)}
+                      placeholder="해시 앞부분 검색"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                    />
+                  </label>
+                </div>
+                {reviewedExistingSkips.length === 0 ? (
                   <p className="mt-2 text-sm text-slate-600">해당 없음</p>
                 ) : (
                   <ul className="mt-3 space-y-3">
-                    {summary.existingOutputSkipDetails.map((row, index) => (
+                    {reviewedExistingSkips.map((row, index) => (
                       <li
                         key={`${row.sourcePhotoId}-${index}`}
                         className="rounded-md border border-slate-200 p-3 text-sm text-slate-800"
                       >
+                        <div className="mb-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                          <span className="rounded-full bg-slate-100 px-2 py-1">
+                            sourcePhotoId: {row.sourcePhotoId}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1">
+                            SHA-256: {row.sha256.slice(0, 12)}...
+                          </span>
+                        </div>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div>
                             <p className="text-[11px] font-medium text-slate-600">
@@ -1883,72 +2151,176 @@ export function OrganizePage({
               </div>
             ) : null}
 
-            {openScanResultDetail === 'warnings' ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                <p className="text-xs font-semibold text-amber-950">경고 목록</p>
-                {summary.issues.filter((i) => i.severity === 'warning').length ===
-                0 ? (
-                  <p className="mt-2 text-sm text-slate-600">해당 없음</p>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {summary.issues
-                      .filter((i) => i.severity === 'warning')
-                      .map((issue, index) => (
-                        <li
-                          key={`${issue.sourcePath}-${issue.code}-${index}`}
-                          className="rounded border border-amber-200 bg-white p-2 text-xs text-slate-800"
-                        >
-                          <p className="font-mono text-[11px] text-slate-600">
-                            {issue.code} · {issue.stage}
-                          </p>
-                          <p className="mt-1 break-all">{issue.sourcePath}</p>
-                          {issue.photoId ? (
-                            <p className="text-slate-500">photoId: {issue.photoId}</p>
-                          ) : null}
-                          <p className="mt-1 text-slate-700">{issue.message}</p>
-                        </li>
-                      ))}
-                  </ul>
-                )}
-              </div>
-            ) : null}
+            {openScanResultDetail === 'warnings' ||
+            openScanResultDetail === 'failures' ? (
+              <div
+                className={`rounded-lg border p-4 ${
+                  openScanResultDetail === 'failures'
+                    ? 'border-red-200 bg-red-50'
+                    : 'border-amber-200 bg-amber-50'
+                }`}
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p
+                      className={`text-xs font-semibold ${
+                        openScanResultDetail === 'failures'
+                          ? 'text-red-950'
+                          : 'text-amber-950'
+                      }`}
+                    >
+                      실행 이슈 검토
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      severity, stage, code, sourcePath 기준으로 다시 확인할 수
+                      있습니다.
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    필터 결과 {reviewedIssues.length} / 전체 {summary.issues.length}
+                  </p>
+                </div>
 
-            {openScanResultDetail === 'failures' ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                <p className="text-xs font-semibold text-red-950">실패 목록</p>
-                {summary.issues.filter((i) => i.severity === 'error').length ===
-                0 ? (
-                  <p className="mt-2 text-sm text-slate-600">해당 없음</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {([
+                    ['all', '전체'],
+                    ['warning', '경고'],
+                    ['error', '실패']
+                  ] as const).map(([value, label]) => (
+                    <button
+                      type="button"
+                      key={value}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                        issueSeverityFilter === value
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                      onClick={() => setIssueSeverityFilter(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                  <label className="space-y-1">
+                    <span className="text-[11px] font-medium text-slate-600">
+                      stage
+                    </span>
+                    <select
+                      value={issueStageFilter}
+                      onChange={(event) =>
+                        setIssueStageFilter(
+                          event.target.value as 'all' | ScanPhotoLibraryIssue['stage']
+                        )
+                      }
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                    >
+                      <option value="all">전체 stage</option>
+                      {issueStageOptions.map((stage) => (
+                        <option key={stage} value={stage}>
+                          {formatIssueStageLabel(stage)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-[11px] font-medium text-slate-600">
+                      code 검색
+                    </span>
+                    <input
+                      value={issueCodeQuery}
+                      onChange={(event) => setIssueCodeQuery(event.target.value)}
+                      placeholder="예: metadata-missing"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-[11px] font-medium text-slate-600">
+                      sourcePath 검색
+                    </span>
+                    <input
+                      value={issueSourcePathQuery}
+                      onChange={(event) => setIssueSourcePathQuery(event.target.value)}
+                      placeholder="경로 일부 검색"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                    />
+                  </label>
+                </div>
+
+                {reviewedIssues.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-600">
+                    현재 필터 조건에 맞는 이슈가 없습니다.
+                  </p>
                 ) : (
-                  <ul className="mt-2 space-y-2">
-                    {summary.issues
-                      .filter((i) => i.severity === 'error')
-                      .map((issue, index) => (
+                  <>
+                    <div className="mt-4 hidden grid-cols-[90px_100px_180px_minmax(0,1fr)] gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 lg:grid">
+                      <span>severity</span>
+                      <span>stage</span>
+                      <span>code</span>
+                      <span>sourcePath</span>
+                    </div>
+                    <ul className="mt-2 space-y-2">
+                      {reviewedIssues.map((issue, index) => (
                         <li
                           key={`${issue.sourcePath}-${issue.code}-${index}`}
-                          className="rounded border border-red-200 bg-white p-2 text-xs text-slate-800"
+                          className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-800"
                         >
-                          <p className="font-mono text-[11px] text-slate-600">
-                            {issue.code} · {issue.stage}
-                          </p>
-                          <p className="mt-1 break-all">{issue.sourcePath}</p>
-                          {issue.photoId ? (
-                            <p className="text-slate-500">photoId: {issue.photoId}</p>
-                          ) : null}
-                          {issue.outputRelativePath ? (
-                            <p className="break-all text-slate-600">
-                              출력 상대경로: {issue.outputRelativePath}
-                            </p>
-                          ) : null}
-                          {issue.destinationPath ? (
-                            <p className="break-all text-slate-600">
-                              대상 경로: {issue.destinationPath}
-                            </p>
-                          ) : null}
-                          <p className="mt-1 text-slate-800">{issue.message}</p>
+                          <div className="grid gap-2 lg:grid-cols-[90px_100px_180px_minmax(0,1fr)] lg:items-start lg:gap-3">
+                            <div>
+                              <p className="text-[11px] font-medium text-slate-500 lg:hidden">
+                                severity
+                              </p>
+                              <span
+                                className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${getIssueSeverityBadgeClass(issue.severity)}`}
+                              >
+                                {formatIssueSeverityLabel(issue.severity)}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-medium text-slate-500 lg:hidden">
+                                stage
+                              </p>
+                              <p className="font-medium text-slate-700">
+                                {formatIssueStageLabel(issue.stage)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-medium text-slate-500 lg:hidden">
+                                code
+                              </p>
+                              <p className="font-mono text-[11px] text-slate-700">
+                                {issue.code}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-medium text-slate-500 lg:hidden">
+                                sourcePath
+                              </p>
+                              <p className="break-all text-slate-800">
+                                {issue.sourcePath}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-3 text-[11px] text-slate-600">
+                            {issue.photoId ? <p>photoId: {issue.photoId}</p> : null}
+                            {issue.outputRelativePath ? (
+                              <p className="break-all">
+                                출력 상대경로: {issue.outputRelativePath}
+                              </p>
+                            ) : null}
+                            {issue.destinationPath ? (
+                              <p className="break-all">
+                                대상 경로: {issue.destinationPath}
+                              </p>
+                            ) : null}
+                            <p className="text-xs text-slate-800">{issue.message}</p>
+                          </div>
                         </li>
                       ))}
-                  </ul>
+                    </ul>
+                  </>
                 )}
               </div>
             ) : null}

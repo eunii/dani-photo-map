@@ -16,6 +16,7 @@ import { assignGroupDisplayTitledOutputRelativePaths } from '@application/servic
 import { buildExistingOutputHashSet } from '@application/services/buildExistingOutputHashSet'
 import { buildFallbackNearbyGroupTitleSuggestions } from '@application/services/buildFallbackNearbyGroupTitleSuggestions'
 import { buildNearbyGroupTitleSuggestions } from '@application/services/buildNearbyGroupTitleSuggestions'
+import { buildIncrementalSourcePhotoCandidates } from '@application/services/buildIncrementalSourcePhotoCandidates'
 import { mergeStoredLibraryMetadata } from '@application/services/mergeStoredLibraryMetadata'
 import { rebuildLibraryIndexFromExistingOutput } from '@application/services/rebuildLibraryIndexFromExistingOutput'
 import { createCanonicalPhotoIdByHash } from '@application/services/createCanonicalPhotoIdByHash'
@@ -97,6 +98,7 @@ interface PreviewPhotoContext {
   photoId: string
   sourcePath: string
   sourceFileName: string
+  sourceFingerprint?: Photo['sourceFingerprint']
 }
 
 export class PreviewPendingOrganizationUseCase {
@@ -126,16 +128,24 @@ export class PreviewPendingOrganizationUseCase {
     })
     const existingIndex = this.buildExistingIndex(existingOutputSnapshot, storedIndex)
     const listedPhotoPaths = await this.dependencies.fileSystem.listPhotoFiles(sourceRoot)
+    const { candidates: sourcePhotoCandidates } =
+      await buildIncrementalSourcePhotoCandidates({
+        listedPhotoPaths,
+        sourceRoot,
+        storedIndex,
+        fileSystem: this.dependencies.fileSystem
+      })
     const candidatePhotos = (
       await mapWithConcurrencyLimit(
-        listedPhotoPaths,
+        sourcePhotoCandidates,
         PREVIEW_PREPARE_CONCURRENCY_LIMIT,
-        async (listedPhotoPath, index) =>
+        async (candidate, index) =>
           this.prepareCandidatePhoto(
             {
               photoId: `preview-photo-${index + 1}`,
-              sourcePath: normalizePathSeparators(listedPhotoPath),
-              sourceFileName: getPathBaseName(listedPhotoPath)
+              sourcePath: normalizePathSeparators(candidate.sourcePath),
+              sourceFileName: candidate.sourceFileName,
+              sourceFingerprint: candidate.sourceFingerprint
             },
             validatedCommand.missingGpsGroupingBasis
           )
@@ -335,6 +345,7 @@ export class PreviewPendingOrganizationUseCase {
       id: context.photoId,
       sourcePath: context.sourcePath,
       sourceFileName: context.sourceFileName,
+      sourceFingerprint: context.sourceFingerprint,
       sha256,
       capturedAt: metadata.capturedAt,
       capturedAtSource: metadata.capturedAtSource,

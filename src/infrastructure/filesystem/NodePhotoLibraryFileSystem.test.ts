@@ -47,6 +47,20 @@ describe('NodePhotoLibraryFileSystem', () => {
     expect(photoFiles[1]).toMatch(/IMG_0001\.HEIC$|IMG_0002\.JPG$/)
   })
 
+  it('reads photo file fingerprint from size and mtime', async () => {
+    const rootPath = await createTempDirectory()
+    const sourcePath = join(rootPath, 'IMG_0001.JPG')
+    const fileSystem = new NodePhotoLibraryFileSystem()
+
+    await writeFile(sourcePath, 'sample-photo', 'utf-8')
+
+    const fingerprint = await fileSystem.getPhotoFileFingerprint(sourcePath)
+
+    expect(fingerprint).toBeTruthy()
+    expect(fingerprint?.sizeBytes).toBeGreaterThan(0)
+    expect(fingerprint?.modifiedAtMs).toBeGreaterThan(0)
+  })
+
   it('copies a file and rejects destination conflicts explicitly', async () => {
     const rootPath = await createTempDirectory()
     const sourcePath = join(rootPath, 'IMG_0001.JPG')

@@ -26,10 +26,16 @@ export const photoLocationSources = ['exif', 'assigned-from-group', 'none'] as c
 
 export type PhotoLocationSource = typeof photoLocationSources[number]
 
+export interface SourcePhotoFingerprint {
+  sizeBytes: number
+  modifiedAtMs: number
+}
+
 export interface Photo {
   id: string
   sourcePath: string
   sourceFileName: string
+  sourceFingerprint?: SourcePhotoFingerprint
   sha256?: string
   duplicateOfPhotoId?: string
   capturedAt?: PhotoTimestamp

@@ -1,9 +1,10 @@
 import { constants } from 'node:fs'
-import { access, copyFile, mkdir, readdir, rename, rm } from 'node:fs/promises'
+import { access, copyFile, mkdir, readdir, rename, rm, stat } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
 import {
   PhotoFileConflictError,
+  type PhotoFileFingerprint,
   type PhotoLibraryFileSystemPort
 } from '@application/ports/PhotoLibraryFileSystemPort'
 import { normalizePathSeparators } from '@shared/utils/path'
@@ -28,6 +29,29 @@ export class NodePhotoLibraryFileSystem implements PhotoLibraryFileSystemPort {
     return photoFiles
       .map((photoPath) => normalizePathSeparators(photoPath))
       .sort()
+  }
+
+  async getPhotoFileFingerprint(
+    absolutePath: string
+  ): Promise<PhotoFileFingerprint | null> {
+    try {
+      const fileStat = await stat(normalize(absolutePath))
+
+      return {
+        sizeBytes: fileStat.size,
+        modifiedAtMs: fileStat.mtimeMs
+      }
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ENOENT'
+      ) {
+        return null
+      }
+
+      throw error
+    }
   }
 
   async listDirectoryFileNames(directoryPath: string): Promise<string[]> {

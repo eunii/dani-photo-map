@@ -8,8 +8,14 @@ export class PhotoFileConflictError extends Error {
   }
 }
 
+export interface PhotoFileFingerprint {
+  sizeBytes: number
+  modifiedAtMs: number
+}
+
 export interface PhotoLibraryFileSystemPort {
   listPhotoFiles(rootPath: string): Promise<string[]>
+  getPhotoFileFingerprint?(absolutePath: string): Promise<PhotoFileFingerprint | null>
   listDirectoryFileNames(directoryPath: string): Promise<string[]>
   ensureDirectory(path: string): Promise<void>
   copyFile(sourcePath: string, destinationPath: string): Promise<void>

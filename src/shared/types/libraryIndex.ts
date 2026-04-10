@@ -32,10 +32,16 @@ export const geoPointSchema = z.object({
   longitude: z.number().finite()
 })
 
+export const sourcePhotoFingerprintSchema = z.object({
+  sizeBytes: z.number().int().nonnegative(),
+  modifiedAtMs: z.number().finite().nonnegative()
+})
+
 export const photoSchema = z.object({
   id: z.string().min(1),
   sourcePath: z.string().min(1),
   sourceFileName: z.string().min(1),
+  sourceFingerprint: sourcePhotoFingerprintSchema.optional(),
   sha256: z.string().min(1).optional(),
   duplicateOfPhotoId: z.string().min(1).optional(),
   capturedAt: photoTimestampSchema.optional(),
