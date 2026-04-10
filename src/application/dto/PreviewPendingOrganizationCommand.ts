@@ -8,6 +8,7 @@ import {
 export const previewPendingOrganizationCommandSchema = z.object({
   sourceRoot: z.string().min(1),
   outputRoot: z.string().min(1),
+  forceFullRescan: z.boolean().optional(),
   missingGpsGroupingBasis: z
     .enum(missingGpsGroupingBases)
     .default(defaultMissingGpsGroupingBasis)

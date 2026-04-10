@@ -61,7 +61,7 @@ function mergeScanSummaries(
   }
 
   return {
-    scannedCount: previous.scannedCount + next.scannedCount,
+    scannedCount: Math.max(previous.scannedCount, next.scannedCount),
     skippedUnchangedCount: previous.skippedUnchangedCount + next.skippedUnchangedCount,
     duplicateCount: previous.duplicateCount + next.duplicateCount,
     keptCount: previous.keptCount + next.keptCount,
@@ -217,6 +217,7 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
       const previewResult = await useCase.execute({
         sourceRoot: request.sourceRoot,
         outputRoot: request.outputRoot,
+        forceFullRescan: request.forceFullRescan,
         missingGpsGroupingBasis:
           request.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
       })

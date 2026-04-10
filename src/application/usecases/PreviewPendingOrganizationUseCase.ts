@@ -146,7 +146,8 @@ export class PreviewPendingOrganizationUseCase {
         listedPhotoPaths,
         sourceRoot,
         storedIndex,
-        fileSystem: this.dependencies.fileSystem
+        fileSystem: this.dependencies.fileSystem,
+        forceFullRescan: validatedCommand.forceFullRescan
       })
     const candidatePhotos = (
       await mapWithConcurrencyLimit(

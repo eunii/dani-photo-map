@@ -607,6 +607,8 @@ export function OrganizePage({
   const bulkSaveStartIndexRef = useRef(0)
   const bulkRunTotalPhotosRef = useRef<number | null>(null)
   const [bulkRunStartIndex, setBulkRunStartIndex] = useState<number | null>(null)
+  const [nextPreviewForceFullRescan, setNextPreviewForceFullRescan] =
+    useState(false)
 
   useEffect(() => {
     saveJobQueueRef.current = saveJobQueue
@@ -750,6 +752,7 @@ export function OrganizePage({
 
     return SCAN_ISSUE_STAGES.filter((stage) => usedStages.has(stage))
   }, [summary])
+
   const reviewedIssues = useMemo(() => {
     if (!summary) {
       return []
@@ -1227,6 +1230,16 @@ export function OrganizePage({
     )
 
     if (selectedPath) {
+      const isSameSourcePath =
+        normalizePathSeparators(selectedPath) === normalizePathSeparators(sourceRoot)
+      setNextPreviewForceFullRescan(isSameSourcePath)
+      if (isSameSourcePath) {
+        setResultActionMessage(
+          '같은 원본 폴더를 다시 선택했습니다. 다음 후보 불러오기는 전체 다시 스캔으로 진행됩니다.'
+        )
+      } else {
+        setResultActionMessage(null)
+      }
       setSourceRoot(selectedPath)
       setWizardStepIndex(0)
       setPreviewResult(null)
@@ -1256,24 +1269,31 @@ export function OrganizePage({
   async function handlePreview(options?: {
     basis?: MissingGpsGroupingBasis
     notifyCompletion?: boolean
+    forceFullRescan?: boolean
   }): Promise<void> {
     const basis = options?.basis ?? missingGpsGroupingBasis
     const notifyCompletion = options?.notifyCompletion ?? true
+    const forceFullRescan = options?.forceFullRescan ?? nextPreviewForceFullRescan
     if (!sourceRoot || !outputRoot) {
       setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
       return
     }
 
     setErrorMessage(null)
+    setSummary(null)
+    setOpenScanResultDetail(null)
+    setResultActionMessage(null)
 
     try {
       await window.photoApp.startOrganizeJob({
         mode: 'preview',
         sourceRoot,
         outputRoot,
+        forceFullRescan,
         missingGpsGroupingBasis: basis,
         notifyCompletion
       })
+      setNextPreviewForceFullRescan(false)
       const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
       setLastLoadedIndex(loadedIndex)
       setSaveJobQueue([])
@@ -1299,7 +1319,7 @@ export function OrganizePage({
     }
   }
 
-  function enqueueSaveAllGroups(options?: { fromStart?: boolean }): void {
+  function enqueueSaveAllGroups(): void {
     if (!sourceRoot || !outputRoot) {
       setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
       return
@@ -1332,9 +1352,10 @@ export function OrganizePage({
     bulkSaveActiveRef.current = true
     setBulkSaveActive(true)
 
-    const startIndex = options?.fromStart
-      ? 0
-      : Math.min(wizardStepIndex, Math.max(0, orderedPreviewGroups.length - 1))
+    const startIndex = Math.min(
+      wizardStepIndex,
+      Math.max(0, orderedPreviewGroups.length - 1)
+    )
     bulkSaveStartIndexRef.current = startIndex
     setBulkRunStartIndex(startIndex)
 
@@ -1566,7 +1587,9 @@ export function OrganizePage({
                   variant="secondary"
                   className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-[12px] font-semibold text-[var(--app-foreground)] shadow-sm hover:border-[var(--app-foreground)]/20 hover:bg-[var(--app-surface-strong)]"
                   isDisabled={isLoadingPreview}
-                  onPress={() => void handlePreview()}
+                  onPress={() =>
+                    void handlePreview({ forceFullRescan: nextPreviewForceFullRescan })
+                  }
                 >
                   {isLoadingPreview ? '불러오는 중…' : '정리 시작하기'}
                 </Button>
@@ -1667,7 +1690,9 @@ export function OrganizePage({
                   variant="secondary"
                   className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[12px] text-[var(--app-foreground)]"
                   isDisabled={isLoadingPreview || savePipelineBusy}
-                  onPress={() => void handlePreview()}
+                  onPress={() =>
+                    void handlePreview({ forceFullRescan: nextPreviewForceFullRescan })
+                  }
                 >
                   후보 다시 불러오기
                 </Button>
@@ -1683,16 +1708,6 @@ export function OrganizePage({
                     onPress={() => enqueueSaveAllGroups()}
                   >
                     현재 그룹부터 끝까지 저장
-                  </Button>
-                ) : null}
-                {hasPendingPreviewGroups && orderedPreviewGroups.length > 1 ? (
-                  <Button
-                    variant="secondary"
-                    className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[12px] text-[var(--app-foreground)]"
-                    isDisabled={isLoadingPreview || savePipelineBusy}
-                    onPress={() => enqueueSaveAllGroups({ fromStart: true })}
-                  >
-                    처음부터 전체 저장
                   </Button>
                 ) : null}
               </>
@@ -1723,7 +1738,7 @@ export function OrganizePage({
         </div>
       ) : null}
 
-      {bulkSaveActive && savePipelineBusy ? (
+      {(bulkSaveActive || bulkRunStartIndex !== null) && savePipelineBusy ? (
         (() => {
           const denom = photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview || 1
           const overallPct = Math.min(
@@ -1818,7 +1833,7 @@ export function OrganizePage({
       ) : null}
       </div>
 
-      {previewResult && !hidePreviewPanelWhileSaving ? (
+      {previewResult && !hidePreviewPanelWhileSaving && !summary ? (
         <div className="app-scroll min-h-0 flex-1 overflow-y-auto">
         <section className="rounded-xl border border-[color:color-mix(in_srgb,var(--app-accent)_32%,var(--app-border)_68%)] bg-[color:color-mix(in_srgb,var(--app-accent)_6%,var(--app-surface)_94%)] p-2.5">
           <div className="space-y-2">

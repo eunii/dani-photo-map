@@ -149,7 +149,8 @@ export class ScanPhotoLibraryUseCase {
         listedPhotoPaths,
         sourceRoot: paths.sourceRoot,
         storedIndex,
-        fileSystem: this.dependencies.fileSystem
+        fileSystem: this.dependencies.fileSystem,
+        forceFullRescan: validatedCommand.forceFullRescan
       })
 
     await this.prepareOutputDirectories(paths.outputRoot)

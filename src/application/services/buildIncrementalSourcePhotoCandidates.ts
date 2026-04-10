@@ -32,15 +32,23 @@ export async function buildIncrementalSourcePhotoCandidates(params: {
   sourceRoot: string
   storedIndex: LibraryIndex | null
   fileSystem: IncrementalFingerprintReader
+  forceFullRescan?: boolean
 }): Promise<{
   candidates: SourcePhotoCandidate[]
   skippedUnchangedCount: number
   skippedUnchangedDetails: IncrementalSkipDetail[]
 }> {
-  const { fileSystem, listedPhotoPaths, sourceRoot, storedIndex } = params
+  const {
+    fileSystem,
+    listedPhotoPaths,
+    sourceRoot,
+    storedIndex,
+    forceFullRescan = false
+  } = params
 
   const normalizedSourceRoot = normalizePathSeparators(sourceRoot)
   const canUseIncremental =
+    !forceFullRescan &&
     storedIndex?.sourceRoot === normalizedSourceRoot &&
     typeof fileSystem.getPhotoFileFingerprint === 'function'
 

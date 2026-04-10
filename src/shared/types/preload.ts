@@ -28,6 +28,8 @@ export interface DirectorySelectionOptions {
 export interface ScanPhotoLibraryRequest {
   sourceRoot: string
   outputRoot: string
+  /** true면 동일 sourceRoot라도 증분 스캔을 비활성화하고 전체 다시 스캔합니다. */
+  forceFullRescan?: boolean
   missingGpsGroupingBasis?: MissingGpsGroupingBasis
   groupMetadataOverrides?: Array<{
     groupKey: string
@@ -69,6 +71,8 @@ export interface LoadLibraryGroupDetailRequest {
 export interface PreviewPendingOrganizationRequest {
   sourceRoot: string
   outputRoot: string
+  /** true면 동일 sourceRoot라도 증분 스캔을 비활성화하고 전체 다시 스캔합니다. */
+  forceFullRescan?: boolean
   missingGpsGroupingBasis?: MissingGpsGroupingBasis
 }
 
@@ -76,6 +80,8 @@ export interface OrganizeJobPreviewStartRequest {
   mode: 'preview'
   sourceRoot: string
   outputRoot: string
+  /** true면 동일 sourceRoot라도 증분 스캔을 비활성화하고 전체 다시 스캔합니다. */
+  forceFullRescan?: boolean
   missingGpsGroupingBasis?: MissingGpsGroupingBasis
   /** false면 프리뷰 완료/실패 알림을 표시하지 않습니다 (기준 전환 재불러오기 등). */
   notifyCompletion?: boolean
