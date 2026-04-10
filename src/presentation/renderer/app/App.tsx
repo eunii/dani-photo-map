@@ -14,6 +14,7 @@ import { BrowsePage } from '@presentation/renderer/pages/BrowsePage'
 import { DashboardPage } from '@presentation/renderer/pages/DashboardPage'
 import { FileListPage } from '@presentation/renderer/pages/FileListPage'
 import { OrganizePage } from '@presentation/renderer/pages/OrganizePage'
+import { useOrganizeJobStore } from '@presentation/renderer/store/useOrganizeJobStore'
 import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
 import { useUiPreferencesStore } from '@presentation/renderer/store/useUiPreferencesStore'
 
@@ -102,6 +103,8 @@ export function App() {
   const toggleSidebarCollapsed = useUiPreferencesStore(
     (state) => state.toggleSidebarCollapsed
   )
+  const organizeJobStatus = useOrganizeJobStore((state) => state.status)
+  const setOrganizeJobStatus = useOrganizeJobStore((state) => state.setStatus)
   const [route, setRoute] = useState<AppRoute>(() =>
     getInitialRoute(window.location.hash, outputRoot)
   )
@@ -154,7 +157,46 @@ export function App() {
     window.scrollTo({ top: 0 })
   }, [route])
 
+  useEffect(() => {
+    let unmounted = false
+
+    void window.photoApp.getOrganizeJobStatus().then((status) => {
+      if (!unmounted) {
+        setOrganizeJobStatus(status)
+      }
+    })
+
+    const unsubscribe = window.photoApp.onOrganizeJobStatusChanged((status) => {
+      setOrganizeJobStatus(status)
+    })
+
+    return () => {
+      unmounted = true
+      unsubscribe()
+    }
+  }, [setOrganizeJobStatus])
+
   const routeMeta = useMemo(() => ROUTE_META[route], [route])
+  const organizeJobBadgeText = useMemo(() => {
+    if (
+      organizeJobStatus.phase !== 'preview-running' &&
+      organizeJobStatus.phase !== 'save-running'
+    ) {
+      return undefined
+    }
+
+    if (organizeJobStatus.phase === 'preview-running') {
+      return '정리 후보 불러오는 중'
+    }
+
+    const total = organizeJobStatus.progress.total > 0 ? organizeJobStatus.progress.total : 1
+    const percent = Math.min(
+      100,
+      Math.round((organizeJobStatus.progress.completed / total) * 100)
+    )
+
+    return `백그라운드 저장 ${percent}%`
+  }, [organizeJobStatus])
 
   function navigate(nextRoute: AppRoute): void {
     const nextHash = ROUTE_HASHES[nextRoute]
@@ -234,6 +276,7 @@ export function App() {
           <AppTopbar
             title={routeMeta.title}
             description={routeMeta.description}
+            organizeJobBadgeText={organizeJobBadgeText}
           />
 
           <section className="app-page-section flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] p-0.5 lg:p-1">

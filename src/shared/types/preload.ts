@@ -70,6 +70,72 @@ export interface PreviewPendingOrganizationRequest {
   missingGpsGroupingBasis?: MissingGpsGroupingBasis
 }
 
+export interface OrganizeJobPreviewStartRequest {
+  mode: 'preview'
+  sourceRoot: string
+  outputRoot: string
+  missingGpsGroupingBasis?: MissingGpsGroupingBasis
+}
+
+export interface OrganizeJobSaveStepRequest {
+  copyGroupKeysInThisRun: string[]
+  progressOffsetBeforeJob: number
+  groupPhotoCount: number
+  snapshotPayload: Pick<
+    ScanPhotoLibraryRequest,
+    | 'missingGpsGroupingBasis'
+    | 'groupMetadataOverrides'
+    | 'pendingGroupAssignments'
+    | 'pendingCustomGroupSplits'
+    | 'defaultTitleManualPhotoIds'
+  >
+}
+
+export interface OrganizeJobSaveStartRequest {
+  mode: 'save-bulk'
+  sourceRoot: string
+  outputRoot: string
+  totalPhotoCount: number
+  steps: OrganizeJobSaveStepRequest[]
+}
+
+export type StartOrganizeJobRequest =
+  | OrganizeJobPreviewStartRequest
+  | OrganizeJobSaveStartRequest
+
+export interface OrganizeJobCancellationResult {
+  accepted: boolean
+}
+
+export type OrganizeJobPhase =
+  | 'idle'
+  | 'preview-running'
+  | 'preview-completed'
+  | 'save-running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export interface OrganizeJobStatus {
+  jobId: string | null
+  phase: OrganizeJobPhase
+  mode: StartOrganizeJobRequest['mode'] | null
+  startedAtIso?: string
+  updatedAtIso: string
+  sourceRoot?: string
+  outputRoot?: string
+  message?: string
+  isCancelRequested: boolean
+  progress: {
+    completed: number
+    total: number
+    stage?: 'prepare' | 'file-flow' | 'preview'
+    currentGroupKey?: string
+  }
+  previewResult?: PreviewPendingOrganizationResult
+  summary?: ScanPhotoLibrarySummary
+}
+
 export type LibraryIndexLoadSource =
   | 'merged'
   | 'fallback'
@@ -308,6 +374,9 @@ export interface PhotoAppInvokeRequestMap {
   'photo-app/move-photos-to-group': MovePhotosToGroupRequest
   'photo-app/delete-photos-from-library': DeletePhotosFromLibraryRequest
   'photo-app/delete-output-folder-subtree': DeleteOutputFolderSubtreeRequest
+  'photo-app/start-organize-job': StartOrganizeJobRequest
+  'photo-app/get-organize-job-status': null
+  'photo-app/cancel-organize-job': null
 }
 
 export interface PhotoAppInvokeResponseMap {
@@ -320,6 +389,9 @@ export interface PhotoAppInvokeResponseMap {
   'photo-app/move-photos-to-group': LibraryIndexView
   'photo-app/delete-photos-from-library': LibraryIndexView
   'photo-app/delete-output-folder-subtree': LibraryIndexView
+  'photo-app/start-organize-job': OrganizeJobStatus
+  'photo-app/get-organize-job-status': OrganizeJobStatus
+  'photo-app/cancel-organize-job': OrganizeJobCancellationResult
 }
 
 export interface PreloadBridge {
@@ -338,11 +410,19 @@ export interface PreloadBridge {
   previewPendingOrganization: (
     request: PreviewPendingOrganizationRequest
   ) => Promise<PreviewPendingOrganizationResult>
+  startOrganizeJob: (
+    request: StartOrganizeJobRequest
+  ) => Promise<OrganizeJobStatus>
+  getOrganizeJobStatus: () => Promise<OrganizeJobStatus>
+  cancelOrganizeJob: () => Promise<OrganizeJobCancellationResult>
   scanPhotoLibrary: (
     request: ScanPhotoLibraryRequest
   ) => Promise<ScanPhotoLibrarySummary>
   onScanPhotoLibraryProgress: (
     handler: (payload: ScanPhotoLibraryProgressPayload) => void
+  ) => () => void
+  onOrganizeJobStatusChanged: (
+    handler: (payload: OrganizeJobStatus) => void
   ) => () => void
   updatePhotoGroup: (
     request: UpdatePhotoGroupRequest

@@ -7,11 +7,15 @@ export const photoAppInvokeChannels = {
   updatePhotoGroup: 'photo-app/update-photo-group',
   movePhotosToGroup: 'photo-app/move-photos-to-group',
   deletePhotosFromLibrary: 'photo-app/delete-photos-from-library',
-  deleteOutputFolderSubtree: 'photo-app/delete-output-folder-subtree'
+  deleteOutputFolderSubtree: 'photo-app/delete-output-folder-subtree',
+  startOrganizeJob: 'photo-app/start-organize-job',
+  getOrganizeJobStatus: 'photo-app/get-organize-job-status',
+  cancelOrganizeJob: 'photo-app/cancel-organize-job'
 } as const
 
 export const photoAppEventChannels = {
-  scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress'
+  scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress',
+  organizeJobStatusChanged: 'photo-app/organize-job-status-changed'
 } as const
 
 export type PhotoAppInvokeChannel =

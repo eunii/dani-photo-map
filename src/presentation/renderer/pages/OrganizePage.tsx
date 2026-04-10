@@ -17,6 +17,7 @@ import type {
   ScanPhotoLibraryIssue
 } from '@application/dto/ScanPhotoLibraryResult'
 import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
+import { useOrganizeJobStore } from '@presentation/renderer/store/useOrganizeJobStore'
 
 import {
   buildOrganizeScanPayload,
@@ -525,6 +526,7 @@ export function OrganizePage({
   const setLastLoadedIndex = useLibraryWorkspaceStore(
     (state) => state.setLastLoadedIndex
   )
+  const organizeJobStatus = useOrganizeJobStore((state) => state.status)
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [resultActionMessage, setResultActionMessage] = useState<string | null>(null)
@@ -815,7 +817,92 @@ export function OrganizePage({
   const hasPendingPreviewGroups = (previewResult?.groups.length ?? 0) > 0
 
   const savePipelineBusy =
-    runningSaveTarget !== null || saveJobQueue.length > 0
+    runningSaveTarget !== null ||
+    saveJobQueue.length > 0 ||
+    organizeJobStatus.phase === 'save-running'
+
+  useEffect(() => {
+    if (organizeJobStatus.phase === 'preview-running') {
+      setIsLoadingPreview(true)
+      return
+    }
+
+    if (organizeJobStatus.phase === 'preview-completed') {
+      setIsLoadingPreview(false)
+      if (organizeJobStatus.previewResult) {
+        const nextPreview = organizeJobStatus.previewResult
+        setPreviewResult(nextPreview)
+        setWizardStepIndex(0)
+        setPreviewImageLoadFailedByPhotoId({})
+        setGroupTitleInputs(
+          Object.fromEntries(
+            nextPreview.groups.map((group) => [
+              group.groupKey,
+              getInitialGroupTitleValue(group)
+            ])
+          )
+        )
+        setGroupCompanionsInputs(
+          Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
+        )
+        setGroupNotesInputs(
+          Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
+        )
+      }
+      return
+    }
+
+    if (organizeJobStatus.phase === 'save-running') {
+      setHidePreviewPanelWhileSaving(true)
+      setBulkSaveActive(true)
+      setPhotosSavedCount(organizeJobStatus.progress.completed)
+      setPhotoFlowTotal(organizeJobStatus.progress.total)
+      setRunningSaveTarget(organizeJobStatus.progress.currentGroupKey ?? null)
+      return
+    }
+
+    if (organizeJobStatus.phase === 'completed') {
+      setBulkSaveActive(false)
+      setHidePreviewPanelWhileSaving(false)
+      setRunningSaveTarget(null)
+      setSaveJobQueue([])
+      setPhotosSavedCount(0)
+      setPhotoFlowTotal(0)
+      setPrepareProgress(null)
+      setActiveSaveJobMeta(null)
+      if (organizeJobStatus.summary) {
+        setSummary(organizeJobStatus.summary)
+      }
+      return
+    }
+
+    if (organizeJobStatus.phase === 'failed') {
+      setBulkSaveActive(false)
+      setHidePreviewPanelWhileSaving(false)
+      setRunningSaveTarget(null)
+      setSaveJobQueue([])
+      setPrepareProgress(null)
+      setActiveSaveJobMeta(null)
+      setErrorMessage(organizeJobStatus.message ?? '백그라운드 정리 작업이 실패했습니다.')
+      return
+    }
+
+    if (organizeJobStatus.phase === 'cancelled') {
+      setBulkSaveActive(false)
+      setHidePreviewPanelWhileSaving(false)
+      setRunningSaveTarget(null)
+      setSaveJobQueue([])
+      setPrepareProgress(null)
+      setActiveSaveJobMeta(null)
+      setErrorMessage('백그라운드 정리 작업이 취소되었습니다.')
+      if (organizeJobStatus.summary) {
+        setSummary(organizeJobStatus.summary)
+      }
+      return
+    }
+
+    setIsLoadingPreview(false)
+  }, [organizeJobStatus])
 
   useEffect(() => {
     if (!summary) {
@@ -1168,31 +1255,15 @@ export function OrganizePage({
       return
     }
 
-    setIsLoadingPreview(true)
     setErrorMessage(null)
 
     try {
-      const nextPreview = await window.photoApp.previewPendingOrganization({
+      await window.photoApp.startOrganizeJob({
+        mode: 'preview',
         sourceRoot,
         outputRoot,
         missingGpsGroupingBasis: basis
       })
-
-      setPreviewResult(nextPreview)
-      setWizardStepIndex(0)
-      setPreviewImageLoadFailedByPhotoId({})
-      setGroupTitleInputs(
-        Object.fromEntries(
-          nextPreview.groups.map((group) => [group.groupKey, getInitialGroupTitleValue(group)])
-        )
-      )
-      setGroupCompanionsInputs(
-        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
-      )
-      setGroupNotesInputs(
-        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
-      )
-
       const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
       setLastLoadedIndex(loadedIndex)
       setSaveJobQueue([])
@@ -1215,8 +1286,6 @@ export function OrganizePage({
           ? error.message
           : '신규 정리 후보를 불러오지 못했습니다.'
       )
-    } finally {
-      setIsLoadingPreview(false)
     }
   }
 
@@ -1322,10 +1391,35 @@ export function OrganizePage({
       return
     }
 
-    setSaveJobQueue((previous) => [...previous, ...jobs])
+    void window.photoApp
+      .startOrganizeJob({
+        mode: 'save-bulk',
+        sourceRoot,
+        outputRoot,
+        totalPhotoCount: totalPhotosInThisBulk,
+        steps: jobs.map((job, index) => ({
+          copyGroupKeysInThisRun: job.copyGroupKeysInThisRun,
+          progressOffsetBeforeJob: job.progressOffsetBeforeJob,
+          groupPhotoCount:
+            orderedPreviewGroups[startIndex + index]?.photoCount ?? 0,
+          snapshotPayload: job.snapshotPayload
+        }))
+      })
+      .catch((error) => {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : '백그라운드 저장 작업을 시작하지 못했습니다.'
+        )
+      })
   }
 
   function cancelRemainingSaveJobs(): void {
+    if (organizeJobStatus.phase === 'save-running') {
+      void window.photoApp.cancelOrganizeJob()
+      return
+    }
+
     if (!savePipelineBusy) {
       return
     }

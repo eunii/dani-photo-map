@@ -8,6 +8,7 @@ import {
   type PhotoAppInvokeChannel
 } from '@shared/ipc/photoAppChannels'
 import type {
+  OrganizeJobStatus,
   PhotoAppInvokeRequestMap,
   PhotoAppInvokeResponseMap,
   PreloadBridge,
@@ -47,6 +48,15 @@ export const preloadBridge: PreloadBridge = {
   async previewPendingOrganization(request) {
     return ipcRenderer.invoke(photoAppInvokeChannels.previewPendingOrganization, request)
   },
+  async startOrganizeJob(request) {
+    return ipcRenderer.invoke(photoAppInvokeChannels.startOrganizeJob, request)
+  },
+  async getOrganizeJobStatus() {
+    return ipcRenderer.invoke(photoAppInvokeChannels.getOrganizeJobStatus)
+  },
+  async cancelOrganizeJob() {
+    return ipcRenderer.invoke(photoAppInvokeChannels.cancelOrganizeJob)
+  },
   async scanPhotoLibrary(request) {
     return ipcRenderer.invoke(photoAppInvokeChannels.scanPhotoLibrary, request)
   },
@@ -62,6 +72,23 @@ export const preloadBridge: PreloadBridge = {
 
     return () => {
       ipcRenderer.removeListener(photoAppEventChannels.scanPhotoLibraryProgress, listener)
+    }
+  },
+  onOrganizeJobStatusChanged(handler) {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: OrganizeJobStatus
+    ) => {
+      handler(payload)
+    }
+
+    ipcRenderer.on(photoAppEventChannels.organizeJobStatusChanged, listener)
+
+    return () => {
+      ipcRenderer.removeListener(
+        photoAppEventChannels.organizeJobStatusChanged,
+        listener
+      )
     }
   },
   async updatePhotoGroup(request) {
