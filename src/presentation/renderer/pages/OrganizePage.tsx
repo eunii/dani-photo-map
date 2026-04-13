@@ -1,516 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { Button, Card, Input, TextArea } from '@heroui/react'
-
-import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
 import {
   defaultMissingGpsGroupingBasis,
   type MissingGpsGroupingBasis
 } from '@domain/policies/MissingGpsGroupingBasis'
-import type {
-  PendingOrganizationPreviewPhoto,
-  PreviewPendingOrganizationResult,
-  ScanPhotoLibrarySummary
-} from '@shared/types/preload'
-import type {
-  InBatchDuplicateDetail,
-  ScanPhotoLibraryIssue
-} from '@application/dto/ScanPhotoLibraryResult'
+import type { ScanPhotoLibrarySummary } from '@shared/types/preload'
+import type { ScanPhotoLibraryIssue } from '@application/dto/ScanPhotoLibraryResult'
 import { useLibraryWorkspaceStore } from '@presentation/renderer/store/useLibraryWorkspaceStore'
 
+import { OrganizeOutputMissingCard } from '@presentation/renderer/components/organize/OrganizeOutputMissingCard'
+import { OrganizePreviewActionBar } from '@presentation/renderer/components/organize/OrganizePreviewActionBar'
+import { OrganizeSaveProgressOverlays } from '@presentation/renderer/components/organize/OrganizeSaveProgressOverlays'
+import { OrganizeSourceAndGroupingSection } from '@presentation/renderer/components/organize/OrganizeSourceAndGroupingSection'
+import { OrganizeScanResultDetailPanels } from '@presentation/renderer/components/organize/OrganizeScanResultDetailPanels'
+import { OrganizeWizardGroupCard } from '@presentation/renderer/components/organize/OrganizeWizardGroupCard'
 import {
-  buildOrganizeScanPayload,
-  type OrganizeCustomSplitInput
-} from '@presentation/renderer/pages/organizeScanPayload'
-import { SaveProgressCard } from '@presentation/renderer/components/organize/SaveProgressCard'
-import { joinPathSegments, normalizePathSeparators } from '@shared/utils/path'
-
-const SOURCE_DIALOG_OPTIONS = {
-  title: '원본 사진 폴더 선택',
-  buttonLabel: '원본 폴더 선택'
-} as const
-
-const EMPTY_GROUP_ASSIGNMENTS: Record<string, string> = {}
-const EMPTY_CUSTOM_SPLITS: Record<string, OrganizeCustomSplitInput[]> = {}
-const MISSING_GPS_GROUPING_OPTIONS: Array<{
-  value: MissingGpsGroupingBasis
-  label: string
-}> = [
-  { value: 'month', label: '월별' },
-  { value: 'week', label: '주별' },
-  { value: 'day', label: '일별' }
-]
-const SCAN_ISSUE_STAGES: ScanPhotoLibraryIssue['stage'][] = [
-  'metadata-read',
-  'hash',
-  'region-resolve',
-  'copy',
-  'thumbnail'
-]
-const ISSUE_QUICK_FILTERS = [
-  {
-    key: 'all',
-    label: '전체 code',
-    codeQuery: '',
-    stage: 'all' as const
-  },
-  {
-    key: 'metadata',
-    label: '메타데이터 실패',
-    codeQuery: 'metadata-read-failed',
-    stage: 'metadata-read' as const
-  },
-  {
-    key: 'hash',
-    label: '해시 관련',
-    codeQuery: 'hash',
-    stage: 'hash' as const
-  },
-  {
-    key: 'region',
-    label: '지역 해석 실패',
-    codeQuery: 'region-resolve-failed',
-    stage: 'region-resolve' as const
-  },
-  {
-    key: 'copy',
-    label: '복사 관련',
-    codeQuery: 'copy',
-    stage: 'copy' as const
-  },
-  {
-    key: 'copy-conflict',
-    label: '복사 충돌',
-    codeQuery: 'copy-destination-conflict',
-    stage: 'copy' as const
-  },
-  {
-    key: 'thumbnail',
-    label: '썸네일 실패',
-    codeQuery: 'thumbnail',
-    stage: 'thumbnail' as const
-  }
-] as const
-
-function fileUrlFromAbsolutePath(absolutePath: string): string {
-  const normalized = normalizePathSeparators(absolutePath)
-  const withSlashes = normalized.replace(/\\/g, '/')
-
-  if (/^[a-zA-Z]:\//.test(withSlashes)) {
-    return `file:///${encodeURI(withSlashes)}`
-  }
-
-  return `file://${encodeURI(withSlashes)}`
-}
-
-/** Prefer preload `pathToFileURL` so Windows paths load in the renderer with `webSecurity` relaxed. */
-function localImageFileUrl(absolutePath: string): string {
-  const fromPreload = window.photoApp.pathToFileUrl(absolutePath)
-
-  if (fromPreload) {
-    return fromPreload
-  }
-
-  return fileUrlFromAbsolutePath(absolutePath)
-}
-
-function computeGlobalBarProgress(
-  offset: number,
-  groupPhotoCount: number,
-  payload: ScanPhotoLibraryProgressPayload
-): number {
-  if (groupPhotoCount <= 0) {
-    return offset
-  }
-
-  if (payload.kind === 'prepare') {
-    const denom = payload.total > 0 ? payload.total : 1
-
-    return offset + Math.round((payload.completed / denom) * 0.5 * groupPhotoCount)
-  }
-
-  const denom = payload.total > 0 ? payload.total : 1
-  const halfGroup = 0.5 * groupPhotoCount
-  const filePortion = (payload.completed / denom) * 0.5 * groupPhotoCount
-
-  return offset + Math.round(halfGroup + filePortion)
-}
-
-function mergeScanSummaries(
-  previous: ScanPhotoLibrarySummary | null,
-  next: ScanPhotoLibrarySummary
-): ScanPhotoLibrarySummary {
-  if (!previous) {
-    return next
-  }
-
-  return {
-    scannedCount: Math.max(previous.scannedCount, next.scannedCount),
-    skippedUnchangedCount:
-      previous.skippedUnchangedCount + next.skippedUnchangedCount,
-    duplicateCount: previous.duplicateCount + next.duplicateCount,
-    keptCount: previous.keptCount + next.keptCount,
-    copiedCount: previous.copiedCount + next.copiedCount,
-    skippedExistingCount: previous.skippedExistingCount + next.skippedExistingCount,
-    groupCount: next.groupCount,
-    warningCount: previous.warningCount + next.warningCount,
-    failureCount: previous.failureCount + next.failureCount,
-    issues: [...previous.issues, ...next.issues],
-    inBatchDuplicateDetails: [
-      ...previous.inBatchDuplicateDetails,
-      ...next.inBatchDuplicateDetails
-    ],
-    existingOutputSkipDetails: [
-      ...previous.existingOutputSkipDetails,
-      ...next.existingOutputSkipDetails
-    ],
-    skippedUnchangedDetails: [
-      ...previous.skippedUnchangedDetails,
-      ...next.skippedUnchangedDetails
-    ],
-    mapGroups: next.mapGroups
-  }
-}
-
-function groupInBatchDuplicateDetails(rows: InBatchDuplicateDetail[]) {
-  const map = new Map<
-    string,
-    { canonicalSourcePath: string; duplicateSourcePaths: string[] }
-  >()
-
-  for (const row of rows) {
-    const existing = map.get(row.canonicalPhotoId)
-
-    if (!existing) {
-      map.set(row.canonicalPhotoId, {
-        canonicalSourcePath: row.canonicalSourcePath,
-        duplicateSourcePaths: [row.duplicateSourcePath]
-      })
-    } else {
-      existing.duplicateSourcePaths.push(row.duplicateSourcePath)
-    }
-  }
-
-  return [...map.entries()].map(([canonicalPhotoId, value]) => ({
-    canonicalPhotoId,
-    canonicalSourcePath: value.canonicalSourcePath,
-    duplicateSourcePaths: value.duplicateSourcePaths
-  }))
-}
-
-function formatIssueStageLabel(stage: ScanPhotoLibraryIssue['stage']): string {
-  switch (stage) {
-    case 'metadata-read':
-      return '메타데이터'
-    case 'hash':
-      return '해시'
-    case 'region-resolve':
-      return '지역 해석'
-    case 'copy':
-      return '복사'
-    case 'thumbnail':
-      return '썸네일'
-    default:
-      return stage
-  }
-}
-
-function formatIssueSeverityLabel(
-  severity: ScanPhotoLibraryIssue['severity']
-): string {
-  switch (severity) {
-    case 'warning':
-      return '경고'
-    case 'error':
-      return '실패'
-    default:
-      return severity
-  }
-}
-
-function getIssueSeverityBadgeClass(
-  severity: ScanPhotoLibraryIssue['severity']
-): string {
-  return severity === 'error'
-    ? 'border-red-200 bg-red-50 text-red-700'
-    : 'border-amber-200 bg-amber-50 text-amber-700'
-}
-
-function isIssueQuickFilterActive(
-  filter: (typeof ISSUE_QUICK_FILTERS)[number],
-  stage: 'all' | ScanPhotoLibraryIssue['stage'],
-  codeQuery: string
-): boolean {
-  return filter.stage === stage && filter.codeQuery === codeQuery
-}
-
-function formatIncrementalSkipListForClipboard(
-  rows: PreviewPendingOrganizationResult['skippedUnchangedDetails']
-): string {
-  return rows
-    .map(
-      (row) =>
-        [
-          `sourceFileName: ${row.sourceFileName}`,
-          `sourcePath: ${row.sourcePath}`,
-          `sizeBytes: ${row.sourceFingerprint.sizeBytes}`,
-          `modifiedAtMs: ${row.sourceFingerprint.modifiedAtMs}`
-        ].join('\n')
-    )
-    .join('\n\n')
-}
-
-function formatDuplicateListForClipboard(
-  rows: Array<{
-    canonicalSourcePath: string
-    duplicateSourcePaths: string[]
-  }>
-): string {
-  return rows
-    .map((row) =>
-      [
-        `canonical: ${row.canonicalSourcePath}`,
-        ...row.duplicateSourcePaths.map((path) => `duplicate: ${path}`)
-      ].join('\n')
-    )
-    .join('\n\n')
-}
-
-function formatExistingSkipListForClipboard(
-  rows: ScanPhotoLibrarySummary['existingOutputSkipDetails']
-): string {
-  return rows
-    .map((row) =>
-      [
-        `sourcePhotoId: ${row.sourcePhotoId}`,
-        `sourcePath: ${row.sourcePath}`,
-        `existingOutputRelativePath: ${row.existingOutputRelativePath}`,
-        `sha256: ${row.sha256}`
-      ].join('\n')
-    )
-    .join('\n\n')
-}
-
-function formatIssueListForClipboard(rows: ScanPhotoLibrarySummary['issues']): string {
-  return rows
-    .map((issue) =>
-      [
-        `severity: ${issue.severity}`,
-        `stage: ${issue.stage}`,
-        `code: ${issue.code}`,
-        `sourcePath: ${issue.sourcePath}`,
-        issue.photoId ? `photoId: ${issue.photoId}` : null,
-        issue.outputRelativePath
-          ? `outputRelativePath: ${issue.outputRelativePath}`
-          : null,
-        issue.destinationPath ? `destinationPath: ${issue.destinationPath}` : null,
-        `message: ${issue.message}`
-      ]
-        .filter((line): line is string => Boolean(line))
-        .join('\n')
-    )
-    .join('\n\n')
-}
-
-function getMissingGpsCategoryLabel(
-  category?: PreviewPendingOrganizationResult['groups'][number]['missingGpsCategory']
-): string | null {
-  switch (category) {
-    case 'capture':
-      return '캡처 자동 분류'
-    case 'missing-original-gps':
-      return '원본 GPS 없음'
-    case 'missing-imported-gps':
-      return '외부 수신본 GPS 없음'
-    default:
-      return null
-  }
-}
-
-function getAssignmentModeDescription(
-  group: PreviewPendingOrganizationResult['groups'][number]
-): string | null {
-  switch (group.assignmentMode) {
-    case 'auto-capture':
-      return '자동 그룹으로 분리됩니다.'
-    case 'new-group':
-    default:
-      return null
-  }
-}
-
-function formatMissingGpsGroupingBasisLabel(
-  basis: MissingGpsGroupingBasis
-): string {
-  return (
-    MISSING_GPS_GROUPING_OPTIONS.find((option) => option.value === basis)?.label ??
-    '월별'
-  )
-}
-
-function formatMissingGpsFolderPattern(
-  basis: MissingGpsGroupingBasis
-): string {
-  switch (basis) {
-    case 'week':
-      return 'year/month/weekN'
-    case 'day':
-      return 'year/month/day'
-    case 'month':
-    default:
-      return 'year/month'
-  }
-}
-
-type GroupSavePhase = 'idle' | 'queued' | 'saving' | 'done' | 'error'
-type IssueSeverityFilter = 'all' | ScanPhotoLibraryIssue['severity']
-type DuplicateSortOption = 'duplicates-desc' | 'path-asc'
-type IncrementalSkipSortOption = 'path-asc' | 'mtime-desc'
-type ExistingSkipSortOption = 'path-asc' | 'hash-asc'
-type IssueSortOption = 'severity-stage-path' | 'path-asc' | 'code-asc'
-
-function formatGroupSavePhaseLabel(phase: GroupSavePhase): string {
-  switch (phase) {
-    case 'queued':
-      return '저장 대기'
-    case 'saving':
-      return '저장 중'
-    case 'done':
-      return '저장 완료'
-    case 'error':
-      return '저장 실패'
-    default:
-      return '미저장'
-  }
-}
-
-function getGroupLinePercent(
-  phase: GroupSavePhase,
-  runningKey: string | null,
-  groupKey: string,
-  meta: { progressOffsetBeforeJob: number; groupPhotoCount: number } | null,
-  photosSavedCount: number
-): number {
-  if (phase === 'done') {
-    return 100
-  }
-
-  if (phase === 'error') {
-    return 0
-  }
-
-  if (phase === 'queued' || phase === 'idle') {
-    return 0
-  }
-
-  if (
-    phase === 'saving' &&
-    runningKey === groupKey &&
-    meta &&
-    meta.groupPhotoCount > 0
-  ) {
-    return Math.min(
-      100,
-      Math.max(
-        0,
-        Math.round(
-          ((photosSavedCount - meta.progressOffsetBeforeJob) /
-            meta.groupPhotoCount) *
-            100
-        )
-      )
-    )
-  }
-
-  return 0
-}
+  ISSUE_QUICK_FILTERS,
+  SCAN_ISSUE_STAGES,
+  SOURCE_DIALOG_OPTIONS
+} from '@presentation/renderer/pages/organize/organizePageConstants'
+import { groupInBatchDuplicateDetails } from '@presentation/renderer/pages/organize/organizeScanSummaryMerge'
+import {
+  type DuplicateSortOption,
+  type ExistingSkipSortOption,
+  type GroupSavePhase,
+  type IncrementalSkipSortOption,
+  type IssueSeverityFilter,
+  type IssueSortOption,
+  buildEffectiveOrganizeInputs,
+  effectiveGroupTitle,
+  formatGroupSavePhaseLabel
+} from '@presentation/renderer/pages/organize/organizeGroupForm'
+import { useOrganizePreview } from '@presentation/renderer/pages/organize/useOrganizePreview'
+import { useOrganizeSaveJobs } from '@presentation/renderer/pages/organize/useOrganizeSaveJobs'
 
 interface OrganizePageProps {
   onNavigateToSettings?: () => void
-}
-
-function getInitialGroupTitleValue(
-  group: PreviewPendingOrganizationResult['groups'][number]
-): string {
-  if (!group.representativeGps && group.displayTitle.trim().length > 0) {
-    return group.displayTitle
-  }
-
-  return group.suggestedTitles[0] ?? group.displayTitle
-}
-
-function effectiveGroupTitle(
-  group: PreviewPendingOrganizationResult['groups'][number],
-  groupTitleInputs: Record<string, string>
-): string {
-  const raw = groupTitleInputs[group.groupKey]
-  if (raw !== undefined) {
-    const trimmed = raw.trim()
-
-    return trimmed.length > 0 ? trimmed : '제목 없음'
-  }
-
-  return getInitialGroupTitleValue(group)
-}
-
-function buildEffectiveOrganizeInputs(
-  groups: PreviewPendingOrganizationResult['groups'],
-  inputs: {
-    missingGpsGroupingBasis: MissingGpsGroupingBasis
-    groupTitleInputs: Record<string, string>
-    groupCompanionsInputs: Record<string, string>
-    groupNotesInputs: Record<string, string>
-  }
-): Parameters<typeof buildOrganizeScanPayload>[2] {
-  const groupTitleInputs = { ...inputs.groupTitleInputs }
-
-  for (const group of groups) {
-    if (groupTitleInputs[group.groupKey] === undefined) {
-      groupTitleInputs[group.groupKey] = getInitialGroupTitleValue(group)
-    }
-  }
-
-  return {
-    missingGpsGroupingBasis: inputs.missingGpsGroupingBasis,
-    groupTitleInputs,
-    groupCompanionsInputs: inputs.groupCompanionsInputs,
-    groupNotesInputs: inputs.groupNotesInputs,
-    groupAssignmentInputs: EMPTY_GROUP_ASSIGNMENTS,
-    groupCustomSplits: EMPTY_CUSTOM_SPLITS
-  }
-}
-
-function PendingPreviewImageBlock({
-  photo,
-  imageFailed,
-  onImageError,
-  imageHeightClass,
-  placeholderClassName,
-  imageAlt = ''
-}: {
-  photo: PendingOrganizationPreviewPhoto
-  imageFailed: boolean
-  onImageError: () => void
-  imageHeightClass: string
-  placeholderClassName: string
-  imageAlt?: string
-}) {
-  if (photo.previewDataUrl && !imageFailed) {
-    return (
-      <img
-        src={photo.previewDataUrl}
-        alt={imageAlt}
-        className={`w-full object-cover ${imageHeightClass}`}
-        onError={onImageError}
-      />
-    )
-  }
-
-  return (
-    <div className={placeholderClassName}>
-      미리보기를 불러오지 못했습니다.
-    </div>
-  )
 }
 
 export function OrganizePage({
@@ -525,12 +50,9 @@ export function OrganizePage({
   const setLastLoadedIndex = useLibraryWorkspaceStore(
     (state) => state.setLastLoadedIndex
   )
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [resultActionMessage, setResultActionMessage] = useState<string | null>(null)
   const [summary, setSummary] = useState<ScanPhotoLibrarySummary | null>(null)
-  const [previewResult, setPreviewResult] =
-    useState<PreviewPendingOrganizationResult | null>(null)
   const [missingGpsGroupingBasis, setMissingGpsGroupingBasis] =
     useState<MissingGpsGroupingBasis>(defaultMissingGpsGroupingBasis)
   const [groupTitleInputs, setGroupTitleInputs] = useState<
@@ -542,29 +64,6 @@ export function OrganizePage({
   const [groupNotesInputs, setGroupNotesInputs] = useState<
     Record<string, string>
   >({})
-  const [saveJobQueue, setSaveJobQueue] = useState<
-    Array<{
-      copyGroupKeysInThisRun: string[]
-      isLastStep: boolean
-      snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
-      progressOffsetBeforeJob: number
-    }>
-  >([])
-  const [runningSaveTarget, setRunningSaveTarget] = useState<string | null>(null)
-  const runningSaveTargetRef = useRef<string | null>(null)
-  const [bulkSaveActive, setBulkSaveActive] = useState(false)
-  const bulkSaveActiveRef = useRef(false)
-  const [prepareProgress, setPrepareProgress] = useState<{
-    completed: number
-    total: number
-  } | null>(null)
-  const [photoFlowTotal, setPhotoFlowTotal] = useState(0)
-  const [groupSavePhaseByKey, setGroupSavePhaseByKey] = useState<
-    Record<string, GroupSavePhase>
-  >({})
-  const [hidePreviewPanelWhileSaving, setHidePreviewPanelWhileSaving] =
-    useState(false)
-  const [photosSavedCount, setPhotosSavedCount] = useState(0)
   const [openScanResultDetail, setOpenScanResultDetail] = useState<
     null
     | 'inBatchDup'
@@ -592,32 +91,32 @@ export function OrganizePage({
     useState<IncrementalSkipSortOption>('path-asc')
   const [issueSort, setIssueSort] =
     useState<IssueSortOption>('severity-stage-path')
-  const [activeSaveJobMeta, setActiveSaveJobMeta] = useState<{
-    progressOffsetBeforeJob: number
-    groupPhotoCount: number
-  } | null>(null)
-
-  const saveJobQueueRef = useRef(saveJobQueue)
-  const mergedBulkSummaryRef = useRef<ScanPhotoLibrarySummary | null>(null)
-  const cancelRemainingBulkJobsRef = useRef(false)
-  const bulkSaveStartIndexRef = useRef(0)
-  const bulkRunTotalPhotosRef = useRef<number | null>(null)
-  const [bulkRunStartIndex, setBulkRunStartIndex] = useState<number | null>(null)
-
-  useEffect(() => {
-    saveJobQueueRef.current = saveJobQueue
-  }, [saveJobQueue])
-
-  useEffect(() => {
-    runningSaveTargetRef.current = runningSaveTarget
-  }, [runningSaveTarget])
-
-  useEffect(() => {
-    bulkSaveActiveRef.current = bulkSaveActive
-  }, [bulkSaveActive])
   const [previewImageLoadFailedByPhotoId, setPreviewImageLoadFailedByPhotoId] =
     useState<Record<string, boolean>>({})
   const [wizardStepIndex, setWizardStepIndex] = useState(0)
+
+  const resetSavePipelineAfterPreviewRef = useRef<() => void>(() => {})
+
+  const {
+    previewResult,
+    setPreviewResult,
+    isLoadingPreview,
+    handlePreview
+  } = useOrganizePreview({
+    sourceRoot,
+    outputRoot,
+    missingGpsGroupingBasis,
+    setLastLoadedIndex,
+    setWizardStepIndex,
+    setGroupTitleInputs,
+    setGroupCompanionsInputs,
+    setGroupNotesInputs,
+    setPreviewImageLoadFailedByPhotoId,
+    resetSavePipelineAfterPreview: () =>
+      resetSavePipelineAfterPreviewRef.current(),
+    setErrorMessage,
+    setOpenScanResultDetail
+  })
 
   const orderedPreviewGroups = useMemo(() => {
     if (!previewResult?.groups.length) {
@@ -635,6 +134,46 @@ export function OrganizePage({
       orderedPreviewGroups.reduce((sum, group) => sum + group.photoCount, 0),
     [orderedPreviewGroups]
   )
+
+  const {
+    saveJobQueue,
+    runningSaveTarget,
+    bulkSaveActive,
+    prepareProgress,
+    photoFlowTotal,
+    groupSavePhaseByKey,
+    hidePreviewPanelWhileSaving,
+    photosSavedCount,
+    activeSaveJobMeta,
+    bulkRunStartIndex,
+    savePipelineBusy,
+    enqueueSaveAllGroups,
+    enqueueSaveCurrentGroup,
+    cancelRemainingSaveJobs,
+    resetSavePipelineToIdle
+  } = useOrganizeSaveJobs({
+    sourceRoot,
+    outputRoot,
+    setLastLoadedIndex,
+    previewResult,
+    orderedPreviewGroups,
+    totalPhotosInPreview,
+    missingGpsGroupingBasis,
+    groupTitleInputs,
+    groupCompanionsInputs,
+    groupNotesInputs,
+    wizardStepIndex,
+    setWizardStepIndex,
+    setSummary,
+    setPreviewResult,
+    setGroupTitleInputs,
+    setGroupCompanionsInputs,
+    setGroupNotesInputs,
+    setPreviewImageLoadFailedByPhotoId,
+    setErrorMessage
+  })
+
+  resetSavePipelineAfterPreviewRef.current = resetSavePipelineToIdle
 
   const groupedInBatchDuplicates = useMemo(
     () =>
@@ -813,236 +352,12 @@ export function OrganizePage({
 
   const hasPendingPreviewGroups = (previewResult?.groups.length ?? 0) > 0
 
-  const savePipelineBusy =
-    runningSaveTarget !== null || saveJobQueue.length > 0
-
   const wizardGroup =
     orderedPreviewGroups.length > 0
       ? orderedPreviewGroups[
           Math.min(wizardStepIndex, orderedPreviewGroups.length - 1)
         ]
       : undefined
-
-  useEffect(() => {
-    if (runningSaveTarget !== null) {
-      return
-    }
-
-    if (saveJobQueue.length === 0) {
-      return
-    }
-
-    if (!sourceRoot || !outputRoot) {
-      return
-    }
-
-    const queueSnapshot = saveJobQueue
-    const nextJob = queueSnapshot[0]
-
-    if (!nextJob) {
-      return
-    }
-
-    const remainderQueue = queueSnapshot.slice(1)
-    saveJobQueueRef.current = remainderQueue
-    setSaveJobQueue(remainderQueue)
-
-    const onlyKey = nextJob.copyGroupKeysInThisRun[0]
-    setRunningSaveTarget(onlyKey ?? null)
-
-    const groupPhotoCountForJob =
-      onlyKey !== undefined
-        ? (orderedPreviewGroups.find((g) => g.groupKey === onlyKey)?.photoCount ??
-          0)
-        : 0
-
-    setActiveSaveJobMeta(
-      onlyKey
-        ? {
-            progressOffsetBeforeJob: nextJob.progressOffsetBeforeJob,
-            groupPhotoCount: groupPhotoCountForJob
-          }
-        : null
-    )
-
-    if (bulkSaveActive && onlyKey) {
-      const jobIndex = orderedPreviewGroups.findIndex(
-        (g) => g.groupKey === onlyKey
-      )
-      const bulkStart = bulkSaveStartIndexRef.current
-      const remainingKeys = new Set(
-        remainderQueue.map((j) => j.copyGroupKeysInThisRun[0]).filter(Boolean)
-      )
-      setGroupSavePhaseByKey(
-        Object.fromEntries(
-          orderedPreviewGroups.map((g, i) => {
-            if (i < bulkStart) {
-              return [g.groupKey, 'idle' as const]
-            }
-            if (jobIndex >= 0 && i < jobIndex) {
-              return [g.groupKey, 'done' as const]
-            }
-            if (g.groupKey === onlyKey) {
-              return [g.groupKey, 'saving' as const]
-            }
-            if (remainingKeys.has(g.groupKey)) {
-              return [g.groupKey, 'queued' as const]
-            }
-            return [g.groupKey, 'idle' as const]
-          })
-        )
-      )
-    } else if (onlyKey) {
-      setGroupSavePhaseByKey((previous) => ({
-        ...previous,
-        [onlyKey]: 'saving'
-      }))
-    }
-
-    setPhotosSavedCount(nextJob.progressOffsetBeforeJob)
-    setPhotoFlowTotal(
-      bulkRunTotalPhotosRef.current ?? totalPhotosInPreview
-    )
-    setPrepareProgress(null)
-
-    void (async () => {
-      const offset = nextJob.progressOffsetBeforeJob
-      const flowTotal =
-        bulkRunTotalPhotosRef.current ?? totalPhotosInPreview
-      const unsubscribe = window.photoApp.onScanPhotoLibraryProgress(
-        (payload) => {
-          if (payload.kind === 'prepare') {
-            setPrepareProgress({
-              completed: payload.completed,
-              total: payload.total
-            })
-          } else {
-            setPrepareProgress(null)
-          }
-
-          setPhotosSavedCount(
-            computeGlobalBarProgress(offset, groupPhotoCountForJob, payload)
-          )
-          setPhotoFlowTotal(flowTotal)
-        }
-      )
-
-      try {
-        const nextSummary = await window.photoApp.scanPhotoLibrary({
-          sourceRoot,
-          outputRoot,
-          ...nextJob.snapshotPayload,
-          copyGroupKeysInThisRun: nextJob.copyGroupKeysInThisRun
-        })
-        const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
-
-        setLastLoadedIndex(loadedIndex)
-
-        if (bulkSaveActiveRef.current) {
-          mergedBulkSummaryRef.current = mergeScanSummaries(
-            mergedBulkSummaryRef.current,
-            nextSummary
-          )
-        }
-
-        if (onlyKey) {
-          setGroupSavePhaseByKey((previous) => ({
-            ...previous,
-            [onlyKey]: 'done'
-          }))
-        }
-
-        const noMoreJobs = saveJobQueueRef.current.length === 0
-
-        if (bulkSaveActiveRef.current && noMoreJobs) {
-          const cancelledBulk = cancelRemainingBulkJobsRef.current
-          cancelRemainingBulkJobsRef.current = false
-          bulkSaveActiveRef.current = false
-          setBulkSaveActive(false)
-          bulkRunTotalPhotosRef.current = null
-          bulkSaveStartIndexRef.current = 0
-          setBulkRunStartIndex(null)
-          setGroupSavePhaseByKey({})
-          setHidePreviewPanelWhileSaving(false)
-          setPhotosSavedCount(0)
-          setPhotoFlowTotal(0)
-          setPrepareProgress(null)
-          setActiveSaveJobMeta(null)
-          setSummary(mergedBulkSummaryRef.current ?? nextSummary)
-          mergedBulkSummaryRef.current = null
-          setPreviewResult(null)
-          setGroupTitleInputs({})
-          setGroupCompanionsInputs({})
-          setGroupNotesInputs({})
-          setPreviewImageLoadFailedByPhotoId({})
-          setWizardStepIndex(0)
-          if (cancelledBulk) {
-            setErrorMessage(
-              '남은 저장 작업을 취소했습니다. 완료된 그룹까지 결과가 반영되었습니다.'
-            )
-          }
-        } else if (!bulkSaveActiveRef.current && nextJob.isLastStep) {
-          bulkRunTotalPhotosRef.current = null
-          bulkSaveStartIndexRef.current = 0
-          setBulkRunStartIndex(null)
-          setGroupSavePhaseByKey({})
-          setHidePreviewPanelWhileSaving(false)
-          setPhotosSavedCount(0)
-          setPhotoFlowTotal(0)
-          setPrepareProgress(null)
-          setActiveSaveJobMeta(null)
-          setSummary(nextSummary)
-          setPreviewResult(null)
-          setGroupTitleInputs({})
-          setGroupCompanionsInputs({})
-          setGroupNotesInputs({})
-          setPreviewImageLoadFailedByPhotoId({})
-          setWizardStepIndex(0)
-        }
-      } catch (error) {
-        bulkSaveActiveRef.current = false
-        setBulkSaveActive(false)
-        bulkRunTotalPhotosRef.current = null
-        bulkSaveStartIndexRef.current = 0
-        setBulkRunStartIndex(null)
-        cancelRemainingBulkJobsRef.current = false
-        mergedBulkSummaryRef.current = null
-        setSaveJobQueue([])
-        setHidePreviewPanelWhileSaving(false)
-        setPhotosSavedCount(0)
-        setPhotoFlowTotal(0)
-        setPrepareProgress(null)
-        setActiveSaveJobMeta(null)
-        setGroupSavePhaseByKey((previous) => {
-          const next: Record<string, GroupSavePhase> = { ...previous }
-          for (const key of nextJob.copyGroupKeysInThisRun) {
-            next[key] = 'error'
-          }
-          for (const key of Object.keys(next)) {
-            if (next[key] === 'queued') {
-              next[key] = 'idle'
-            }
-          }
-          return next
-        })
-        setErrorMessage(
-          error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
-        )
-      } finally {
-        unsubscribe()
-        setRunningSaveTarget(null)
-      }
-    })()
-  }, [
-    runningSaveTarget,
-    saveJobQueue,
-    sourceRoot,
-    outputRoot,
-    setLastLoadedIndex,
-    orderedPreviewGroups,
-    totalPhotosInPreview,
-    bulkSaveActive
-  ])
 
   function handleToggleScanResultDetail(
     detail:
@@ -1127,441 +442,46 @@ export function OrganizePage({
       setSummary(null)
       setOpenScanResultDetail(null)
       setErrorMessage(null)
-      setSaveJobQueue([])
-      setRunningSaveTarget(null)
-      bulkSaveActiveRef.current = false
-      setBulkSaveActive(false)
-      bulkRunTotalPhotosRef.current = null
-      bulkSaveStartIndexRef.current = 0
-      setBulkRunStartIndex(null)
-      setGroupSavePhaseByKey({})
-      setHidePreviewPanelWhileSaving(false)
-      setPhotosSavedCount(0)
-      setPhotoFlowTotal(0)
-      setPrepareProgress(null)
-      setActiveSaveJobMeta(null)
-    }
-  }
-
-  async function handlePreview(
-    basis: MissingGpsGroupingBasis = missingGpsGroupingBasis
-  ): Promise<void> {
-    if (!sourceRoot || !outputRoot) {
-      setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
-      return
-    }
-
-    setIsLoadingPreview(true)
-    setErrorMessage(null)
-
-    try {
-      const nextPreview = await window.photoApp.previewPendingOrganization({
-        sourceRoot,
-        outputRoot,
-        missingGpsGroupingBasis: basis
-      })
-
-      setPreviewResult(nextPreview)
-      setWizardStepIndex(0)
-      setPreviewImageLoadFailedByPhotoId({})
-      setGroupTitleInputs(
-        Object.fromEntries(
-          nextPreview.groups.map((group) => [group.groupKey, getInitialGroupTitleValue(group)])
-        )
-      )
-      setGroupCompanionsInputs(
-        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
-      )
-      setGroupNotesInputs(
-        Object.fromEntries(nextPreview.groups.map((group) => [group.groupKey, '']))
-      )
-
-      const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
-      setLastLoadedIndex(loadedIndex)
-      setSaveJobQueue([])
-      setRunningSaveTarget(null)
-      bulkSaveActiveRef.current = false
-      setBulkSaveActive(false)
-      bulkRunTotalPhotosRef.current = null
-      bulkSaveStartIndexRef.current = 0
-      setBulkRunStartIndex(null)
-      setGroupSavePhaseByKey({})
-      setHidePreviewPanelWhileSaving(false)
-      setPhotosSavedCount(0)
-      setPhotoFlowTotal(0)
-      setPrepareProgress(null)
-      setActiveSaveJobMeta(null)
-      setOpenScanResultDetail(null)
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : '신규 정리 후보를 불러오지 못했습니다.'
-      )
-    } finally {
-      setIsLoadingPreview(false)
-    }
-  }
-
-  function enqueueSaveAllGroups(): void {
-    if (!sourceRoot || !outputRoot) {
-      setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
-      return
-    }
-
-    if (!previewResult) {
-      setErrorMessage('먼저 정리 후보를 불러오세요.')
-      return
-    }
-
-    if (orderedPreviewGroups.length === 0) {
-      setErrorMessage('저장할 그룹이 없습니다.')
-      return
-    }
-
-    if (savePipelineBusy) {
-      return
-    }
-
-    const effectiveInputs = buildEffectiveOrganizeInputs(previewResult.groups, {
-      missingGpsGroupingBasis,
-      groupTitleInputs,
-      groupCompanionsInputs,
-      groupNotesInputs
-    })
-
-    setErrorMessage(null)
-    mergedBulkSummaryRef.current = null
-    cancelRemainingBulkJobsRef.current = false
-    bulkSaveActiveRef.current = true
-    setBulkSaveActive(true)
-
-    const startIndex = Math.min(
-      wizardStepIndex,
-      Math.max(0, orderedPreviewGroups.length - 1)
-    )
-    bulkSaveStartIndexRef.current = startIndex
-    setBulkRunStartIndex(startIndex)
-
-    const remainingGroups = orderedPreviewGroups.slice(startIndex)
-    const totalPhotosInThisBulk = remainingGroups.reduce(
-      (sum, g) => sum + g.photoCount,
-      0
-    )
-    bulkRunTotalPhotosRef.current = totalPhotosInThisBulk
-
-    const queuedPhases: Record<string, GroupSavePhase> = {}
-    for (let i = 0; i < orderedPreviewGroups.length; i += 1) {
-      const g = orderedPreviewGroups[i]
-      if (g && i >= startIndex) {
-        queuedPhases[g.groupKey] = 'queued'
-      }
-    }
-    setGroupSavePhaseByKey((previous) => ({ ...previous, ...queuedPhases }))
-    setHidePreviewPanelWhileSaving(true)
-    setPhotosSavedCount(0)
-    setPhotoFlowTotal(totalPhotosInThisBulk)
-    setActiveSaveJobMeta(null)
-
-    const jobs: Array<{
-      copyGroupKeysInThisRun: string[]
-      isLastStep: boolean
-      snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
-      progressOffsetBeforeJob: number
-    }> = []
-
-    let progressOffsetBeforeJob = 0
-
-    for (let index = startIndex; index < orderedPreviewGroups.length; index += 1) {
-      const includedGroupKeySet = new Set(
-        orderedPreviewGroups.slice(0, index + 1).map((g) => g.groupKey)
-      )
-      const snapshotPayload = buildOrganizeScanPayload(
-        previewResult,
-        includedGroupKeySet,
-        effectiveInputs
-      )
-      const group = orderedPreviewGroups[index]
-
-      if (!group) {
-        continue
-      }
-
-      jobs.push({
-        copyGroupKeysInThisRun: [group.groupKey],
-        isLastStep: index >= orderedPreviewGroups.length - 1,
-        snapshotPayload,
-        progressOffsetBeforeJob
-      })
-      progressOffsetBeforeJob += group.photoCount
-    }
-
-    if (jobs.length === 0) {
-      bulkSaveActiveRef.current = false
-      setBulkSaveActive(false)
-      bulkRunTotalPhotosRef.current = null
-      setBulkRunStartIndex(null)
-      setErrorMessage('이후에 저장할 그룹이 없습니다.')
-      return
-    }
-
-    setSaveJobQueue((previous) => [...previous, ...jobs])
-  }
-
-  function cancelRemainingSaveJobs(): void {
-    if (!savePipelineBusy) {
-      return
-    }
-
-    cancelRemainingBulkJobsRef.current = true
-    saveJobQueueRef.current = []
-    setSaveJobQueue([])
-  }
-
-  function enqueueSaveCurrentGroup(): void {
-    if (!sourceRoot || !outputRoot) {
-      setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
-      return
-    }
-
-    if (!previewResult) {
-      setErrorMessage('먼저 정리 후보를 불러오세요.')
-      return
-    }
-
-    const snapshotStepIndex = wizardStepIndex
-    const currentGroup = orderedPreviewGroups[snapshotStepIndex]
-
-    if (!currentGroup) {
-      setErrorMessage('저장할 그룹을 찾을 수 없습니다.')
-      return
-    }
-
-    const includedGroupKeySet = new Set(
-      orderedPreviewGroups
-        .slice(0, snapshotStepIndex + 1)
-        .map((group) => group.groupKey)
-    )
-
-    const snapshotPayload = buildOrganizeScanPayload(
-      previewResult,
-      includedGroupKeySet,
-      buildEffectiveOrganizeInputs(previewResult.groups, {
-        missingGpsGroupingBasis,
-        groupTitleInputs,
-        groupCompanionsInputs,
-        groupNotesInputs
-      })
-    )
-
-    const isLastStep = snapshotStepIndex >= orderedPreviewGroups.length - 1
-
-    const progressOffsetBeforeJob = orderedPreviewGroups
-      .slice(0, snapshotStepIndex)
-      .reduce((sum, g) => sum + g.photoCount, 0)
-
-    setErrorMessage(null)
-
-    const alreadyQueuedOrRunning =
-      runningSaveTargetRef.current === currentGroup.groupKey ||
-      saveJobQueue.some(
-        (job) =>
-          job.copyGroupKeysInThisRun.length === 1 &&
-          job.copyGroupKeysInThisRun[0] === currentGroup.groupKey
-      )
-
-    if (alreadyQueuedOrRunning) {
-      return
-    }
-
-    setGroupSavePhaseByKey((previous) => ({
-      ...previous,
-      [currentGroup.groupKey]: 'queued'
-    }))
-
-    setSaveJobQueue((previous) => [
-      ...previous,
-      {
-        copyGroupKeysInThisRun: [currentGroup.groupKey],
-        isLastStep,
-        snapshotPayload,
-        progressOffsetBeforeJob
-      }
-    ])
-
-    if (isLastStep) {
-      setHidePreviewPanelWhileSaving(true)
-    }
-
-    if (!isLastStep) {
-      setWizardStepIndex((step) => step + 1)
+      resetSavePipelineToIdle()
     }
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto overflow-x-hidden">
       <div className="shrink-0 space-y-1.5">
-      <section className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-2.5 py-2">
-        <div className="flex flex-col gap-2">
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <span className="shrink-0 text-sm font-semibold text-[var(--app-foreground)]">
-              원본 사진 폴더
-            </span>
-            <div
-              className={`min-h-8 min-w-0 flex-1 truncate rounded-xl px-2 py-1.5 text-[12px] leading-snug ${
-                sourceRoot
-                  ? 'border border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_10%,var(--app-surface)_90%)] text-[var(--app-foreground)]'
-                  : 'border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)]'
-              }`}
-              title={sourceRoot || undefined}
-            >
-              {sourceRoot || '아직 선택되지 않았습니다.'}
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-1.5">
-              <Button
-                variant="secondary"
-                className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-3 text-[12px] font-medium text-[var(--app-foreground)] hover:bg-[color:color-mix(in_srgb,var(--app-foreground)_6%,var(--app-surface-strong)_94%)]"
-                onPress={() => void selectSourceRoot()}
-              >
-                원본 폴더 선택
-              </Button>
-              {!previewResult ? (
-                <Button
-                  variant="secondary"
-                  className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-[12px] font-semibold text-[var(--app-foreground)] shadow-sm hover:border-[var(--app-foreground)]/20 hover:bg-[var(--app-surface-strong)]"
-                  isDisabled={isLoadingPreview}
-                  onPress={() => void handlePreview()}
-                >
-                  {isLoadingPreview ? '불러오는 중…' : '정리 시작하기'}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-
-          <div
-            className="border-t border-[var(--app-border)] pt-2"
-            title="아래 기준으로 GPS 유무와 관계없이 그룹을 나누고 폴더를 구성합니다."
-          >
-            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-              <p className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-[var(--app-muted)]">
-                그룹 기준 (GPS 포함)
-              </p>
-              <div className="flex min-w-0 flex-wrap gap-1">
-                {MISSING_GPS_GROUPING_OPTIONS.map((option) => {
-                  const isSelected = missingGpsGroupingBasis === option.value
-
-                  return (
-                    <Button
-                      key={option.value}
-                      size="sm"
-                      variant={isSelected ? 'primary' : 'secondary'}
-                      className={`h-7 min-w-0 rounded-full px-2.5 text-[11px] ${
-                        isSelected
-                          ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
-                          : 'border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]'
-                      }`}
-                      isDisabled={isLoadingPreview || savePipelineBusy}
-                      onPress={() => {
-                        if (option.value === missingGpsGroupingBasis) {
-                          return
-                        }
-
-                        setMissingGpsGroupingBasis(option.value)
-
-                        if (previewResult && sourceRoot && outputRoot) {
-                          void handlePreview(option.value)
-                        }
-                      }}
-                    >
-                      {option.label}
-                    </Button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <OrganizeSourceAndGroupingSection
+        sourceRoot={sourceRoot}
+        previewResult={previewResult}
+        isLoadingPreview={isLoadingPreview}
+        savePipelineBusy={savePipelineBusy}
+        missingGpsGroupingBasis={missingGpsGroupingBasis}
+        onSelectSource={() => void selectSourceRoot()}
+        onStartPreview={() => void handlePreview()}
+        onChangeGroupingBasis={(value) => {
+          setMissingGpsGroupingBasis(value)
+          if (previewResult && sourceRoot && outputRoot) {
+            void handlePreview(value)
+          }
+        }}
+      />
 
       {!outputRoot ? (
-        <section className="rounded-2xl border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] p-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-[var(--app-foreground)]">
-                출력 폴더가 설정되지 않았습니다.
-              </h2>
-              <p className="text-sm text-[var(--app-muted)]">
-                공통 출력 폴더는 설정 탭에서 지정합니다.
-              </p>
-            </div>
-            {onNavigateToSettings ? (
-              <Button
-                variant="secondary"
-                className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)]"
-                onPress={onNavigateToSettings}
-              >
-                설정으로 이동
-              </Button>
-            ) : null}
-          </div>
-        </section>
+        <OrganizeOutputMissingCard onNavigateToSettings={onNavigateToSettings} />
       ) : null}
 
-      <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-2.5 py-2">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {previewResult ? (
-              <>
-                {hasPendingPreviewGroups && orderedPreviewGroups.length > 1 ? (
-                  <Button
-                    variant="secondary"
-                    className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[12px] text-[var(--app-foreground)]"
-                    isDisabled={savePipelineBusy || wizardStepIndex === 0}
-                    onPress={() =>
-                      setWizardStepIndex((step) => Math.max(0, step - 1))
-                    }
-                  >
-                    이전 그룹
-                  </Button>
-                ) : null}
-                <Button
-                  variant="secondary"
-                  className="h-8 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[12px] text-[var(--app-foreground)]"
-                  isDisabled={isLoadingPreview || savePipelineBusy}
-                  onPress={() => void handlePreview()}
-                >
-                  후보 다시 불러오기
-                </Button>
-                {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
-                  <Button
-                    variant="primary"
-                    className="h-8 rounded-xl bg-[var(--app-accent)] px-2.5 text-[12px] text-[var(--app-accent-foreground)]"
-                    isDisabled={
-                      isLoadingPreview ||
-                      savePipelineBusy ||
-                      orderedPreviewGroups.length === 0
-                    }
-                    onPress={() => enqueueSaveAllGroups()}
-                  >
-                    이후 그룹 전체 저장하기
-                  </Button>
-                ) : null}
-              </>
-            ) : (
-              <p className="text-[10px] leading-snug text-[var(--app-muted)]">
-                위에서 원본을 고르고 「정리 시작하기」로 후보를 만듭니다. 출력
-                폴더는 설정에서 지정합니다.
-              </p>
-            )}
-          </div>
-          {previewResult ? (
-            <p className="text-[10px] leading-snug text-[var(--app-muted)]">
-              그룹 메타 입력 후 카드에서 저장하거나 일괄 저장으로 이어서 처리합니다.
-              GPS 유무와 관계없이 같은 기준으로 그룹을 나눕니다.
-            </p>
-          ) : null}
-        </div>
-      </div>
+      <OrganizePreviewActionBar
+        previewResult={previewResult}
+        hasPendingPreviewGroups={hasPendingPreviewGroups}
+        orderedPreviewGroupCount={orderedPreviewGroups.length}
+        wizardStepIndex={wizardStepIndex}
+        isLoadingPreview={isLoadingPreview}
+        savePipelineBusy={savePipelineBusy}
+        onWizardPrev={() =>
+          setWizardStepIndex((step) => Math.max(0, step - 1))
+        }
+        onReloadPreview={() => void handlePreview()}
+        onSaveAllGroups={() => enqueueSaveAllGroups()}
+      />
 
       {errorMessage ? (
         <div className="rounded-[24px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1574,99 +494,24 @@ export function OrganizePage({
         </div>
       ) : null}
 
-      {bulkSaveActive && savePipelineBusy ? (
-        (() => {
-          const denom = photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview || 1
-          const overallPct = Math.min(
-            100,
-            Math.round((photosSavedCount / denom) * 100)
-          )
-          const targetGroups =
-            bulkRunStartIndex != null
-              ? orderedPreviewGroups.slice(bulkRunStartIndex)
-              : orderedPreviewGroups
-          const groupLines = targetGroups.map((g) => {
-            const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
-            const linePct = getGroupLinePercent(
-              phase,
-              runningSaveTarget,
-              g.groupKey,
-              activeSaveJobMeta,
-              photosSavedCount
-            )
-            return {
-              key: g.groupKey,
-              title: effectiveGroupTitle(g, groupTitleInputs),
-              phase,
-              linePct
-            }
-          })
-
-          return (
-            <SaveProgressCard
-              title="이후 그룹 일괄 저장 진행 중"
-              description="현재 위저드 위치부터 남은 그룹만 복사·인덱스에 반영합니다. 막대에는 원본 읽기·해시와 복사·썸네일이 함께 반영됩니다."
-              prepareProgressText={
-                prepareProgress
-                  ? `원본 읽기·해시 (현재 그룹) ${prepareProgress.completed} / ${prepareProgress.total}장`
-                  : null
-              }
-              overallPct={overallPct}
-              processedCount={photosSavedCount}
-              totalCount={denom}
-              groupLines={groupLines}
-              footerText="현재 그룹마다 원본 처리(절반)와 저장(절반)을 합산해 전체 막대가 움직입니다. 진행 중인 그룹은 끝날 때까지 걸릴 수 있습니다."
-              ariaBusy={runningSaveTarget !== null}
-              onCancelRemaining={() => cancelRemainingSaveJobs()}
-            />
-          )
-        })()
-      ) : null}
-
-      {hidePreviewPanelWhileSaving &&
-      previewResult &&
-      savePipelineBusy &&
-      hasPendingPreviewGroups &&
-      !bulkSaveActive ? (
-        (() => {
-          const denom = photoFlowTotal > 0 ? photoFlowTotal : totalPhotosInPreview || 1
-          const overallPct =
-            denom > 0 ? Math.min(100, Math.round((photosSavedCount / denom) * 100)) : 0
-          const groupLines = orderedPreviewGroups.map((g) => {
-            const phase = groupSavePhaseByKey[g.groupKey] ?? 'idle'
-            const linePct = getGroupLinePercent(
-              phase,
-              runningSaveTarget,
-              g.groupKey,
-              activeSaveJobMeta,
-              photosSavedCount
-            )
-            return {
-              key: g.groupKey,
-              title: effectiveGroupTitle(g, groupTitleInputs),
-              phase,
-              linePct
-            }
-          })
-
-          return (
-            <SaveProgressCard
-              title="저장 진행 중"
-              prepareProgressText={
-                prepareProgress
-                  ? `원본 읽기·해시 (현재 그룹) ${prepareProgress.completed} / ${prepareProgress.total}장`
-                  : null
-              }
-              overallPct={overallPct}
-              processedCount={photosSavedCount}
-              totalCount={denom}
-              groupLines={groupLines}
-              ariaBusy={runningSaveTarget !== null}
-              onCancelRemaining={() => cancelRemainingSaveJobs()}
-            />
-          )
-        })()
-      ) : null}
+      <OrganizeSaveProgressOverlays
+        bulkSaveActive={bulkSaveActive}
+        savePipelineBusy={savePipelineBusy}
+        hidePreviewPanelWhileSaving={hidePreviewPanelWhileSaving}
+        previewResult={previewResult}
+        hasPendingPreviewGroups={hasPendingPreviewGroups}
+        bulkRunStartIndex={bulkRunStartIndex}
+        orderedPreviewGroups={orderedPreviewGroups}
+        photoFlowTotal={photoFlowTotal}
+        totalPhotosInPreview={totalPhotosInPreview}
+        photosSavedCount={photosSavedCount}
+        prepareProgress={prepareProgress}
+        groupSavePhaseByKey={groupSavePhaseByKey}
+        runningSaveTarget={runningSaveTarget}
+        activeSaveJobMeta={activeSaveJobMeta}
+        groupTitleInputs={groupTitleInputs}
+        onCancelRemaining={() => cancelRemainingSaveJobs()}
+      />
       </div>
 
       {previewResult && !hidePreviewPanelWhileSaving ? (
@@ -1755,232 +600,27 @@ export function OrganizePage({
 
             {hasPendingPreviewGroups && wizardGroup ? (
               <div className="space-y-2">
-                {(() => {
-                  const group = wizardGroup
-                  const phaseForGroup =
-                    groupSavePhaseByKey[group.groupKey] ?? 'idle'
-                  const saveBusyForThisGroup =
-                    runningSaveTarget === group.groupKey ||
-                    saveJobQueue.some(
-                      (job) =>
-                        job.copyGroupKeysInThisRun.includes(group.groupKey)
-                    ) ||
-                    phaseForGroup === 'done'
-                  const isLastInWizard =
-                    orderedPreviewGroups.length > 0 &&
-                    wizardStepIndex >= orderedPreviewGroups.length - 1
-                  const saveButtonLabel = (() => {
-                    switch (phaseForGroup) {
-                      case 'saving':
-                        return '저장 중…'
-                      case 'queued':
-                        return '저장 대기'
-                      case 'done':
-                        return '저장 완료'
-                      case 'error':
-                        return '다시 저장'
-                      default:
-                        break
-                    }
-
-                    return isLastInWizard ? '마지막 그룹 저장' : '이 그룹 저장 및 복사'
-                  })()
-
-                  return (
-                  <Card
-                    key={group.groupKey}
-                    className="app-surface-card rounded-2xl border-0 p-2.5 shadow-none"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <h3 className="text-sm font-semibold text-[var(--app-foreground)]">
-                            {effectiveGroupTitle(group, groupTitleInputs)}
-                          </h3>
-                          <p className="text-sm text-[var(--app-muted)]">
-                            사진 {group.photoCount}장
-                            {group.representativeGps ? ' · GPS 기반 그룹' : ' · GPS 없음'}
-                          </p>
-                          <p className="text-xs text-[var(--app-muted)]">
-                            현재 기준: {formatMissingGpsGroupingBasisLabel(missingGpsGroupingBasis)}
-                            {' · '}
-                            실제 폴더: {formatMissingGpsFolderPattern(missingGpsGroupingBasis)}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {getMissingGpsCategoryLabel(group.missingGpsCategory) ? (
-                              <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-                                {getMissingGpsCategoryLabel(group.missingGpsCategory)}
-                              </span>
-                            ) : null}
-                          </div>
-                          {getAssignmentModeDescription(group) ? (
-                            <p className="text-xs text-[var(--app-muted)]">
-                              {getAssignmentModeDescription(group)}
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="rounded-full bg-[var(--app-surface-strong)] px-3 py-1 text-xs font-medium text-[var(--app-accent-strong)]">
-                          {group.groupKey}
-                        </div>
-                      </div>
-
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1.5 sm:gap-2">
-                          {group.representativePhotos.map((photo) => (
-                            <div key={photo.id} className="min-w-0">
-                              <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-                                <PendingPreviewImageBlock
-                                  photo={photo}
-                                  imageFailed={Boolean(
-                                    previewImageLoadFailedByPhotoId[photo.id]
-                                  )}
-                                  onImageError={() =>
-                                    setPreviewImageLoadFailedByPhotoId(
-                                      (current) => ({
-                                        ...current,
-                                        [photo.id]: true
-                                      })
-                                    )
-                                  }
-                                  imageHeightClass="h-14"
-                                  placeholderClassName="flex h-14 items-center justify-center bg-slate-200 px-1 text-center text-[10px] leading-tight text-slate-500"
-                                  imageAlt={photo.sourceFileName}
-                                />
-                              </div>
-                              <p
-                                className="mt-0.5 truncate text-[10px] font-medium text-slate-800"
-                                title={photo.sourceFileName}
-                              >
-                                {photo.sourceFileName}
-                              </p>
-                              <p
-                                className="truncate text-[10px] text-slate-500"
-                                title={photo.capturedAtIso ?? '촬영 시각 없음'}
-                              >
-                                {photo.capturedAtIso ?? '촬영 시각 없음'}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-
-                      <div className="mt-1 rounded-2xl border border-[var(--app-border)] bg-[color:color-mix(in_srgb,var(--app-surface-strong)_88%,var(--app-surface)_12%)] p-4 shadow-[0_1px_0_0_color-mix(in_srgb,var(--app-border)_65%,transparent)]">
-                        <div className="space-y-3">
-                          {group.suggestedTitles.length > 0 ? (
-                            <>
-                              <div className="space-y-2">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)]">
-                                  기본 그룹명 제안
-                                </p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {group.suggestedTitles.map((title) => (
-                                    <button
-                                      key={title}
-                                      type="button"
-                                      className="rounded-full border border-[color:color-mix(in_srgb,var(--app-accent)_35%,var(--app-border)_65%)] bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)] px-3 py-1.5 text-xs font-medium text-[var(--app-accent-strong)] transition hover:bg-[color:color-mix(in_srgb,var(--app-accent)_14%,var(--app-surface)_86%)]"
-                                      onClick={() =>
-                                        setGroupTitleInputs((current) => ({
-                                          ...current,
-                                          [group.groupKey]: title
-                                        }))
-                                      }
-                                    >
-                                      {title}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="h-px w-full bg-[color:color-mix(in_srgb,var(--app-border)_75%,transparent_25%)]" />
-                            </>
-                          ) : null}
-
-                          <div className="space-y-4">
-                            <div className="space-y-1.5">
-                              <div className="flex flex-wrap items-end justify-between gap-2">
-                                <span className="text-[13px] font-semibold text-[var(--app-foreground)]">
-                                  저장될 그룹명
-                                </span>
-                                <span className="text-[10px] text-[var(--app-muted)]">
-                                  인덱스·지도에 표시
-                                </span>
-                              </div>
-                              <Input
-                                value={groupTitleInputs[group.groupKey] ?? ''}
-                                onChange={(event) =>
-                                  setGroupTitleInputs((current) => ({
-                                    ...current,
-                                    [group.groupKey]: event.target.value
-                                  }))
-                                }
-                                placeholder={group.displayTitle}
-                                className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] shadow-[inset_0_1px_2px_color-mix(in_srgb,var(--app-foreground)_4%,transparent)] placeholder:text-[var(--app-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--app-accent)_40%,transparent)]"
-                              />
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <div className="flex flex-wrap items-end justify-between gap-2">
-                                <span className="text-[13px] font-semibold text-[var(--app-foreground)]">
-                                  동행인
-                                </span>
-                                <span className="text-[10px] text-[var(--app-muted)]">
-                                  쉼표로 구분
-                                </span>
-                              </div>
-                              <Input
-                                value={
-                                  groupCompanionsInputs[group.groupKey] ?? ''
-                                }
-                                onChange={(event) =>
-                                  setGroupCompanionsInputs((current) => ({
-                                    ...current,
-                                    [group.groupKey]: event.target.value
-                                  }))
-                                }
-                                placeholder="예: Alice, Bob"
-                                className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] shadow-[inset_0_1px_2px_color-mix(in_srgb,var(--app-foreground)_4%,transparent)] placeholder:text-[var(--app-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--app-accent)_40%,transparent)]"
-                              />
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <div className="flex flex-wrap items-end justify-between gap-2">
-                                <span className="text-[13px] font-semibold text-[var(--app-foreground)]">
-                                  메모
-                                </span>
-                                <span className="text-[10px] text-[var(--app-muted)]">
-                                  선택 · 그룹 상세에 표시
-                                </span>
-                              </div>
-                              <TextArea
-                                value={groupNotesInputs[group.groupKey] ?? ''}
-                                onChange={(event) =>
-                                  setGroupNotesInputs((current) => ({
-                                    ...current,
-                                    [group.groupKey]: event.target.value
-                                  }))
-                                }
-                                placeholder="여행 메모, 장소, 분위기 등을 적어 두세요."
-                                className="min-h-[5.75rem] w-full resize-y rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2.5 text-sm leading-relaxed text-[var(--app-foreground)] shadow-[inset_0_1px_2px_color-mix(in_srgb,var(--app-foreground)_4%,transparent)] placeholder:text-[var(--app-muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--app-accent)_40%,transparent)]"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {hasPendingPreviewGroups ? (
-                        <div className="flex justify-end border-t border-[var(--app-border)] pt-4">
-                          <Button
-                            variant="primary"
-                            className="rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)]"
-                            isDisabled={saveBusyForThisGroup}
-                            onPress={() => enqueueSaveCurrentGroup()}
-                          >
-                            {saveButtonLabel}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </Card>
-                  )
-                })()}
+                <OrganizeWizardGroupCard
+                  group={wizardGroup}
+                  missingGpsGroupingBasis={missingGpsGroupingBasis}
+                  orderedPreviewGroups={orderedPreviewGroups}
+                  wizardStepIndex={wizardStepIndex}
+                  saveJobQueue={saveJobQueue}
+                  runningSaveTarget={runningSaveTarget}
+                  groupSavePhaseByKey={groupSavePhaseByKey}
+                  groupTitleInputs={groupTitleInputs}
+                  setGroupTitleInputs={setGroupTitleInputs}
+                  groupCompanionsInputs={groupCompanionsInputs}
+                  setGroupCompanionsInputs={setGroupCompanionsInputs}
+                  groupNotesInputs={groupNotesInputs}
+                  setGroupNotesInputs={setGroupNotesInputs}
+                  previewImageLoadFailedByPhotoId={previewImageLoadFailedByPhotoId}
+                  setPreviewImageLoadFailedByPhotoId={
+                    setPreviewImageLoadFailedByPhotoId
+                  }
+                  hasPendingPreviewGroups={hasPendingPreviewGroups}
+                  onEnqueueSaveCurrentGroup={() => enqueueSaveCurrentGroup()}
+                />
               </div>
             ) : (
               <div className="rounded-[24px] border border-dashed border-[var(--app-border)] bg-[var(--app-surface)] p-6 text-center">
@@ -1999,716 +639,46 @@ export function OrganizePage({
       ) : null}
 
       {summary ? (
-        <div className="w-full shrink-0 pb-1">
-        <section className="rounded-[28px] border border-[color:color-mix(in_srgb,var(--app-accent)_26%,var(--app-border)_74%)] bg-[color:color-mix(in_srgb,var(--app-accent)_10%,var(--app-surface)_90%)] p-5">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-[var(--app-foreground)]">
-                실행 결과
-              </h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
-                <p className="text-xs text-[var(--app-muted)]">스캔 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.scannedCount}
-                </p>
-              </div>
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
-                <p className="text-xs text-[var(--app-muted)]">증분 스킵 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.skippedUnchangedCount}
-                </p>
-              </div>
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
-                <p className="text-xs text-[var(--app-muted)]">유지 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.keptCount}
-                </p>
-              </div>
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
-                <p className="text-xs text-[var(--app-muted)]">신규 복사 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.copiedCount}
-                </p>
-              </div>
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-4 py-3">
-                <p className="text-xs text-[var(--app-muted)]">그룹 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.groupCount}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <button
-                type="button"
-                className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
-                  openScanResultDetail === 'inBatchDup'
-                    ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
-                    : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
-                }`}
-                onClick={() => handleToggleScanResultDetail('inBatchDup')}
-              >
-                <p className="text-xs text-[var(--app-muted)]">중복 (같은 실행 내)</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.duplicateCount}
-                </p>
-                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 쌍 비교</p>
-              </button>
-              <button
-                type="button"
-                className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
-                  openScanResultDetail === 'incrementalSkip'
-                    ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
-                    : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
-                }`}
-                onClick={() => handleToggleScanResultDetail('incrementalSkip')}
-              >
-                <p className="text-xs text-[var(--app-muted)]">증분 스킵 (준비 단계)</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.skippedUnchangedCount}
-                </p>
-                <p className="mt-1 text-[11px] text-[var(--app-muted)]">
-                  sourcePath + size + mtime 기준
-                </p>
-              </button>
-              <button
-                type="button"
-                className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
-                  openScanResultDetail === 'existingSkip'
-                    ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
-                    : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
-                }`}
-                onClick={() => handleToggleScanResultDetail('existingSkip')}
-              >
-                <p className="text-xs text-[var(--app-muted)]">기존 출력과 동일 (스킵)</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.skippedExistingCount}
-                </p>
-                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 경로 비교</p>
-              </button>
-              <button
-                type="button"
-                className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
-                  openScanResultDetail === 'warnings'
-                    ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
-                    : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
-                }`}
-                onClick={() => handleToggleScanResultDetail('warnings')}
-              >
-                <p className="text-xs text-[var(--app-muted)]">경고 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.warningCount}
-                </p>
-                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 목록</p>
-              </button>
-              <button
-                type="button"
-                className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
-                  openScanResultDetail === 'failures'
-                    ? 'border-[var(--app-accent)] bg-[color:color-mix(in_srgb,var(--app-accent)_18%,var(--app-surface-strong)_82%)] shadow-sm'
-                    : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_8%,var(--app-surface)_92%)]'
-                }`}
-                onClick={() => handleToggleScanResultDetail('failures')}
-              >
-                <p className="text-xs text-[var(--app-muted)]">실패 수</p>
-                <p className="text-xl font-semibold text-[var(--app-foreground)]">
-                  {summary.failureCount}
-                </p>
-                <p className="mt-1 text-[11px] text-[var(--app-muted)]">탭하여 목록</p>
-              </button>
-            </div>
-
-            {openScanResultDetail === 'inBatchDup' ? (
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-800">
-                      같은 실행 안에서 동일 파일(해시) 검토
-                    </p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      canonical 원본과 이번 실행에서 생략된 duplicate 원본을 같이
-                      확인할 수 있습니다.
-                    </p>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    필터 결과 {reviewedInBatchDuplicates.length} / 전체{' '}
-                    {groupedInBatchDuplicates.length}
-                  </p>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    variant="secondary"
-                    className="rounded-2xl border border-[var(--app-border)] bg-white text-xs font-medium text-[var(--app-foreground)]"
-                    onPress={() =>
-                      void copyResultDetail(
-                        formatDuplicateListForClipboard(reviewedInBatchDuplicates),
-                        '중복 검토 목록을 복사했습니다.'
-                      )
-                    }
-                  >
-                    목록 복사
-                  </Button>
-                </div>
-                <label className="mt-3 block space-y-1">
-                  <span className="text-[11px] font-medium text-slate-600">
-                    sourcePath 검색
-                  </span>
-                  <Input
-                    value={duplicatePathQuery}
-                    onChange={(event) => setDuplicatePathQuery(event.target.value)}
-                    placeholder="canonical 또는 duplicate 경로 일부 검색"
-                    className="rounded-2xl border border-[var(--app-border)] bg-white"
-                  />
-                </label>
-                <label className="mt-3 block space-y-1">
-                  <span className="text-[11px] font-medium text-slate-600">
-                    정렬
-                  </span>
-                  <select
-                    value={duplicateSort}
-                    onChange={(event) =>
-                      setDuplicateSort(event.target.value as DuplicateSortOption)
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                  >
-                    <option value="duplicates-desc">duplicate 수 많은 순</option>
-                    <option value="path-asc">canonical 경로순</option>
-                  </select>
-                </label>
-                {reviewedInBatchDuplicates.length === 0 ? (
-                  <p className="mt-2 text-sm text-slate-600">해당 없음</p>
-                ) : (
-                  <ul className="mt-3 space-y-4">
-                    {reviewedInBatchDuplicates.map((dupGroup) => (
-                      <li
-                        key={dupGroup.canonicalPhotoId}
-                        className="rounded-[20px] border border-slate-200 p-3"
-                      >
-                        <div className="mb-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
-                          <span className="rounded-full bg-slate-100 px-2 py-1">
-                            canonical 1장
-                          </span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1">
-                            duplicate {dupGroup.duplicateSourcePaths.length}장
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                          <div className="sm:w-2/5">
-                            <p className="text-[11px] font-medium text-slate-600">
-                              대표(저장)
-                            </p>
-                            <div className="mt-1 overflow-hidden rounded border border-slate-200 bg-slate-100">
-                              <img
-                                src={localImageFileUrl(dupGroup.canonicalSourcePath)}
-                                alt=""
-                                className="h-40 w-full object-contain"
-                              />
-                            </div>
-                            <p className="mt-1 break-all text-[11px] text-slate-700">
-                              {dupGroup.canonicalSourcePath}
-                            </p>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-medium text-slate-600">
-                              중복(복사 생략){' '}
-                              {dupGroup.duplicateSourcePaths.length}장
-                            </p>
-                            <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                              {dupGroup.duplicateSourcePaths.map((path, idx) => (
-                                <div
-                                  key={`${path}-${idx}`}
-                                  className="overflow-hidden rounded border border-slate-200 bg-slate-100"
-                                >
-                                  <img
-                                    src={localImageFileUrl(path)}
-                                    alt=""
-                                    className="h-16 w-full object-cover"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                            <ul className="mt-2 space-y-1">
-                              {dupGroup.duplicateSourcePaths.map((path) => (
-                                <li
-                                  key={path}
-                                  className="break-all text-[11px] text-slate-600"
-                                >
-                                  {path}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : null}
-
-            {openScanResultDetail === 'incrementalSkip' ? (
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-800">
-                      증분 재스캔으로 건너뛴 입력 검토
-                    </p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      이전 저장 fingerprint 와 현재 `sourcePath + size + mtime` 이
-                      같아 준비 단계에서 제외된 원본 파일입니다.
-                    </p>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    필터 결과 {reviewedIncrementalSkips.length} / 전체{' '}
-                    {summary.skippedUnchangedDetails.length}
-                  </p>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    variant="secondary"
-                    className="rounded-2xl border border-[var(--app-border)] bg-white text-xs font-medium text-[var(--app-foreground)]"
-                    onPress={() =>
-                      void copyResultDetail(
-                        formatIncrementalSkipListForClipboard(reviewedIncrementalSkips),
-                        '증분 스킵 목록을 복사했습니다.'
-                      )
-                    }
-                  >
-                    목록 복사
-                  </Button>
-                </div>
-                <label className="mt-3 block space-y-1">
-                  <span className="text-[11px] font-medium text-slate-600">
-                    sourcePath 검색
-                  </span>
-                  <Input
-                    value={incrementalSkipPathQuery}
-                    onChange={(event) =>
-                      setIncrementalSkipPathQuery(event.target.value)
-                    }
-                    placeholder="증분 스킵된 원본 경로 검색"
-                    className="rounded-2xl border border-[var(--app-border)] bg-white"
-                  />
-                </label>
-                <label className="mt-3 block space-y-1">
-                  <span className="text-[11px] font-medium text-slate-600">
-                    정렬
-                  </span>
-                  <select
-                    value={incrementalSkipSort}
-                    onChange={(event) =>
-                      setIncrementalSkipSort(
-                        event.target.value as IncrementalSkipSortOption
-                      )
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                  >
-                    <option value="path-asc">경로순</option>
-                    <option value="mtime-desc">mtime 최신순</option>
-                  </select>
-                </label>
-                {reviewedIncrementalSkips.length === 0 ? (
-                  <p className="mt-2 text-sm text-slate-600">해당 없음</p>
-                ) : (
-                  <ul className="mt-3 space-y-2">
-                    {reviewedIncrementalSkips.map((row, index) => (
-                      <li
-                        key={`${row.sourcePath}-${index}`}
-                        className="rounded-[20px] border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800"
-                      >
-                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
-                          <span className="rounded-full bg-white px-2 py-1">
-                            {row.sourceFileName}
-                          </span>
-                          <span className="rounded-full bg-white px-2 py-1">
-                            {row.sourceFingerprint.sizeBytes} bytes
-                          </span>
-                          <span className="rounded-full bg-white px-2 py-1">
-                            mtime{' '}
-                            {new Date(
-                              row.sourceFingerprint.modifiedAtMs
-                            ).toLocaleString()}
-                          </span>
-                        </div>
-                        <p className="mt-2 break-all text-slate-700">
-                          {row.sourcePath}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : null}
-
-            {openScanResultDetail === 'existingSkip' ? (
-              <div className="rounded-[24px] border border-[var(--app-border)] bg-[var(--app-surface-strong)] p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-800">
-                      기존 출력과 동일해 건너뛴 항목 검토
-                    </p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      source 원본과 기존 output 대상 경로를 함께 비교할 수 있습니다.
-                    </p>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    필터 결과 {reviewedExistingSkips.length} / 전체{' '}
-                    {summary.existingOutputSkipDetails.length}
-                  </p>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    variant="secondary"
-                    className="rounded-2xl border border-[var(--app-border)] bg-white text-xs font-medium text-[var(--app-foreground)]"
-                    onPress={() =>
-                      void copyResultDetail(
-                        formatExistingSkipListForClipboard(reviewedExistingSkips),
-                        '기존 출력 스킵 목록을 복사했습니다.'
-                      )
-                    }
-                  >
-                    목록 복사
-                  </Button>
-                </div>
-                <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                  <label className="space-y-1">
-                    <span className="text-[11px] font-medium text-slate-600">
-                      경로 검색
-                    </span>
-                    <Input
-                      value={existingSkipPathQuery}
-                      onChange={(event) => setExistingSkipPathQuery(event.target.value)}
-                      placeholder="sourcePath 또는 outputRelativePath 검색"
-                      className="rounded-2xl border border-[var(--app-border)] bg-white"
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-[11px] font-medium text-slate-600">
-                      SHA-256 검색
-                    </span>
-                    <Input
-                      value={existingSkipHashQuery}
-                      onChange={(event) => setExistingSkipHashQuery(event.target.value)}
-                      placeholder="해시 앞부분 검색"
-                      className="rounded-2xl border border-[var(--app-border)] bg-white"
-                    />
-                  </label>
-                </div>
-                <label className="mt-3 block space-y-1">
-                  <span className="text-[11px] font-medium text-slate-600">
-                    정렬
-                  </span>
-                  <select
-                    value={existingSkipSort}
-                    onChange={(event) =>
-                      setExistingSkipSort(
-                        event.target.value as ExistingSkipSortOption
-                      )
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                  >
-                    <option value="hash-asc">SHA-256 기준</option>
-                    <option value="path-asc">원본 경로순</option>
-                  </select>
-                </label>
-                {reviewedExistingSkips.length === 0 ? (
-                  <p className="mt-2 text-sm text-slate-600">해당 없음</p>
-                ) : (
-                  <ul className="mt-3 space-y-3">
-                    {reviewedExistingSkips.map((row, index) => (
-                      <li
-                        key={`${row.sourcePhotoId}-${index}`}
-                        className="rounded-md border border-slate-200 p-3 text-sm text-slate-800"
-                      >
-                        <div className="mb-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
-                          <span className="rounded-full bg-slate-100 px-2 py-1">
-                            sourcePhotoId: {row.sourcePhotoId}
-                          </span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1">
-                            SHA-256: {row.sha256.slice(0, 12)}...
-                          </span>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div>
-                            <p className="text-[11px] font-medium text-slate-600">
-                              원본
-                            </p>
-                            <div className="mt-1 overflow-hidden rounded border border-slate-200 bg-slate-100">
-                              <img
-                                src={localImageFileUrl(row.sourcePath)}
-                                alt=""
-                                className="h-28 w-full object-contain"
-                              />
-                            </div>
-                            <p className="mt-1 break-all text-[11px]">{row.sourcePath}</p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] font-medium text-slate-600">
-                              기존 출력
-                            </p>
-                            <div className="mt-1 overflow-hidden rounded border border-slate-200 bg-slate-100">
-                              <img
-                                src={localImageFileUrl(
-                                  outputRoot
-                                    ? joinPathSegments(
-                                        outputRoot,
-                                        row.existingOutputRelativePath
-                                      )
-                                    : row.existingOutputRelativePath
-                                )}
-                                alt=""
-                                className="h-28 w-full object-contain"
-                              />
-                            </div>
-                            <p className="mt-1 break-all text-[11px]">
-                              {outputRoot
-                                ? joinPathSegments(
-                                    outputRoot,
-                                    row.existingOutputRelativePath
-                                  )
-                                : row.existingOutputRelativePath}
-                            </p>
-                            <p className="mt-1 text-[11px] text-slate-500">
-                              SHA-256: {row.sha256}
-                            </p>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : null}
-
-            {openScanResultDetail === 'warnings' ||
-            openScanResultDetail === 'failures' ? (
-              <div
-                className={`rounded-lg border p-4 ${
-                  openScanResultDetail === 'failures'
-                    ? 'border-red-200 bg-red-50'
-                    : 'border-amber-200 bg-amber-50'
-                }`}
-              >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <p
-                      className={`text-xs font-semibold ${
-                        openScanResultDetail === 'failures'
-                          ? 'text-red-950'
-                          : 'text-amber-950'
-                      }`}
-                    >
-                      실행 이슈 검토
-                    </p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      severity, stage, code, sourcePath 기준으로 다시 확인할 수
-                      있습니다.
-                    </p>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    필터 결과 {reviewedIssues.length} / 전체 {summary.issues.length}
-                  </p>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    onClick={() =>
-                      void copyResultDetail(
-                        formatIssueListForClipboard(reviewedIssues),
-                        '이슈 검토 목록을 복사했습니다.'
-                      )
-                    }
-                  >
-                    목록 복사
-                  </button>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {([
-                    ['all', '전체'],
-                    ['warning', '경고'],
-                    ['error', '실패']
-                  ] as const).map(([value, label]) => (
-                    <button
-                      type="button"
-                      key={value}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
-                        issueSeverityFilter === value
-                          ? 'border-slate-900 bg-slate-900 text-white'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
-                      onClick={() => setIssueSeverityFilter(value)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {ISSUE_QUICK_FILTERS.map((filter) => (
-                    <button
-                      type="button"
-                      key={filter.key}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
-                        isIssueQuickFilterActive(
-                          filter,
-                          issueStageFilter,
-                          issueCodeQuery
-                        )
-                          ? 'border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
-                          : 'border-[var(--app-border)] bg-[var(--app-surface-strong)] text-[var(--app-foreground)] hover:bg-[color:color-mix(in_srgb,var(--app-accent)_6%,var(--app-surface)_94%)]'
-                      }`}
-                      onClick={() => applyIssueQuickFilter(filter)}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-3 grid gap-3 lg:grid-cols-3">
-                  <label className="space-y-1">
-                    <span className="text-[11px] font-medium text-slate-600">
-                      stage
-                    </span>
-                    <select
-                      value={issueStageFilter}
-                      onChange={(event) =>
-                        setIssueStageFilter(
-                          event.target.value as 'all' | ScanPhotoLibraryIssue['stage']
-                        )
-                      }
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                    >
-                      <option value="all">전체 stage</option>
-                      {issueStageOptions.map((stage) => (
-                        <option key={stage} value={stage}>
-                          {formatIssueStageLabel(stage)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-[11px] font-medium text-slate-600">
-                      code 검색
-                    </span>
-                    <input
-                      value={issueCodeQuery}
-                      onChange={(event) => setIssueCodeQuery(event.target.value)}
-                      placeholder="예: metadata-missing"
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-[11px] font-medium text-slate-600">
-                      sourcePath 검색
-                    </span>
-                    <input
-                      value={issueSourcePathQuery}
-                      onChange={(event) => setIssueSourcePathQuery(event.target.value)}
-                      placeholder="경로 일부 검색"
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
-                    />
-                  </label>
-                </div>
-                <label className="mt-3 block space-y-1">
-                  <span className="text-[11px] font-medium text-slate-600">
-                    정렬
-                  </span>
-                  <select
-                    value={issueSort}
-                    onChange={(event) =>
-                      setIssueSort(event.target.value as IssueSortOption)
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                  >
-                    <option value="severity-stage-path">severity/stage 기준</option>
-                    <option value="path-asc">sourcePath 기준</option>
-                    <option value="code-asc">code 기준</option>
-                  </select>
-                </label>
-
-                {reviewedIssues.length === 0 ? (
-                  <p className="mt-3 text-sm text-slate-600">
-                    현재 필터 조건에 맞는 이슈가 없습니다.
-                  </p>
-                ) : (
-                  <>
-                    <div className="mt-4 hidden grid-cols-[90px_100px_180px_minmax(0,1fr)] gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 lg:grid">
-                      <span>severity</span>
-                      <span>stage</span>
-                      <span>code</span>
-                      <span>sourcePath</span>
-                    </div>
-                    <ul className="mt-2 space-y-2">
-                      {reviewedIssues.map((issue, index) => (
-                        <li
-                          key={`${issue.sourcePath}-${issue.code}-${index}`}
-                          className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-800"
-                        >
-                          <div className="grid gap-2 lg:grid-cols-[90px_100px_180px_minmax(0,1fr)] lg:items-start lg:gap-3">
-                            <div>
-                              <p className="text-[11px] font-medium text-slate-500 lg:hidden">
-                                severity
-                              </p>
-                              <span
-                                className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${getIssueSeverityBadgeClass(issue.severity)}`}
-                              >
-                                {formatIssueSeverityLabel(issue.severity)}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-medium text-slate-500 lg:hidden">
-                                stage
-                              </p>
-                              <p className="font-medium text-slate-700">
-                                {formatIssueStageLabel(issue.stage)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-medium text-slate-500 lg:hidden">
-                                code
-                              </p>
-                              <p className="font-mono text-[11px] text-slate-700">
-                                {issue.code}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-medium text-slate-500 lg:hidden">
-                                sourcePath
-                              </p>
-                              <p className="break-all text-slate-800">
-                                {issue.sourcePath}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-3 text-[11px] text-slate-600">
-                            {issue.photoId ? <p>photoId: {issue.photoId}</p> : null}
-                            {issue.outputRelativePath ? (
-                              <p className="break-all">
-                                출력 상대경로: {issue.outputRelativePath}
-                              </p>
-                            ) : null}
-                            {issue.destinationPath ? (
-                              <p className="break-all">
-                                대상 경로: {issue.destinationPath}
-                              </p>
-                            ) : null}
-                            <p className="text-xs text-slate-800">{issue.message}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </div>
-            ) : null}
-          </div>
-        </section>
-        </div>
+        <OrganizeScanResultDetailPanels
+          summary={summary}
+          outputRoot={outputRoot}
+          openScanResultDetail={openScanResultDetail}
+          handleToggleScanResultDetail={handleToggleScanResultDetail}
+          duplicatePathQuery={duplicatePathQuery}
+          setDuplicatePathQuery={setDuplicatePathQuery}
+          duplicateSort={duplicateSort}
+          setDuplicateSort={setDuplicateSort}
+          incrementalSkipPathQuery={incrementalSkipPathQuery}
+          setIncrementalSkipPathQuery={setIncrementalSkipPathQuery}
+          incrementalSkipSort={incrementalSkipSort}
+          setIncrementalSkipSort={setIncrementalSkipSort}
+          existingSkipPathQuery={existingSkipPathQuery}
+          setExistingSkipPathQuery={setExistingSkipPathQuery}
+          existingSkipHashQuery={existingSkipHashQuery}
+          setExistingSkipHashQuery={setExistingSkipHashQuery}
+          existingSkipSort={existingSkipSort}
+          setExistingSkipSort={setExistingSkipSort}
+          issueSeverityFilter={issueSeverityFilter}
+          setIssueSeverityFilter={setIssueSeverityFilter}
+          issueStageFilter={issueStageFilter}
+          setIssueStageFilter={setIssueStageFilter}
+          issueCodeQuery={issueCodeQuery}
+          setIssueCodeQuery={setIssueCodeQuery}
+          issueSourcePathQuery={issueSourcePathQuery}
+          setIssueSourcePathQuery={setIssueSourcePathQuery}
+          issueSort={issueSort}
+          setIssueSort={setIssueSort}
+          issueStageOptions={issueStageOptions}
+          applyIssueQuickFilter={applyIssueQuickFilter}
+          copyResultDetail={copyResultDetail}
+          groupedInBatchDuplicates={groupedInBatchDuplicates}
+          reviewedInBatchDuplicates={reviewedInBatchDuplicates}
+          reviewedIncrementalSkips={reviewedIncrementalSkips}
+          reviewedExistingSkips={reviewedExistingSkips}
+          reviewedIssues={reviewedIssues}
+        />
       ) : null}
+
     </div>
   )
 }
