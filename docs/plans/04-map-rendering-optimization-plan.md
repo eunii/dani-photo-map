@@ -8,7 +8,6 @@
 ## 현재 상태 요약
 대상 파일:
 - [`src/presentation/renderer/components/map/PhotoGroupMap.tsx`](C:/workspace/cursor/Photo/src/presentation/renderer/components/map/PhotoGroupMap.tsx)
-- [`src/presentation/renderer/components/GroupsMap.tsx`](C:/workspace/cursor/Photo/src/presentation/renderer/components/GroupsMap.tsx)
 - [`src/presentation/renderer/view-models/map/mapPageSelectors.ts`](C:/workspace/cursor/Photo/src/presentation/renderer/view-models/map/mapPageSelectors.ts)
 - [`src/presentation/renderer/pages/BrowsePage.tsx`](C:/workspace/cursor/Photo/src/presentation/renderer/pages/BrowsePage.tsx)
 
@@ -16,8 +15,6 @@
 - `PhotoGroupMap` 는 `source.setData()` 후 `clearMarkers()` 를 호출하고 HTML 마커를 전부 다시 만든다.
 - `updateMarkerPresentation()` 는 `move`, `zoom`, `selectedGroupId` 변경마다 반복 실행된다.
 - 선택 그룹이 바뀌면 상세 로딩과 지도 중심 이동이 함께 일어난다.
-- `GroupsMap` 도 마커와 팝업을 반복 생성하는 구조다.
-
 ## 현재 문제 구간
 핵심 구간:
 - `clearMarkers()`
@@ -84,8 +81,7 @@
 2. marker diff update 구현
 3. `setData` 호출 조건 정리
 4. `updateMarkerPresentation()` 트리거 축소
-5. `GroupsMap` 에 동일 패턴 일부 적용
-6. 필요 시 selector 메모이제이션 점검
+5. 필요 시 selector 메모이제이션 점검
 
 ## 검증 포인트
 

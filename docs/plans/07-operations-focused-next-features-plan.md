@@ -121,7 +121,7 @@
 - 최근 변경 그룹 보기
 - duplicate 관련 탐색 진입점
 
-### SettingsPage
+### 설정 UI (`SettingsDrawer` 등)
 강화 후보:
 - 앱 버전
 - 배포 채널/업데이트 정책 안내

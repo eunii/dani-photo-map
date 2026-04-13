@@ -82,7 +82,7 @@
   - 그룹 간 사진 이동
 - 그룹 편집 성공 메시지와 리로드 흐름 정리
 - 지도 마커 diff 업데이트 기반 재사용
-- `PhotoGroupMap` / `GroupsMap` 마커 전체 재생성 감소
+- `PhotoGroupMap` 마커 전체 재생성 감소
 - duplicate canonical 로직 공통 서비스 추출
 - renderer의 그룹 제목 포맷터 경계 정리
 - Electron main use case 팩토리 분리
