@@ -227,15 +227,7 @@ export function OutputFolderTreePanel({
             폴더 트리
           </h3>
         </div>
-        <Button
-          variant={rootSelected ? 'primary' : 'secondary'}
-          size="sm"
-          className={`h-7 shrink-0 rounded-lg px-2 py-0 text-[12px] font-medium ${
-            rootSelected
-              ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
-              : 'border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] hover:bg-[var(--app-surface)]/90'
-          }`}
-          aria-expanded={expandableKeys.size > 0 ? treeFullyExpanded : undefined}
+        <span
           title={
             expandableKeys.size === 0
               ? '루트로 이동'
@@ -243,10 +235,22 @@ export function OutputFolderTreePanel({
                 ? '트리 전체 접기'
                 : '루트로 이동 후 트리 전체 펼치기'
           }
-          onPress={handleHomePress}
+          className="inline-flex"
         >
-          홈 (전체 보기)
-        </Button>
+          <Button
+            variant={rootSelected ? 'primary' : 'secondary'}
+            size="sm"
+            className={`h-7 shrink-0 rounded-lg px-2 py-0 text-[12px] font-medium ${
+              rootSelected
+                ? 'bg-[var(--app-accent)] text-[var(--app-accent-foreground)]'
+                : 'border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-foreground)] hover:bg-[var(--app-surface)]/90'
+            }`}
+            aria-expanded={expandableKeys.size > 0 ? treeFullyExpanded : undefined}
+            onPress={handleHomePress}
+          >
+            홈 (전체 보기)
+          </Button>
+        </span>
       </div>
       <div className="app-scroll min-h-0 flex-1 px-1.5 pt-1.5 pb-6">
         <ul className="space-y-px">
