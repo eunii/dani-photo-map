@@ -17,15 +17,6 @@ import type {
 const ALLOWED_INVOKE_CHANNELS = new Set<string>(Object.values(photoAppInvokeChannels))
 
 export const preloadBridge: PreloadBridge = {
-  async getAppInfo() {
-    return {
-      name: 'Dani Photo Map',
-      version: '0.1.0'
-    }
-  },
-  async ping() {
-    return 'pong'
-  },
   pathToFileUrl(absolutePath: string) {
     const trimmed = absolutePath.trim()
 

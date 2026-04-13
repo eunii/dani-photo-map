@@ -15,11 +15,6 @@ export type {
   InBatchDuplicateDetail
 }
 
-export interface AppInfo {
-  name: string
-  version: string
-}
-
 export interface DirectorySelectionOptions {
   title: string
   buttonLabel: string
@@ -323,8 +318,6 @@ export interface PhotoAppInvokeResponseMap {
 }
 
 export interface PreloadBridge {
-  getAppInfo: () => Promise<AppInfo>
-  ping: () => Promise<string>
   pathToFileUrl: (absolutePath: string) => string
   selectDirectory: (
     options: DirectorySelectionOptions
