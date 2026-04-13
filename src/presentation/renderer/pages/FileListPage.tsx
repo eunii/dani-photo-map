@@ -9,6 +9,12 @@ import {
 import { Button } from '@heroui/react'
 
 import { buildGroupAwarePhotoOutputRelativePath } from '@domain/services/GroupAwarePhotoNamingService'
+import { FileListDeleteFolderDialog } from '@presentation/renderer/components/fileList/FileListDeleteFolderDialog'
+import { FileListDeletePhotosDialog } from '@presentation/renderer/components/fileList/FileListDeletePhotosDialog'
+import { FileListMovePhotosDialog } from '@presentation/renderer/components/fileList/FileListMovePhotosDialog'
+import { FileListPhotoPreviewPanel } from '@presentation/renderer/components/fileList/FileListPhotoPreviewPanel'
+import { FileListRenameGroupDialog } from '@presentation/renderer/components/fileList/FileListRenameGroupDialog'
+import { FileListToolbarStrip } from '@presentation/renderer/components/fileList/FileListToolbarStrip'
 import { BreadcrumbDropdown } from '@presentation/renderer/components/files/BreadcrumbDropdown'
 import { OutputFolderTreePanel } from '@presentation/renderer/components/OutputFolderTreePanel'
 import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
@@ -37,76 +43,20 @@ import {
   listSubfoldersAtPath as listGroupSubfoldersAtPath
 } from '@presentation/renderer/view-models/groupFolderNavigation'
 import { formatPathSegmentLabel } from '@presentation/renderer/view-models/outputPathNavigation'
-
-const LIST_CHUNK = 150
-
-/** 목적지: 년·월만 (가운데 폴더 없음) */
-const DEST_YEAR_MONTH_ONLY = '__flat__'
-/** 드롭다운: 직접 입력과 목록이 일치하지 않음 */
-const DEST_CUSTOM = '__custom__'
+import {
+  DEST_CUSTOM,
+  DEST_YEAR_MONTH_ONLY,
+  LIST_CHUNK
+} from '@presentation/renderer/pages/fileList/fileListPageConstants'
+import {
+  folderLabelMatches,
+  folderRenameLabelWithoutDate,
+  formatCapturedLabel,
+  toPreviewTimestamp
+} from '@presentation/renderer/pages/fileList/fileListPageFormat'
 
 interface FileListPageProps {
   onNavigateToSettings?: () => void
-}
-
-function normalizeFolderLabelForMatch(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/_+/g, '_')
-}
-
-function folderLabelMatches(input: string, folderLabel: string): boolean {
-  return (
-    normalizeFolderLabelForMatch(input) ===
-    normalizeFolderLabelForMatch(folderLabel)
-  )
-}
-
-/** 이름 변경 UI: 자동 제목 앞의 년·월(·일) 접두 제거. 남는 것이 없으면 원문 유지 */
-function folderRenameLabelWithoutDate(raw: string): string {
-  const t = raw.trim()
-  if (!t) {
-    return ''
-  }
-  const stripped = stripLeadingDateFromGroupTitle(t)
-  return stripped.length > 0 ? stripped : t
-}
-
-function formatCapturedLabel(iso?: string): string {
-  if (!iso) {
-    return '—'
-  }
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) {
-    return iso
-  }
-  return d.toLocaleString()
-}
-
-function toPreviewTimestamp(capturedAtIso?: string) {
-  if (!capturedAtIso) {
-    return undefined
-  }
-
-  const date = new Date(capturedAtIso)
-
-  if (Number.isNaN(date.getTime())) {
-    return undefined
-  }
-
-  return {
-    iso: capturedAtIso,
-    year: String(date.getUTCFullYear()).padStart(4, '0'),
-    month: String(date.getUTCMonth() + 1).padStart(2, '0'),
-    day: String(date.getUTCDate()).padStart(2, '0'),
-    time: [
-      String(date.getUTCHours()).padStart(2, '0'),
-      String(date.getUTCMinutes()).padStart(2, '0'),
-      String(date.getUTCSeconds()).padStart(2, '0')
-    ].join('')
-  }
 }
 
 export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
@@ -676,47 +626,16 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
 
       <section className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden">
         {outputRoot ? (
-          <div className="shrink-0 rounded-xl bg-[var(--app-surface-strong)] px-2 py-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-            <div className="rounded-full bg-[var(--app-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--app-foreground)]">
-              전체 {totalCount}장
-            </div>
-            {pathSegments.length > 0 ? (
-              <div
-                className="rounded-full bg-[var(--app-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--app-foreground)]"
-                title="가장 안쪽 폴더에 있는 파일까지 모두 더한 수입니다."
-              >
-                이 경로 합계 {subtreeCount}장
-              </div>
-            ) : null}
-            {pathSegments.length > 0 && folderCount < subtreeCount ? (
-              <div
-                className="rounded-full bg-[var(--app-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--app-muted)]"
-                title="이 경로 폴더에 직접 들어 있는 파일만. 목록에도 이 기준으로만 나옵니다."
-              >
-                이 폴더에만 {folderCount}장
-              </div>
-            ) : null}
-            {hasMore ? (
-              <div className="rounded-full bg-[var(--app-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--app-muted)]">
-                목록 표시 {visibleRows.length} / 직접 {folderCount}
-              </div>
-            ) : null}
-            <label className="ml-auto flex items-center gap-1.5 text-[11px] text-[var(--app-muted)]">
-              정렬
-              <select
-                value={sortOption}
-                onChange={(event) =>
-                  setSortOption(event.target.value as PhotoListSortOption)
-                }
-                className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-[11px] text-[var(--app-foreground)]"
-              >
-                <option value="captured-desc">촬영일 최신순</option>
-                <option value="filename-asc">파일명 순</option>
-              </select>
-            </label>
-            </div>
-          </div>
+          <FileListToolbarStrip
+            totalCount={totalCount}
+            pathSegmentCount={pathSegments.length}
+            subtreeCount={subtreeCount}
+            folderCount={folderCount}
+            hasMore={hasMore}
+            visibleRowsLength={visibleRows.length}
+            sortOption={sortOption}
+            onSortChange={setSortOption}
+          />
         ) : null}
 
         {!outputRoot ? (
@@ -999,62 +918,10 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                   </div>
                 </div>
 
-                <div className="min-h-0 min-w-0 lg:h-full">
-                  <div className="flex h-full min-h-0 flex-col rounded-xl bg-[var(--app-surface-strong)] p-2">
-                    <h2 className="text-xs font-semibold text-slate-900">미리보기</h2>
-                    {!selectedRow ? (
-                      <p className="mt-2 text-xs leading-relaxed text-slate-600">
-                        목록에서 사진을 선택하면 썸네일 미리보기가 표시됩니다.
-                      </p>
-                    ) : (
-                      <div className="app-scroll mt-2 min-h-0 flex-1 space-y-2 pr-0.5">
-                        <div className="overflow-hidden rounded-lg bg-[var(--app-surface)]">
-                          {previewThumbUrl ? (
-                            <img
-                              src={previewThumbUrl}
-                              alt={selectedRow.photo.sourceFileName}
-                              loading="lazy"
-                              decoding="async"
-                              className="max-h-[min(38vh,360px)] w-full object-contain"
-                            />
-                          ) : (
-                            <div className="flex min-h-[120px] items-center justify-center text-xs text-slate-500">
-                              미리보기를 불러올 수 없습니다.
-                            </div>
-                          )}
-                        </div>
-                        <dl className="space-y-1.5 text-xs">
-                          <div>
-                            <dt className="text-[10px] text-slate-500">파일명</dt>
-                            <dd className="break-all font-medium text-slate-900">
-                              {selectedRow.photo.sourceFileName}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-[10px] text-slate-500">촬영 시각</dt>
-                            <dd className="text-slate-800">
-                              {formatCapturedLabel(selectedRow.photo.capturedAtIso)}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-[10px] text-slate-500">폴더(그룹)</dt>
-                            <dd className="text-slate-800">
-                              {selectedRow.groupDisplayTitle}
-                            </dd>
-                          </div>
-                          {selectedRow.photo.outputRelativePath ? (
-                            <div>
-                              <dt className="text-[10px] text-slate-500">출력 상대 경로</dt>
-                              <dd className="break-all font-mono text-[10px] text-slate-700">
-                                {selectedRow.photo.outputRelativePath}
-                              </dd>
-                            </div>
-                          ) : null}
-                        </dl>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <FileListPhotoPreviewPanel
+                  selectedRow={selectedRow}
+                  previewThumbUrl={previewThumbUrl}
+                />
               </div>
             </div>
           </div>
@@ -1066,392 +933,84 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
       </section>
 
       {moveDialogOpen && libraryIndex && outputRoot ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--app-foreground)_22%,transparent)]/40 p-3 backdrop-blur-[2px]"
-          role="dialog"
-          aria-modal
-          aria-labelledby="move-to-folder-dialog-title"
-          onClick={() => {
+        <FileListMovePhotosDialog
+          selectedCount={selectedForMove.size}
+          moveDestinationUsesChildFolders={moveDestinationUsesChildFolders}
+          breadcrumbPathLabel={breadcrumbPathLabel}
+          destinationListContextLabel={destinationListContextLabel}
+          moveDestinationFolderOptions={moveDestinationFolderOptions}
+          destinationSelect={destinationSelect}
+          manualDestinationFolder={manualDestinationFolder}
+          isMovingPhotos={isMovingPhotos}
+          onOverlayClick={() => {
             if (!isMovingPhotos) {
               setMoveDialogOpen(false)
             }
           }}
-        >
-          <div
-            className="max-h-[min(88vh,720px)] w-full max-w-[560px] overflow-y-auto rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2
-              id="move-to-folder-dialog-title"
-              className="text-base font-semibold text-[var(--app-foreground)]"
-            >
-              폴더로 이동
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-[var(--app-muted)]">
-              선택한 {selectedForMove.size}장의 목적지입니다.{' '}
-              {moveDestinationUsesChildFolders ? (
-                <>
-                  <span className="font-medium">하위 폴더</span>는 지금 연
-                  년·월(또는 상위) 경로 바로 아래에 있는 폴더입니다.
-                </>
-              ) : (
-                <>
-                  <span className="font-medium">동위 폴더</span>는 지금 폴더와
-                  같은 상위 아래에 나란히 있는 폴더입니다.
-                </>
-              )}
-            </p>
-            <p className="mt-2 text-xs leading-5 text-[var(--app-muted)]">
-              드롭다운에서 고르면 아래 입력란에 같은 이름이 채워집니다. 직접 고칠 수도
-              있으며, 동일한 이름의 폴더가 있으면 합쳐집니다.
-            </p>
-            <p className="mt-1 text-xs text-[var(--app-muted)]">
-              지금 보는 경로:{' '}
-              <span className="font-medium text-slate-700">{breadcrumbPathLabel}</span>
-            </p>
-            <p className="mt-0.5 text-xs text-[var(--app-muted)]">
-              {moveDestinationUsesChildFolders
-                ? '하위 목록 기준 (현재 경로): '
-                : '동위 목록 기준 부모 경로: '}
-              <span className="font-medium text-slate-700">
-                {destinationListContextLabel}
-              </span>
-            </p>
-
-            <div className="mt-4 space-y-2">
-              <label className="block text-sm font-medium text-[var(--app-foreground)]">
-                목적지 —{' '}
-                {moveDestinationUsesChildFolders ? '하위 폴더' : '동위 폴더'}
-                <select
-                  className="mt-1 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none"
-                  disabled={isMovingPhotos}
-                  value={
-                    destinationSelect === DEST_CUSTOM ? '' : destinationSelect
-                  }
-                  onChange={(event) =>
-                    applyDestinationFromSelect(event.target.value)
-                  }
-                >
-                  <option value="">목적지 선택…</option>
-                  <option value={DEST_YEAR_MONTH_ONLY}>
-                    년·월만 (가운데 폴더 없음)
-                  </option>
-                  {moveDestinationFolderOptions.map((item) => (
-                    <option key={item.groupId} value={item.groupId}>
-                      {item.label} ({item.photoCount}장)
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {moveDestinationFolderOptions.length === 0 ? (
-                <p className="text-xs leading-5 text-[var(--app-muted)]">
-                  {moveDestinationUsesChildFolders
-                    ? '이 경로 아래에 다른 폴더가 없을 수 있습니다. 「년·월만」을 고르거나 아래에 새 이름을 입력하세요.'
-                    : '같은 상위에 등록된 다른 폴더가 없을 수 있습니다. 「년·월만」을 고르거나 아래에 새 이름을 입력하세요.'}
-                </p>
-              ) : null}
-            </div>
-
-            <label className="mt-4 block text-sm text-[var(--app-foreground)]">
-              <span className="mb-1 block font-medium">
-                폴더 이름 (드롭다운 선택 시 자동 입력 · 수정 가능)
-              </span>
-              <input
-                type="text"
-                value={manualDestinationFolder}
-                onChange={(event) =>
-                  handleManualDestinationInput(event.target.value)
-                }
-                disabled={isMovingPhotos}
-                placeholder="예: 주말산책"
-                className="mt-1 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none"
-              />
-              {destinationSelect === DEST_CUSTOM &&
-              manualDestinationFolder.trim().length > 0 ? (
-                <span className="mt-1 block text-xs text-[var(--app-accent-strong)]">
-                  목록에 없는 이름이면 새 폴더로 만듭니다.
-                </span>
-              ) : null}
-            </label>
-
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-medium text-[var(--app-foreground)] disabled:opacity-50"
-                disabled={isMovingPhotos}
-                onClick={() => setMoveDialogOpen(false)}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className="rounded-[12px] bg-[var(--app-button)] px-3.5 py-2 text-sm font-medium text-[var(--app-button-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={
-                  isMovingPhotos ||
-                  (manualDestinationFolder.trim().length === 0 &&
-                    !destinationSelect)
-                }
-                onClick={() => void handleConfirmMoveToGroup()}
-              >
-                {isMovingPhotos ? '이동 중…' : '이동'}
-              </button>
-            </div>
-          </div>
-        </div>
+          onContentClick={(event) => event.stopPropagation()}
+          onDestinationSelectChange={applyDestinationFromSelect}
+          onManualDestinationChange={handleManualDestinationInput}
+          onCancel={() => setMoveDialogOpen(false)}
+          onConfirm={() => void handleConfirmMoveToGroup()}
+        />
       ) : null}
 
       {renameDialogOpen && libraryIndex && outputRoot ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--app-foreground)_22%,transparent)]/40 p-3 backdrop-blur-[2px]"
-          role="dialog"
-          aria-modal
-          aria-labelledby="rename-folder-dialog-title"
-          onClick={() => {
+        <FileListRenameGroupDialog
+          isRenaming={isRenaming}
+          renameTargetGroupId={renameTargetGroupId}
+          renameNewTitle={renameNewTitle}
+          groupsInCurrentFolder={groupsInCurrentFolder}
+          renamePreviewSummary={renamePreviewSummary}
+          renamePreviewRows={renamePreviewRows}
+          onOverlayClick={() => {
             if (!isRenaming) {
               setRenameDialogOpen(false)
             }
           }}
-        >
-          <div
-            className="w-full max-w-[460px] rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2
-              id="rename-folder-dialog-title"
-              className="text-base font-semibold text-[var(--app-foreground)]"
-            >
-              이름 변경
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-[var(--app-muted)]">
-              이 경로 목록에 나온 폴더(그룹)의 표시 이름을 바꿉니다. 파일이 디스크에서
-              해당 이름 폴더로 다시 정리될 수 있습니다.
-            </p>
-            <label className="mt-4 block text-sm text-[var(--app-foreground)]">
-              <span className="mb-1 block font-medium">대상 폴더</span>
-              <select
-                className="mt-1 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none"
-                disabled={isRenaming}
-                value={renameTargetGroupId}
-                onChange={(event) => {
-                  const id = event.target.value
-                  setRenameTargetGroupId(id)
-                  const g = libraryIndex.groups.find((x) => x.id === id)
-                  setRenameNewTitle(
-                    folderRenameLabelWithoutDate(
-                      g?.title ?? g?.displayTitle ?? ''
-                    )
-                  )
-                }}
-              >
-                {groupsInCurrentFolder.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="mt-3 block text-sm text-[var(--app-foreground)]">
-              <span className="mb-1 block font-medium">새 이름</span>
-              <input
-                type="text"
-                value={renameNewTitle}
-                onChange={(event) => setRenameNewTitle(event.target.value)}
-                disabled={isRenaming}
-                className="mt-1 w-full rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-foreground)] outline-none"
-              />
-            </label>
-            <div className="mt-4 rounded-[14px] bg-[var(--app-surface-strong)] p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium text-slate-900">
-                    저장 전 예상 파일명 미리보기
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    실제 저장 시 기존 파일 충돌이 있으면 시퀀스 번호는 달라질 수
-                    있습니다.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
-                  <span className="rounded-full bg-white px-2 py-1">
-                    변경 {renamePreviewSummary.changedCount}장
-                  </span>
-                  <span className="rounded-full bg-white px-2 py-1">
-                    유지 {renamePreviewSummary.unchangedCount}장
-                  </span>
-                </div>
-              </div>
-              <div className="mt-3 space-y-2">
-                {renamePreviewRows.length === 0 ? (
-                  <p className="text-sm text-slate-500">
-                    현재 선택된 폴더의 사진 미리보기를 불러오지 못했습니다.
-                  </p>
-                ) : (
-                  <>
-                    {renamePreviewRows.slice(0, 6).map((row) => (
-                      <div
-                        key={row.photoId}
-                        className="rounded-[12px] bg-[var(--app-surface)] p-3"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium text-slate-900">
-                            {row.sourceFileName}
-                          </p>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                              row.willChange
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-slate-200 text-slate-600'
-                            }`}
-                          >
-                            {row.willChange ? '변경 예정' : '변경 없음'}
-                          </span>
-                        </div>
-                        <div className="mt-2 grid gap-2 text-[11px] text-slate-600">
-                          <div>
-                            <p className="font-medium text-slate-500">현재</p>
-                            <p className="break-all">
-                              {row.currentOutputRelativePath ?? '출력 경로 없음'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="font-medium text-slate-500">예상</p>
-                            <p className="break-all text-slate-800">
-                              {row.nextOutputRelativePath}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {renamePreviewRows.length > 6 ? (
-                      <p className="text-xs text-slate-500">
-                        총 {renamePreviewRows.length}장 중 처음 6장만 표시합니다.
-                      </p>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-medium text-[var(--app-foreground)] disabled:opacity-50"
-                disabled={isRenaming}
-                onClick={() => setRenameDialogOpen(false)}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className="rounded-[12px] bg-[var(--app-button)] px-3.5 py-2 text-sm font-medium text-[var(--app-button-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isRenaming || !renameTargetGroupId}
-                onClick={() => void handleConfirmRename()}
-              >
-                {isRenaming ? '저장 중…' : '이름 저장'}
-              </button>
-            </div>
-          </div>
-        </div>
+          onContentClick={(event) => event.stopPropagation()}
+          onRenameTargetGroupIdChange={(id) => {
+            setRenameTargetGroupId(id)
+            const g = libraryIndex.groups.find((x) => x.id === id)
+            setRenameNewTitle(
+              folderRenameLabelWithoutDate(g?.title ?? g?.displayTitle ?? '')
+            )
+          }}
+          onRenameNewTitleChange={setRenameNewTitle}
+          onCancel={() => setRenameDialogOpen(false)}
+          onConfirm={() => void handleConfirmRename()}
+        />
       ) : null}
 
       {deletePhotosConfirmOpen && outputRoot ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--app-foreground)_22%,transparent)]/40 p-3 backdrop-blur-[2px]"
-          role="dialog"
-          aria-modal
-          aria-labelledby="delete-photos-dialog-title"
-          onClick={() => {
+        <FileListDeletePhotosDialog
+          selectedCount={selectedForMove.size}
+          isDeletingPhotos={isDeletingPhotos}
+          onOverlayClick={() => {
             if (!isDeletingPhotos) {
               setDeletePhotosConfirmOpen(false)
             }
           }}
-        >
-          <div
-            className="w-full max-w-[430px] rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2
-              id="delete-photos-dialog-title"
-              className="text-base font-semibold text-[var(--app-foreground)]"
-            >
-              선택한 파일 삭제
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
-              선택한 {selectedForMove.size}장을 출력 폴더에서 지우고 index.json에서도
-              제거합니다. 이 작업은 되돌릴 수 없습니다.
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-medium text-[var(--app-foreground)] disabled:opacity-50"
-                disabled={isDeletingPhotos}
-                onClick={() => setDeletePhotosConfirmOpen(false)}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className="rounded-[12px] bg-[var(--app-danger)] px-3.5 py-2 text-sm font-medium text-[var(--app-danger-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isDeletingPhotos}
-                onClick={() => void handleConfirmDeletePhotos()}
-              >
-                {isDeletingPhotos ? '삭제 중…' : '삭제'}
-              </button>
-            </div>
-          </div>
-        </div>
+          onContentClick={(event) => event.stopPropagation()}
+          onCancel={() => setDeletePhotosConfirmOpen(false)}
+          onConfirm={() => void handleConfirmDeletePhotos()}
+        />
       ) : null}
 
       {deleteFolderConfirmOpen && outputRoot ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--app-foreground)_22%,transparent)]/40 p-3 backdrop-blur-[2px]"
-          role="dialog"
-          aria-modal
-          aria-labelledby="delete-folder-dialog-title"
-          onClick={() => {
+        <FileListDeleteFolderDialog
+          breadcrumbPathLabel={breadcrumbPathLabel}
+          subtreeCount={subtreeCount}
+          isDeletingFolder={isDeletingFolder}
+          onOverlayClick={() => {
             if (!isDeletingFolder) {
               setDeleteFolderConfirmOpen(false)
             }
           }}
-        >
-          <div
-            className="w-full max-w-[430px] rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2
-              id="delete-folder-dialog-title"
-              className="text-base font-semibold text-[var(--app-foreground)]"
-            >
-              폴더 삭제
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
-              현재 경로{' '}
-              <span className="font-medium text-slate-800">{breadcrumbPathLabel}</span>
-              와 그 아래에 있는 모든 파일·하위 폴더를 디스크에서 지우고, 해당하는 사진을
-              index.json에서 제거합니다. 이 작업은 되돌릴 수 없습니다.
-            </p>
-            <p className="mt-2 text-xs text-[var(--app-muted)]">
-              (이 경로 합계 약 {subtreeCount}장이 인덱스에서 사라질 수 있습니다.)
-            </p>
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-medium text-[var(--app-foreground)] disabled:opacity-50"
-                disabled={isDeletingFolder}
-                onClick={() => setDeleteFolderConfirmOpen(false)}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className="rounded-[12px] bg-[var(--app-danger)] px-3.5 py-2 text-sm font-medium text-[var(--app-danger-foreground)] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isDeletingFolder}
-                onClick={() => void handleConfirmDeleteFolder()}
-              >
-                {isDeletingFolder ? '삭제 중…' : '폴더 삭제'}
-              </button>
-            </div>
-          </div>
-        </div>
+          onContentClick={(event) => event.stopPropagation()}
+          onCancel={() => setDeleteFolderConfirmOpen(false)}
+          onConfirm={() => void handleConfirmDeleteFolder()}
+        />
       ) : null}
     </div>
   )
