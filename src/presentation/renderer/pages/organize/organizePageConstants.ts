@@ -24,7 +24,8 @@ export const SCAN_ISSUE_STAGES: ScanPhotoLibraryIssue['stage'][] = [
   'hash',
   'region-resolve',
   'copy',
-  'thumbnail'
+  'thumbnail',
+  'prepare'
 ]
 
 export const ISSUE_QUICK_FILTERS = [

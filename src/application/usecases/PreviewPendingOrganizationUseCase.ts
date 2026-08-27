@@ -29,10 +29,13 @@ import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import type { Photo } from '@domain/entities/Photo'
 import { groupKeyIdentitySignature } from '@domain/services/groupKeyIdentity'
 import { resolveGroupLabelForOutputFileName } from '@domain/services/PhotoNamingService'
+import { shouldSkipInlinePreviewImage } from '@shared/constants/mediaExtensions'
+import { appLog, getAppLogFilePath } from '@shared/logging/appLog'
 import {
   getPathBaseName,
   normalizePathSeparators
 } from '@shared/utils/path'
+import { formatUnknownError } from '@shared/utils/formatUnknownError'
 import { mapWithConcurrencyLimit } from '@shared/utils/mapWithConcurrencyLimit'
 
 type AssignmentMode = 'new-group' | 'auto-capture' | 'manual-existing-group'
@@ -40,6 +43,22 @@ type AssignmentMode = 'new-group' | 'auto-capture' | 'manual-existing-group'
 const PREVIEW_PREPARE_CONCURRENCY_LIMIT = 4
 const PREVIEW_GROUP_CONCURRENCY_LIMIT = 2
 const PREVIEW_IMAGE_CONCURRENCY_LIMIT = 2
+const PREVIEW_IMAGES_PER_GROUP = 4
+const PREVIEW_PREPARE_LOG_INTERVAL = 10
+
+export type PreviewSkipFailureStage =
+  | 'prepare'
+  | 'hash'
+  | 'metadata'
+  | 'preview'
+  | 'existing-output-hash'
+
+export interface PreviewSkipFailure {
+  sourcePath: string
+  sourceFileName: string
+  stage: PreviewSkipFailureStage
+  message: string
+}
 
 export interface PendingOrganizationPreviewGroupPhoto {
   id: string
@@ -89,6 +108,8 @@ export interface PreviewPendingOrganizationResult {
   }>
   pendingPhotoCount: number
   skippedExistingCount: number
+  skippedFailureCount: number
+  skippedFailureDetails: PreviewSkipFailure[]
   groups: PendingOrganizationPreviewGroup[]
 }
 
@@ -125,18 +146,39 @@ export class PreviewPendingOrganizationUseCase {
     const validatedCommand = previewPendingOrganizationCommandSchema.parse(command)
     const sourceRoot = normalizePathSeparators(validatedCommand.sourceRoot)
     const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
+    const skippedFailureDetails: PreviewSkipFailure[] = []
+
+    appLog(
+      'info',
+      `preview start source=${sourceRoot} output=${outputRoot} log=${getAppLogFilePath()}`
+    )
+
     const existingOutputSnapshot = await this.dependencies.existingOutputScanner.scan(
       outputRoot
+    )
+    appLog(
+      'info',
+      `preview existing output files=${existingOutputSnapshot.photos.length}`
     )
     const storedIndex = await this.loadStoredLibraryIndexSafely(outputRoot)
     const { hashes: existingOutputHashes } = await buildExistingOutputHashSet({
       snapshot: existingOutputSnapshot,
       storedIndex,
       hasher: this.dependencies.hasher,
-      hashConcurrencyLimit: PREVIEW_PREPARE_CONCURRENCY_LIMIT
+      hashConcurrencyLimit: PREVIEW_PREPARE_CONCURRENCY_LIMIT,
+      onDiskHashFailure: ({ sourcePath, error }) => {
+        this.recordSkip(
+          skippedFailureDetails,
+          sourcePath,
+          getPathBaseName(sourcePath),
+          'existing-output-hash',
+          error
+        )
+      }
     })
     const existingIndex = this.buildExistingIndex(existingOutputSnapshot, storedIndex)
     const listedPhotoPaths = await this.dependencies.fileSystem.listPhotoFiles(sourceRoot)
+    appLog('info', `preview listed source files=${listedPhotoPaths.length}`)
     const {
       candidates: sourcePhotoCandidates,
       skippedUnchangedCount,
@@ -149,20 +191,36 @@ export class PreviewPendingOrganizationUseCase {
         fileSystem: this.dependencies.fileSystem,
         forceFullRescan: validatedCommand.forceFullRescan
       })
+    appLog(
+      'info',
+      `preview incremental candidates=${sourcePhotoCandidates.length} unchangedSkip=${skippedUnchangedCount}`
+    )
     const candidatePhotos = (
       await mapWithConcurrencyLimit(
         sourcePhotoCandidates,
         PREVIEW_PREPARE_CONCURRENCY_LIMIT,
-        async (candidate, index) =>
-          this.prepareCandidatePhoto(
+        async (candidate, index) => {
+          if (
+            (index + 1) % PREVIEW_PREPARE_LOG_INTERVAL === 0 ||
+            index + 1 === sourcePhotoCandidates.length
+          ) {
+            appLog(
+              'info',
+              `preview prepare ${index + 1}/${sourcePhotoCandidates.length}`
+            )
+          }
+
+          return this.prepareCandidatePhoto(
             {
               photoId: `preview-photo-${index + 1}`,
               sourcePath: normalizePathSeparators(candidate.sourcePath),
               sourceFileName: candidate.sourceFileName,
               sourceFingerprint: candidate.sourceFingerprint
             },
-            validatedCommand.missingGpsGroupingBasis
+            validatedCommand.missingGpsGroupingBasis,
+            skippedFailureDetails
           )
+        }
       )
     ).filter((candidatePhoto): candidatePhoto is Photo => candidatePhoto !== null)
     const canonicalCandidates: Photo[] = []
@@ -189,6 +247,11 @@ export class PreviewPendingOrganizationUseCase {
 
       canonicalCandidates.push(candidatePhoto)
     }
+
+    appLog(
+      'info',
+      `preview pending=${canonicalCandidates.length} existingSkip=${skippedExistingCount} failures=${skippedFailureDetails.length}`
+    )
 
     const previewGroups = createPhotoGroups(canonicalCandidates, {
       missingGpsGroupingBasis: validatedCommand.missingGpsGroupingBasis
@@ -248,6 +311,16 @@ export class PreviewPendingOrganizationUseCase {
                 titleSourceIndex: storedIndex ?? existingIndex,
                 metadataReader: this.dependencies.metadataReader
               })
+        const groupPhotos = group.photoIds
+          .map((photoId) => photosById.get(photoId))
+          .filter((photo): photo is Photo => photo !== undefined)
+
+        if (groupPhotos.length > PREVIEW_IMAGES_PER_GROUP) {
+          appLog(
+            'info',
+            `preview group ${group.displayTitle}: generating ${PREVIEW_IMAGES_PER_GROUP}/${groupPhotos.length} thumbnails`
+          )
+        }
 
         return {
           groupKey: group.groupKey,
@@ -274,23 +347,33 @@ export class PreviewPendingOrganizationUseCase {
           photoCount: group.photoIds.length,
           representativeGps: group.representativeGps,
           representativePhotos: await mapWithConcurrencyLimit(
-            group.photoIds
-              .map((photoId) => photosById.get(photoId))
-              .filter((photo): photo is Photo => photo !== undefined),
+            groupPhotos,
             PREVIEW_IMAGE_CONCURRENCY_LIMIT,
-            async (photo) => ({
+            async (photo, photoIndex) => ({
               id: photo.id,
               sourcePath: photo.sourcePath,
               sourceFileName: photo.sourceFileName,
               capturedAtIso: photo.capturedAt?.iso,
               hasGps: Boolean(photo.gps),
               missingGpsCategory: photo.missingGpsCategory,
-              previewDataUrl: await this.createPreviewDataUrlSafely(photo.sourcePath),
+              previewDataUrl:
+                photoIndex < PREVIEW_IMAGES_PER_GROUP
+                  ? await this.createPreviewDataUrlSafely(
+                      photo.sourcePath,
+                      photo.sourceFileName,
+                      skippedFailureDetails
+                    )
+                  : undefined,
               outputRelativePath: previewOutputPaths.get(photo.id)
             })
           )
         }
       }
+    )
+
+    appLog(
+      'info',
+      `preview done groups=${groups.length} pending=${canonicalCandidates.length} skippedFailures=${skippedFailureDetails.length}`
     )
 
     return {
@@ -299,6 +382,8 @@ export class PreviewPendingOrganizationUseCase {
       skippedUnchangedDetails,
       pendingPhotoCount: canonicalCandidates.length,
       skippedExistingCount,
+      skippedFailureCount: skippedFailureDetails.length,
+      skippedFailureDetails,
       groups
     }
   }
@@ -345,53 +430,95 @@ export class PreviewPendingOrganizationUseCase {
 
   private async prepareCandidatePhoto(
     context: PreviewPhotoContext,
-    missingGpsGroupingBasis: PreviewPendingOrganizationCommand['missingGpsGroupingBasis']
+    missingGpsGroupingBasis: PreviewPendingOrganizationCommand['missingGpsGroupingBasis'],
+    skippedFailures: PreviewSkipFailure[]
   ): Promise<Photo | null> {
-    const metadata = await this.readMetadataSafely(context.sourcePath)
-    const sha256 = await this.createSha256Safely(context.sourcePath)
+    try {
+      const metadata = await this.readMetadataSafely(
+        context.sourcePath,
+        context.sourceFileName,
+        skippedFailures
+      )
+      const sha256 = await this.createSha256Safely(
+        context.sourcePath,
+        context.sourceFileName,
+        skippedFailures
+      )
 
-    if (!sha256) {
+      if (!sha256) {
+        return null
+      }
+
+      const regionName = await this.resolveRegionNameSafely(
+        metadata.gps,
+        metadata.missingGpsCategory
+      )
+
+      return {
+        id: context.photoId,
+        sourcePath: context.sourcePath,
+        sourceFileName: context.sourceFileName,
+        sourceFingerprint: context.sourceFingerprint,
+        sha256,
+        capturedAt: metadata.capturedAt,
+        capturedAtSource: metadata.capturedAtSource,
+        originalGps: metadata.originalGps,
+        gps: metadata.gps,
+        locationSource: metadata.gps ? 'exif' : 'none',
+        missingGpsCategory: metadata.missingGpsCategory,
+        missingGpsGroupingBasis,
+        regionName,
+        isDuplicate: false,
+        metadataIssues: metadata.metadataIssues ?? []
+      }
+    } catch (error) {
+      this.recordSkip(
+        skippedFailures,
+        context.sourcePath,
+        context.sourceFileName,
+        'prepare',
+        error
+      )
       return null
-    }
-
-    const regionName = await this.resolveRegionNameSafely(
-      metadata.gps,
-      metadata.missingGpsCategory
-    )
-
-    return {
-      id: context.photoId,
-      sourcePath: context.sourcePath,
-      sourceFileName: context.sourceFileName,
-      sourceFingerprint: context.sourceFingerprint,
-      sha256,
-      capturedAt: metadata.capturedAt,
-      capturedAtSource: metadata.capturedAtSource,
-      originalGps: metadata.originalGps,
-      gps: metadata.gps,
-      locationSource: metadata.gps ? 'exif' : 'none',
-      missingGpsCategory: metadata.missingGpsCategory,
-      missingGpsGroupingBasis,
-      regionName,
-      isDuplicate: false,
-      metadataIssues: metadata.metadataIssues ?? []
     }
   }
 
-  private async readMetadataSafely(sourcePath: string): Promise<PhotoMetadata> {
+  private async readMetadataSafely(
+    sourcePath: string,
+    sourceFileName: string,
+    skippedFailures: PreviewSkipFailure[]
+  ): Promise<PhotoMetadata> {
     try {
       return await this.dependencies.metadataReader.read(sourcePath)
-    } catch {
+    } catch (error) {
+      this.recordSkip(
+        skippedFailures,
+        sourcePath,
+        sourceFileName,
+        'metadata',
+        error
+      )
       return {
         metadataIssues: ['metadata-read-failed']
       }
     }
   }
 
-  private async createSha256Safely(sourcePath: string): Promise<string | null> {
+  private async createSha256Safely(
+    sourcePath: string,
+    sourceFileName: string,
+    skippedFailures: PreviewSkipFailure[]
+  ): Promise<string | null> {
     try {
       return await this.dependencies.hasher.createSha256(sourcePath)
-    } catch {
+    } catch (error) {
+      this.recordSkip(
+        skippedFailures,
+        sourcePath,
+        sourceFileName,
+        'hash',
+        error
+      )
       return null
     }
   }
@@ -414,13 +541,45 @@ export class PreviewPendingOrganizationUseCase {
   }
 
   private async createPreviewDataUrlSafely(
-    sourcePath: string
+    sourcePath: string,
+    sourceFileName: string,
+    skippedFailures: PreviewSkipFailure[]
   ): Promise<string | undefined> {
-    try {
-      return await this.dependencies.photoPreview.createDataUrl(sourcePath)
-    } catch {
+    if (shouldSkipInlinePreviewImage(sourcePath)) {
       return undefined
     }
+
+    appLog('info', `preview image start: ${sourcePath}`)
+
+    try {
+      return await this.dependencies.photoPreview.createDataUrl(sourcePath)
+    } catch (error) {
+      this.recordSkip(
+        skippedFailures,
+        sourcePath,
+        sourceFileName,
+        'preview',
+        error
+      )
+      return undefined
+    }
+  }
+
+  private recordSkip(
+    skippedFailures: PreviewSkipFailure[],
+    sourcePath: string,
+    sourceFileName: string,
+    stage: PreviewSkipFailureStage,
+    error: unknown
+  ): void {
+    const message = formatUnknownError(error)
+    skippedFailures.push({
+      sourcePath,
+      sourceFileName,
+      stage,
+      message
+    })
+    appLog('warn', `preview skip ${stage}: ${sourcePath}`, message)
   }
 
   private buildExistingIndex(

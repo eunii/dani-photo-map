@@ -288,6 +288,7 @@ export type ScanPhotoLibraryIssueStage =
   | 'region-resolve'
   | 'copy'
   | 'thumbnail'
+  | 'prepare'
 
 export interface ScanPhotoLibraryIssue {
   code: string
@@ -367,6 +368,18 @@ export interface PreviewPendingOrganizationResult {
   skippedUnchangedDetails: IncrementalSkipDetail[]
   pendingPhotoCount: number
   skippedExistingCount: number
+  skippedFailureCount: number
+  skippedFailureDetails: Array<{
+    sourcePath: string
+    sourceFileName: string
+    stage:
+      | 'prepare'
+      | 'hash'
+      | 'metadata'
+      | 'preview'
+      | 'existing-output-hash'
+    message: string
+  }>
   groups: PendingOrganizationPreviewGroup[]
 }
 

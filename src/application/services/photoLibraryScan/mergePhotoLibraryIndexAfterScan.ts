@@ -36,7 +36,8 @@ function applyGroupMetadataOverrides(
     title: string
     companions: string[]
     notes?: string
-  }>
+  }>,
+  copyGroupKeysInThisRun: string[] = []
 ): LibraryIndex {
   if (copiedPhotos.length === 0 || groupMetadataOverrides.length === 0) {
     return index
@@ -74,10 +75,16 @@ function applyGroupMetadataOverrides(
     }
   }
 
+  const copiedPhotoIds = new Set(copiedPhotos.map((photo) => photo.id))
+  const wizardOverride =
+    copyGroupKeysInThisRun.length === 1
+      ? overrideByPendingGroupKey.get(copyGroupKeysInThisRun[0] ?? '')
+      : undefined
+
   return {
     ...index,
     groups: index.groups.map((group) => {
-      const override = group.photoIds
+      const overrideFromRegroupedKey = group.photoIds
         .map((photoId) => pendingGroupKeyByPhotoId.get(photoId))
         .map((pendingGroupKey) =>
           pendingGroupKey
@@ -85,6 +92,12 @@ function applyGroupMetadataOverrides(
             : undefined
         )
         .find((value) => Boolean(value))
+      const containsCopiedPhoto = group.photoIds.some((photoId) =>
+        copiedPhotoIds.has(photoId)
+      )
+      const override =
+        overrideFromRegroupedKey ??
+        (containsCopiedPhoto ? wizardOverride : undefined)
 
       return override
         ? {
@@ -172,7 +185,8 @@ export async function buildMergedLibraryIndex(
     title: string
   }>,
   dependencies: ScanPhotoLibraryDependencies,
-  rules: OrganizationRules
+  rules: OrganizationRules,
+  copyGroupKeysInThisRun: string[] = []
 ): Promise<LibraryIndex> {
   const rebuiltExistingIndex = rebuildLibraryIndexFromExistingOutput(
     existingOutputSnapshot,
@@ -199,7 +213,8 @@ export async function buildMergedLibraryIndex(
   const metadataAppliedIndex = applyGroupMetadataOverrides(
     mergeStoredLibraryMetadata(rebuiltIndex, storedIndex),
     customizedCopiedPhotos,
-    groupMetadataOverrides
+    groupMetadataOverrides,
+    copyGroupKeysInThisRun
   )
 
   const afterAssignments = await applyPendingGroupAssignments(
@@ -214,6 +229,7 @@ export async function buildMergedLibraryIndex(
     index: afterAssignments,
     outputRoot: paths.outputRoot,
     fileSystem: dependencies.fileSystem,
-    rules
+    rules,
+    incomingPhotoIds: new Set(copiedPhotos.map((photo) => photo.id))
   })
 }

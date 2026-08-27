@@ -1,24 +1,14 @@
 import { constants } from 'node:fs'
 import { access, copyFile, mkdir, readdir, rename, rm, stat } from 'node:fs/promises'
-import { extname, join, normalize } from 'node:path'
+import { join, normalize } from 'node:path'
 
 import {
   PhotoFileConflictError,
   type PhotoFileFingerprint,
   type PhotoLibraryFileSystemPort
 } from '@application/ports/PhotoLibraryFileSystemPort'
+import { isPhotoLibraryMediaFileName } from '@shared/constants/mediaExtensions'
 import { normalizePathSeparators } from '@shared/utils/path'
-
-const PHOTO_EXTENSIONS = new Set([
-  '.jpg',
-  '.jpeg',
-  '.png',
-  '.heic',
-  '.heif',
-  '.tif',
-  '.tiff',
-  '.webp'
-])
 
 export class NodePhotoLibraryFileSystem implements PhotoLibraryFileSystemPort {
   async listPhotoFiles(rootPath: string): Promise<string[]> {
@@ -172,7 +162,7 @@ export class NodePhotoLibraryFileSystem implements PhotoLibraryFileSystemPort {
         continue
       }
 
-      if (entry.isFile() && PHOTO_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+      if (entry.isFile() && isPhotoLibraryMediaFileName(entry.name)) {
         photoFiles.push(fullPath)
       }
     }

@@ -5,6 +5,8 @@ import type {
   PhotoMetadata,
   PhotoMetadataReaderPort
 } from '@application/ports/PhotoMetadataReaderPort'
+import { EXIF_IO_TIMEOUT_MS } from '@shared/constants/ioTimeouts'
+import { withTimeout } from '@shared/utils/withTimeout'
 import type { PhotoCapturedAtSource } from '@domain/entities/Photo'
 import type { PhotoTimestamp } from '@domain/value-objects/PhotoTimestamp'
 
@@ -104,10 +106,19 @@ function hasPrimaryCapturedAt(metadata: Record<string, unknown> | null | undefin
 export class ExifrPhotoMetadataReader implements PhotoMetadataReaderPort {
   constructor(
     private readonly parseMetadata: typeof exifr.parse = exifr.parse,
-    private readonly readFileStat: typeof stat = stat
+    private readonly readFileStat: typeof stat = stat,
+    private readonly parseTimeoutMs = EXIF_IO_TIMEOUT_MS
   ) {}
 
   async read(sourcePath: string): Promise<PhotoMetadata> {
+    return withTimeout(
+      this.readWithoutTimeout(sourcePath),
+      this.parseTimeoutMs,
+      `exif ${sourcePath}`
+    )
+  }
+
+  private async readWithoutTimeout(sourcePath: string): Promise<PhotoMetadata> {
     const primaryMetadata = (await this.parseMetadata(sourcePath, {
       gps: true,
       tiff: true,

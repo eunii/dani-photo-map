@@ -123,20 +123,39 @@ export async function applyRenamePlan(
   renamePlan: PlannedRename[],
   fileSystem: Pick<PhotoLibraryFileSystemPort, 'ensureDirectory' | 'moveFile'>
 ): Promise<void> {
+  const temporaryRenameToken = Date.now().toString(36)
   const temporaryRenamePlan = renamePlan
     .filter((plan) => plan.currentAbsolutePath !== plan.nextAbsolutePath)
     .map((plan, index) => ({
       ...plan,
-      temporaryAbsolutePath: `${plan.currentAbsolutePath}.photo-organizer-${Date.now()}-${index}.tmp`
+      temporaryAbsolutePath: joinPathSegments(
+        getPathDirectoryName(plan.currentAbsolutePath),
+        `po-${temporaryRenameToken}-${index}.tmp`
+      )
     }))
 
-  for (const plan of temporaryRenamePlan) {
-    await fileSystem.moveFile(plan.currentAbsolutePath, plan.temporaryAbsolutePath)
-  }
+  try {
+    for (const plan of temporaryRenamePlan) {
+      await fileSystem.moveFile(plan.currentAbsolutePath, plan.temporaryAbsolutePath)
+    }
 
-  for (const plan of temporaryRenamePlan) {
-    await fileSystem.ensureDirectory(getPathDirectoryName(plan.nextAbsolutePath))
-    await fileSystem.moveFile(plan.temporaryAbsolutePath, plan.nextAbsolutePath)
+    for (const plan of temporaryRenamePlan) {
+      await fileSystem.ensureDirectory(getPathDirectoryName(plan.nextAbsolutePath))
+      await fileSystem.moveFile(plan.temporaryAbsolutePath, plan.nextAbsolutePath)
+    }
+  } catch (error) {
+    for (const plan of [...temporaryRenamePlan].reverse()) {
+      try {
+        await fileSystem.moveFile(
+          plan.temporaryAbsolutePath,
+          plan.currentAbsolutePath
+        )
+      } catch {
+        // Restore leftover temp files only; files already at the destination stay.
+      }
+    }
+
+    throw error
   }
 }
 

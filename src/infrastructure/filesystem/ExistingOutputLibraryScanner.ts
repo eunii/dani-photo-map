@@ -14,22 +14,13 @@ import {
   type OrganizationRules
 } from '@domain/policies/OrganizationRules'
 import type { PhotoTimestamp } from '@domain/value-objects/PhotoTimestamp'
+import { isPhotoLibraryMediaFileName } from '@shared/constants/mediaExtensions'
 import {
   getPathBaseName,
   joinPathSegments,
   normalizePathSeparators
 } from '@shared/utils/path'
-
-const PHOTO_EXTENSIONS = new Set([
-  '.jpg',
-  '.jpeg',
-  '.png',
-  '.heic',
-  '.heif',
-  '.tif',
-  '.tiff',
-  '.webp'
-])
+import { isOrganizedOutputDirectorySegments } from '@shared/utils/organizedOutputPath'
 
 const RECOVERED_FILE_NAME_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})_(\d{6})_(.+)$/i
@@ -67,12 +58,12 @@ function extractFolderGroupingLabel(pathSegments: string[]): string | undefined 
 }
 
 function parseCapturedAtFromFileName(
-  sourceFileName: string
+  fileName: string
 ): PhotoTimestamp | undefined {
-  const extension = extname(sourceFileName)
+  const extension = extname(fileName)
   const baseName = extension
-    ? sourceFileName.slice(0, -extension.length)
-    : sourceFileName
+    ? fileName.slice(0, -extension.length)
+    : fileName
   const match = baseName.match(RECOVERED_FILE_NAME_PATTERN)
 
   if (!match) {
@@ -100,6 +91,21 @@ function parseCapturedAtFromFileName(
     day,
     time
   }
+}
+
+function recoverSourceFileNameFromOutputFileName(outputFileName: string): string {
+  const extension = extname(outputFileName)
+  const baseName = extension
+    ? outputFileName.slice(0, -extension.length)
+    : outputFileName
+  const match = baseName.match(RECOVERED_FILE_NAME_PATTERN)
+  const recoveredBaseName = match?.[5]
+
+  if (!recoveredBaseName) {
+    return outputFileName
+  }
+
+  return `${recoveredBaseName}${extension}`
 }
 
 export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
@@ -147,9 +153,7 @@ export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
       currentRelativePath
     )
     const fileEntries = directoryEntries.filter(
-      (entry) =>
-        entry.isFile() &&
-        PHOTO_EXTENSIONS.has(extname(entry.name).toLowerCase())
+      (entry) => entry.isFile() && isPhotoLibraryMediaFileName(entry.name)
     )
 
     return fileEntries
@@ -170,17 +174,16 @@ export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
   ): Promise<void> {
     const entries = await this.readDirectoryEntries(outputRoot, currentRelativePath)
     const photoFiles = entries
-      .filter(
-        (entry) =>
-          entry.isFile() &&
-          PHOTO_EXTENSIONS.has(extname(entry.name).toLowerCase())
-      )
+      .filter((entry) => entry.isFile() && isPhotoLibraryMediaFileName(entry.name))
       .sort((left, right) => left.name.localeCompare(right.name))
     const pathSegments = currentRelativePath
       ? currentRelativePath.split('/').filter((segment) => segment.length > 0)
       : []
 
-    if (photoFiles.length > 0 && pathSegments.length > 0) {
+    if (
+      photoFiles.length > 0 &&
+      isOrganizedOutputDirectorySegments(pathSegments)
+    ) {
       const representativeFile = photoFiles[0]
 
       if (!representativeFile) {
@@ -206,7 +209,9 @@ export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
         displayTitle: regionLabel,
         photoCount: photoFiles.length,
         representativeOutputRelativePath,
-        representativeSourceFileName: representativeFile.name,
+        representativeSourceFileName: recoverSourceFileNameFromOutputFileName(
+          representativeFile.name
+        ),
         regionLabel,
         earliestCapturedAt: timestamps[0],
         latestCapturedAt: timestamps[timestamps.length - 1],
@@ -282,7 +287,8 @@ export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
     outputRelativePath: string
   ): ExistingOutputPhotoSnapshot {
     const normalizedOutputRelativePath = normalizePathSeparators(outputRelativePath)
-    const sourceFileName = getPathBaseName(normalizedOutputRelativePath)
+    const outputFileName = getPathBaseName(normalizedOutputRelativePath)
+    const sourceFileName = recoverSourceFileNameFromOutputFileName(outputFileName)
     const pathSegments = normalizedOutputRelativePath.split('/').filter(Boolean)
     const [year, month, regionName] = pathSegments
     const folderGroupingLabel = extractFolderGroupingLabel(pathSegments.slice(0, -1))
@@ -291,7 +297,7 @@ export class ExistingOutputLibraryScanner implements ExistingOutputScannerPort {
       id: createRecoveredPhotoId(normalizedOutputRelativePath),
       sourcePath: joinPathSegments(outputRoot, normalizedOutputRelativePath),
       sourceFileName,
-      capturedAt: parseCapturedAtFromFileName(sourceFileName),
+      capturedAt: parseCapturedAtFromFileName(outputFileName),
       regionName:
         year && month && regionName
           ? decodeURIComponent(regionName)

@@ -781,6 +781,178 @@ describe('ScanPhotoLibraryUseCase', () => {
     expect(dependencies.fileSystem.moveFile).toHaveBeenCalled()
   })
 
+  it('copies a later wizard group that reuses an earlier group title into the saved group', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+    const gpsKey =
+      'group|region=seoul|year=2026|month=04|basis=month|day=00|slot=1'
+    const noGpsKey =
+      'group|region=base|year=2026|month=04|basis=month|day=00|slot=1'
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_GPS.JPG',
+      'C:\\source\\IMG_NOGPS.JPG'
+    ])
+    dependencies.metadataReader.read
+      .mockResolvedValueOnce({
+        metadataIssues: [],
+        gps: {
+          latitude: 37.5665,
+          longitude: 126.978
+        },
+        capturedAt: {
+          iso: '2026-04-03T10:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '100000'
+        }
+      })
+      .mockResolvedValueOnce({
+        metadataIssues: ['gps-missing'],
+        missingGpsCategory: 'missing-original-gps',
+        capturedAt: {
+          iso: '2026-04-03T11:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '110000'
+        }
+      })
+    dependencies.hasher.createSha256.mockImplementation(async (sourcePath: string) =>
+      sourcePath.includes('IMG_GPS') ? 'hash-gps' : 'hash-nogps'
+    )
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    const first = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      copyGroupKeysInThisRun: [gpsKey],
+      groupMetadataOverrides: [
+        { groupKey: gpsKey, title: '동일제목', companions: [] },
+        { groupKey: noGpsKey, title: '다른추천', companions: [] }
+      ]
+    })
+
+    expect(first.copiedCount).toBe(1)
+    const firstIndex = getSavedIndex()
+    expect(firstIndex?.groups).toHaveLength(1)
+    expect(firstIndex?.groups[0]?.title).toBe('동일제목')
+
+    const firstOutputRelativePath = firstIndex?.photos[0]?.outputRelativePath
+    expect(firstOutputRelativePath).toBeTruthy()
+
+    dependencies.libraryIndexStore.load.mockResolvedValue(firstIndex)
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
+      outputRoot: 'C:/output',
+      photos: [
+        {
+          id: firstIndex!.photos[0]!.id,
+          sourcePath: `C:/output/${firstOutputRelativePath}`,
+          sourceFileName: firstIndex!.photos[0]!.sourceFileName,
+          capturedAt: firstIndex!.photos[0]!.capturedAt,
+          regionName: firstIndex!.photos[0]!.regionName,
+          outputRelativePath: firstOutputRelativePath!
+        }
+      ]
+    })
+    dependencies.fileSystem.listDirectoryFileNames.mockResolvedValue([
+      firstOutputRelativePath!.split('/').pop() ?? ''
+    ])
+    dependencies.metadataReader.read
+      .mockResolvedValueOnce({
+        metadataIssues: [],
+        gps: {
+          latitude: 37.5665,
+          longitude: 126.978
+        },
+        capturedAt: {
+          iso: '2026-04-03T10:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '100000'
+        }
+      })
+      .mockResolvedValueOnce({
+        metadataIssues: ['gps-missing'],
+        missingGpsCategory: 'missing-original-gps',
+        capturedAt: {
+          iso: '2026-04-03T11:00:00.000Z',
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: '110000'
+        }
+      })
+
+    const second = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      copyGroupKeysInThisRun: [noGpsKey],
+      groupMetadataOverrides: [
+        { groupKey: gpsKey, title: '동일제목', companions: [] },
+        { groupKey: noGpsKey, title: '동일제목', companions: [] }
+      ],
+      defaultTitleManualPhotoIds: [
+        { photoId: 'preview-photo-1', title: '동일제목' },
+        { photoId: 'preview-photo-2', title: '동일제목' }
+      ]
+    })
+
+    expect(second.copiedCount).toBe(1)
+    expect(getSavedIndex()?.groups).toHaveLength(1)
+    expect(getSavedIndex()?.groups[0]?.title).toBe('동일제목')
+    expect(getSavedIndex()?.photos).toHaveLength(2)
+  })
+
+  it('copies by source path when regrouping would change the preview groupKey slot', async () => {
+    const { dependencies, getSavedIndex } = createUseCaseDependencies()
+    const previewMayKey =
+      'group|region=seoul|year=2026|month=05|basis=month|day=00|slot=2'
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_MAY.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      gps: {
+        latitude: 37.5665,
+        longitude: 126.978
+      },
+      capturedAt: {
+        iso: '2026-05-03T10:00:00.000Z',
+        year: '2026',
+        month: '05',
+        day: '03',
+        time: '100000'
+      }
+    })
+    dependencies.hasher.createSha256.mockResolvedValue('hash-may')
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output',
+      copyGroupKeysInThisRun: [previewMayKey],
+      copySourcePathsInThisRun: ['C:\\source\\IMG_MAY.JPG'],
+      groupMetadataOverrides: [
+        {
+          groupKey: previewMayKey,
+          title: '동일제목',
+          companions: []
+        }
+      ]
+    })
+
+    expect(result.copiedCount).toBe(1)
+    expect(getSavedIndex()?.groups[0]?.title).toBe('동일제목')
+    expect(getSavedIndex()?.photos).toHaveLength(1)
+  })
+
   it('copies only photos whose groupKey is listed in copyGroupKeysInThisRun', async () => {
     const { dependencies, getSavedIndex } = createUseCaseDependencies()
 

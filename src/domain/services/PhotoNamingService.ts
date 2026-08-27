@@ -157,12 +157,34 @@ export function createOrganizedPhotoFileName(
 ): string {
   const safeTimestamp = getSafeTimestamp(timestamp)
   const { baseName, extension } = splitFileName(originalFileName)
+  const sanitizedBaseName = sanitizeFileNameSegment(baseName)
 
   const datePrefix =
     `${safeTimestamp.year}-${safeTimestamp.month}-${safeTimestamp.day}` +
     `_${safeTimestamp.time}`
+  const repeatedPrefix = `${datePrefix}_`
+  let normalizedBaseName = sanitizedBaseName
 
-  return `${datePrefix}_${sanitizeFileNameSegment(baseName)}${nameCollisionSuffix}${extension}`
+  while (normalizedBaseName.startsWith(repeatedPrefix)) {
+    normalizedBaseName = normalizedBaseName.slice(repeatedPrefix.length)
+  }
+  normalizedBaseName = collapseRepeatedCollisionSuffixes(normalizedBaseName)
+
+  return `${datePrefix}_${normalizedBaseName}${nameCollisionSuffix}${extension}`
+}
+
+function collapseRepeatedCollisionSuffixes(baseName: string): string {
+  let next = baseName
+
+  while (true) {
+    const collapsed = next.replace(/(.*?)(_\d{3})(?:\2)+$/u, '$1$2')
+
+    if (collapsed === next) {
+      return collapsed
+    }
+
+    next = collapsed
+  }
 }
 
 export function buildPhotoOutputRelativePath(

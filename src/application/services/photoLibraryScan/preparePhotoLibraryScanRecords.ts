@@ -4,6 +4,7 @@ import type { ScanPhotoLibraryIssue } from '@application/dto/ScanPhotoLibraryRes
 import type { PhotoMetadata } from '@application/ports/PhotoMetadataReaderPort'
 import type { OrganizationRules } from '@domain/policies/OrganizationRules'
 import type { Photo } from '@domain/entities/Photo'
+import { appLog } from '@shared/logging/appLog'
 import { getPathBaseName, normalizePathSeparators } from '@shared/utils/path'
 import { mapWithConcurrencyLimit } from '@shared/utils/mapWithConcurrencyLimit'
 
@@ -34,6 +35,7 @@ async function readMetadataSafely(
     }
 
     issues.push(issue)
+    appLog('warn', `scan skip metadata-read: ${context.sourcePath}`, error)
 
     return {
       metadataIssues: [issue.code]
@@ -57,6 +59,7 @@ async function createSha256Safely(
       photoId: context.photoId,
       message: getScanErrorMessage(error)
     })
+    appLog('error', `scan skip hash: ${context.sourcePath}`, error)
 
     return null
   }
@@ -91,6 +94,7 @@ async function resolveRegionNameSafely(
 
     metadataIssues.push(issue.code)
     issues.push(issue)
+    appLog('warn', `scan skip region-resolve: ${context.sourcePath}`, error)
 
     return rules.unknownRegionLabel
   }
@@ -180,6 +184,20 @@ export async function preparePhotoRecords(
             dependencies,
             rules
           ),
+          issues: localIssues
+        }
+      } catch (error) {
+        localIssues.push({
+          code: 'prepare-failed',
+          severity: 'error',
+          stage: 'prepare',
+          sourcePath,
+          photoId: `photo-${index + 1}`,
+          message: getScanErrorMessage(error)
+        })
+        appLog('error', `scan skip prepare: ${sourcePath}`, error)
+        return {
+          preparedPhotoRecord: null,
           issues: localIssues
         }
       } finally {

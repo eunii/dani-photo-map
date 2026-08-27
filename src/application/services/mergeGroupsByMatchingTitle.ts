@@ -8,8 +8,9 @@ export function normalizeMergeTitle(title: string): string {
 }
 
 /**
- * 같은 제목(title)을 가진 그룹을 하나로 합칩니다. 대표 GPS가 있는 그룹을
- * 우선 목적지로 하고, 모두 GPS가 없으면 사진 수·id 순으로 목적지를 고릅니다.
+ * 같은 제목(title)을 가진 그룹을 하나로 합칩니다.
+ * 이미 저장돼 있던 그룹(이번 실행에서 새로 들어온 사진이 아닌 쪽)을 목적지로
+ * 우선하고, 그다음 대표 GPS·사진 수·id 순입니다.
  */
 export async function mergeGroupsByMatchingTitle(params: {
   index: LibraryIndex
@@ -19,8 +20,11 @@ export async function mergeGroupsByMatchingTitle(params: {
     'ensureDirectory' | 'listDirectoryFileNames' | 'moveFile'
   >
   rules: OrganizationRules
+  /** 이번 저장에서 새로 복사된 사진. 있으면 기존 그룹을 합치기 목적지로 유지합니다. */
+  incomingPhotoIds?: ReadonlySet<string>
 }): Promise<LibraryIndex> {
-  const { fileSystem, index, outputRoot, rules } = params
+  const { fileSystem, incomingPhotoIds, index, outputRoot, rules } = params
+  const incomingIds = incomingPhotoIds ?? new Set<string>()
   const byTitle = new Map<string, typeof index.groups>()
 
   for (const group of index.groups) {
@@ -43,7 +47,16 @@ export async function mergeGroupsByMatchingTitle(params: {
       continue
     }
 
+    const existingPhotoCount = (group: (typeof groups)[number]): number =>
+      group.photoIds.filter((photoId) => !incomingIds.has(photoId)).length
+
     const sorted = [...groups].sort((a, b) => {
+      const existingDelta = existingPhotoCount(b) - existingPhotoCount(a)
+
+      if (existingDelta !== 0) {
+        return existingDelta
+      }
+
       const aG = a.representativeGps ? 1 : 0
       const bG = b.representativeGps ? 1 : 0
 

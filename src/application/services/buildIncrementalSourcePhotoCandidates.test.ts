@@ -107,4 +107,39 @@ describe('buildIncrementalSourcePhotoCandidates', () => {
     ])
     expect(fileSystem.getPhotoFileFingerprint).not.toHaveBeenCalled()
   })
+
+  it('does not skip files whose stored output path is still a source dump folder', async () => {
+    const fileSystem = {
+      getPhotoFileFingerprint: vi.fn(async () => ({
+        sizeBytes: 100,
+        modifiedAtMs: 1_710_000_000_000
+      }))
+    }
+    const storedIndex = createStoredIndex()
+    storedIndex.photos[0] = {
+      ...storedIndex.photos[0]!,
+      sourcePath: 'C:/photos/source/201809__/IMG_0310.JPG',
+      sourceFileName: 'IMG_0310.JPG',
+      outputRelativePath: '아이폰13/201809__/IMG_0310.JPG'
+    }
+
+    const result = await buildIncrementalSourcePhotoCandidates({
+      listedPhotoPaths: ['C:/photos/source/201809__/IMG_0310.JPG'],
+      sourceRoot: 'C:/photos/source',
+      storedIndex,
+      fileSystem
+    })
+
+    expect(result.skippedUnchangedCount).toBe(0)
+    expect(result.candidates).toEqual([
+      {
+        sourcePath: 'C:/photos/source/201809__/IMG_0310.JPG',
+        sourceFileName: 'IMG_0310.JPG',
+        sourceFingerprint: {
+          sizeBytes: 100,
+          modifiedAtMs: 1_710_000_000_000
+        }
+      }
+    ])
+  })
 })

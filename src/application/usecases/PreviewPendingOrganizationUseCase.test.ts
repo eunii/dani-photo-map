@@ -477,4 +477,119 @@ describe('PreviewPendingOrganizationUseCase', () => {
       displayTitle: 'week2'
     })
   })
+
+  it('skips a file whose hash fails and continues with the rest', async () => {
+    const dependencies = createDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\broken.JPG',
+      'C:\\source\\ok.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      gps: {
+        latitude: 37.5665,
+        longitude: 126.978
+      },
+      capturedAt: {
+        iso: '2026-04-10T08:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '10',
+        time: '080000'
+      },
+      capturedAtSource: 'exif-date-time-original'
+    })
+    dependencies.hasher.createSha256.mockImplementation(async (sourcePath: string) => {
+      if (sourcePath.replaceAll('\\', '/').endsWith('broken.JPG')) {
+        throw new Error('hash boom')
+      }
+
+      return 'ok-hash'
+    })
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.photoPreview.createDataUrl.mockResolvedValue(
+      'data:image/webp;base64,preview'
+    )
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
+      outputRoot: 'C:/output',
+      photos: []
+    })
+    dependencies.libraryIndexStore.load.mockResolvedValue(null)
+
+    const useCase = new PreviewPendingOrganizationUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output'
+    })
+
+    expect(result.pendingPhotoCount).toBe(1)
+    expect(result.skippedFailureCount).toBe(1)
+    expect(result.skippedFailureDetails).toEqual([
+      {
+        sourcePath: 'C:/source/broken.JPG',
+        sourceFileName: 'broken.JPG',
+        stage: 'hash',
+        message: 'hash boom'
+      }
+    ])
+    expect(result.groups[0]?.representativePhotos).toEqual([
+      expect.objectContaining({
+        sourceFileName: 'ok.JPG'
+      })
+    ])
+  })
+
+  it('keeps a photo when preview generation fails and records the skip', async () => {
+    const dependencies = createDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_PREVIEW.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      gps: {
+        latitude: 37.5665,
+        longitude: 126.978
+      },
+      capturedAt: {
+        iso: '2026-04-10T08:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '10',
+        time: '080000'
+      },
+      capturedAtSource: 'exif-date-time-original'
+    })
+    dependencies.hasher.createSha256.mockResolvedValue('preview-fail-hash')
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.photoPreview.createDataUrl.mockRejectedValue(
+      new Error('sharp stuck')
+    )
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
+      outputRoot: 'C:/output',
+      photos: []
+    })
+    dependencies.libraryIndexStore.load.mockResolvedValue(null)
+
+    const useCase = new PreviewPendingOrganizationUseCase(dependencies)
+    const result = await useCase.execute({
+      sourceRoot: 'C:\\source',
+      outputRoot: 'C:\\output'
+    })
+
+    expect(result.pendingPhotoCount).toBe(1)
+    expect(result.groups[0]?.representativePhotos[0]).toMatchObject({
+      sourceFileName: 'IMG_PREVIEW.JPG',
+      previewDataUrl: undefined
+    })
+    expect(result.skippedFailureDetails).toEqual([
+      {
+        sourcePath: 'C:/source/IMG_PREVIEW.JPG',
+        sourceFileName: 'IMG_PREVIEW.JPG',
+        stage: 'preview',
+        message: 'sharp stuck'
+      }
+    ])
+  })
 })

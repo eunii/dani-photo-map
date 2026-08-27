@@ -28,6 +28,8 @@ import {
   type OrganizationRules
 } from '@domain/policies/OrganizationRules'
 import type { Photo } from '@domain/entities/Photo'
+import { appLog, getAppLogFilePath } from '@shared/logging/appLog'
+import { normalizePathSeparators } from '@shared/utils/path'
 
 export type { ScanPhotoLibraryDependencies } from '@application/services/photoLibraryScan/photoLibraryScanTypes'
 
@@ -46,6 +48,10 @@ export class ScanPhotoLibraryUseCase {
     const onScanProgress = options?.onScanProgress
     const paths = createScanPathContext(validatedCommand)
     const issues: ScanPhotoLibraryIssue[] = []
+    appLog(
+      'info',
+      `scan start source=${paths.sourceRoot} output=${paths.outputRoot} log=${getAppLogFilePath()}`
+    )
     const existingOutputSnapshot = await this.dependencies.existingOutputScanner.scan(
       paths.outputRoot
     )
@@ -69,12 +75,14 @@ export class ScanPhotoLibraryUseCase {
             outputRelativePath,
             message: getScanErrorMessage(error)
           })
+          appLog('warn', `scan skip existing-output-hash: ${sourcePath}`, error)
         }
       })
 
     const listedPhotoPaths = await this.dependencies.fileSystem.listPhotoFiles(
       paths.sourceRoot
     )
+    appLog('info', `scan listed source files=${listedPhotoPaths.length}`)
     const {
       candidates: sourcePhotoCandidates,
       skippedUnchangedCount,
@@ -100,8 +108,15 @@ export class ScanPhotoLibraryUseCase {
       this.dependencies,
       this.rules
     )
+    appLog('info', `scan prepared photos=${preparedPhotoRecords.length}`)
 
-    const { photoIdToGroupKey, photoIdToDisplayTitle } = computeGroupingMaps(
+    const groupingForCopy = computeGroupingMaps(
+      preparedPhotoRecords,
+      validatedCommand.missingGpsGroupingBasis,
+      validatedCommand.pendingCustomGroupSplits ?? [],
+      []
+    )
+    const groupingForOutput = computeGroupingMaps(
       preparedPhotoRecords,
       validatedCommand.missingGpsGroupingBasis,
       validatedCommand.pendingCustomGroupSplits ?? [],
@@ -109,19 +124,32 @@ export class ScanPhotoLibraryUseCase {
     )
     const photoIdToGroupFileLabel = buildPhotoIdToGroupFileLabelMap(
       preparedPhotoRecords,
-      photoIdToGroupKey,
-      photoIdToDisplayTitle,
+      groupingForOutput.photoIdToGroupKey,
+      groupingForOutput.photoIdToDisplayTitle,
       validatedCommand.groupMetadataOverrides ?? [],
       this.rules
     )
     const copyKeys = validatedCommand.copyGroupKeysInThisRun
+    const copySourcePaths = validatedCommand.copySourcePathsInThisRun?.map(
+      (sourcePath) => normalizePathSeparators(sourcePath)
+    )
     const copyFilter =
-      copyKeys !== undefined
-        ? { keys: new Set(copyKeys), photoIdToGroupKey }
+      copySourcePaths !== undefined || copyKeys !== undefined
+        ? {
+            keys: copyKeys ? new Set(copyKeys) : undefined,
+            photoIdToGroupKey: groupingForCopy.photoIdToGroupKey,
+            sourcePaths: copySourcePaths ? new Set(copySourcePaths) : undefined
+          }
         : undefined
 
+    const skipAllCopies =
+      (copySourcePaths !== undefined && copySourcePaths.length === 0) ||
+      (copySourcePaths === undefined &&
+        copyKeys !== undefined &&
+        copyKeys.length === 0)
+
     const finalizedScanResult =
-      copyKeys !== undefined && copyKeys.length === 0
+      skipAllCopies
         ? {
             copiedPhotos: [] as Photo[],
             copiedCount: 0,
@@ -152,11 +180,17 @@ export class ScanPhotoLibraryUseCase {
       validatedCommand.pendingCustomGroupSplits ?? [],
       validatedCommand.defaultTitleManualPhotoIds ?? [],
       this.dependencies,
-      this.rules
+      this.rules,
+      validatedCommand.copyGroupKeysInThisRun ?? []
     )
     const groups = index.groups
 
     await this.dependencies.libraryIndexStore.save(index)
+
+    appLog(
+      'info',
+      `scan done copied=${finalizedScanResult.copiedCount} existingSkip=${finalizedScanResult.skippedExistingCount} issues=${issues.length}`
+    )
 
     return {
       scannedCount: listedPhotoPaths.length,

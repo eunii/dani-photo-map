@@ -1,5 +1,6 @@
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import { getPathBaseName, normalizePathSeparators } from '@shared/utils/path'
+import { isOrganizedOutputRelativePath } from '@shared/utils/organizedOutputPath'
 import { mapWithConcurrencyLimit } from '@shared/utils/mapWithConcurrencyLimit'
 
 const INCREMENTAL_FINGERPRINT_CONCURRENCY_LIMIT = 8
@@ -60,6 +61,14 @@ export async function buildIncrementalSourcePhotoCandidates(params: {
         photo.sourceFingerprint!
       ])
   )
+  const storedOutputRelativePathBySourcePath = new Map(
+    (storedIndex?.photos ?? [])
+      .filter((photo) => photo.outputRelativePath)
+      .map((photo) => [
+        normalizePathSeparators(photo.sourcePath),
+        photo.outputRelativePath!
+      ])
+  )
 
   let skippedUnchangedCount = 0
   const candidates: SourcePhotoCandidate[] = []
@@ -87,11 +96,17 @@ export async function buildIncrementalSourcePhotoCandidates(params: {
       const sourceFileName = getPathBaseName(sourcePath)
       const currentFingerprint = await fileSystem.getPhotoFileFingerprint!(sourcePath)
       const storedFingerprint = storedFingerprintBySourcePath.get(sourcePath)
+      const storedOutputRelativePath =
+        storedOutputRelativePathBySourcePath.get(sourcePath)
+      const isOrganizedStoredOutput = storedOutputRelativePath
+        ? isOrganizedOutputRelativePath(storedOutputRelativePath)
+        : true
       const isUnchanged = Boolean(
         currentFingerprint &&
           storedFingerprint &&
           currentFingerprint.sizeBytes === storedFingerprint.sizeBytes &&
-          currentFingerprint.modifiedAtMs === storedFingerprint.modifiedAtMs
+          currentFingerprint.modifiedAtMs === storedFingerprint.modifiedAtMs &&
+          isOrganizedStoredOutput
       )
 
       return {

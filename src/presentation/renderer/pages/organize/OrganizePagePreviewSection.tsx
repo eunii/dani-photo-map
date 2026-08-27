@@ -13,6 +13,25 @@ import {
 import type { OrganizeSaveJob } from '@presentation/renderer/pages/organize/useOrganizeSaveJobs'
 import type { Dispatch, SetStateAction } from 'react'
 
+function formatPreviewSkipStageLabel(
+  stage: PreviewPendingOrganizationResult['skippedFailureDetails'][number]['stage']
+): string {
+  switch (stage) {
+    case 'hash':
+      return '해시 실패 · 파일 제외'
+    case 'prepare':
+      return '준비 실패 · 파일 제외'
+    case 'metadata':
+      return '메타데이터 실패'
+    case 'preview':
+      return '미리보기만 실패'
+    case 'existing-output-hash':
+      return '기존 출력 해시 실패'
+    default:
+      return stage
+  }
+}
+
 interface OrganizePagePreviewSectionProps {
   previewResult: PreviewPendingOrganizationResult
   hidePreviewPanelWhileSaving: boolean
@@ -83,6 +102,14 @@ export function OrganizePagePreviewSection({
                   건너뛰었습니다.
                 </p>
               ) : null}
+              {previewResult.skippedFailureCount > 0 ? (
+                <p className="text-[11px] text-[var(--app-danger-foreground)]">
+                  오류로 건너뛴 항목 {previewResult.skippedFailureCount}건.
+                  자세한 내용은 아래 목록과{' '}
+                  <code className="font-mono">logs/dani-photo-map.log</code>를
+                  확인하세요.
+                </p>
+              ) : null}
               {hasPendingPreviewGroups && orderedPreviewGroups.length > 0 ? (
                 <p className="text-[11px] font-medium text-[var(--app-accent-strong)]">
                   그룹 {wizardStepIndex + 1} / {orderedPreviewGroups.length} — GPS
@@ -145,6 +172,37 @@ export function OrganizePagePreviewSection({
                     100,
                     Math.round((photosSavedCount / totalPhotosInPreview) * 100)
                   )}%)`}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {previewResult.skippedFailureDetails.length > 0 ? (
+            <div className="rounded-lg border border-[color:color-mix(in_srgb,var(--app-danger)_32%,var(--app-border)_68%)] bg-[color:color-mix(in_srgb,var(--app-danger)_8%,var(--app-surface)_92%)] p-2">
+              <p className="text-[11px] font-medium text-[var(--app-danger-foreground)]">
+                건너뛴 오류 {previewResult.skippedFailureDetails.length}건
+              </p>
+              <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto">
+                {previewResult.skippedFailureDetails.slice(0, 20).map((failure) => (
+                  <li
+                    key={`${failure.stage}-${failure.sourcePath}`}
+                    className="text-[11px] text-[var(--app-foreground)]"
+                    title={failure.sourcePath}
+                  >
+                    <span className="font-medium">
+                      {formatPreviewSkipStageLabel(failure.stage)}
+                    </span>
+                    {' · '}
+                    {failure.sourceFileName}
+                    {' — '}
+                    <span className="text-[var(--app-muted)]">{failure.message}</span>
+                  </li>
+                ))}
+              </ul>
+              {previewResult.skippedFailureDetails.length > 20 ? (
+                <p className="mt-1 text-[10px] text-[var(--app-muted)]">
+                  외 {previewResult.skippedFailureDetails.length - 20}건은 로그
+                  파일에 있습니다.
                 </p>
               ) : null}
             </div>

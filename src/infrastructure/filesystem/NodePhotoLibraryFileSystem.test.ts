@@ -37,14 +37,19 @@ describe('NodePhotoLibraryFileSystem', () => {
     await mkdir(deeperPath, { recursive: true })
     await writeFile(join(rootPath, 'IMG_0002.JPG'), 'a', 'utf-8')
     await writeFile(join(deeperPath, 'IMG_0001.HEIC'), 'b', 'utf-8')
+    await writeFile(join(rootPath, 'clip.MP4'), 'video', 'utf-8')
     await writeFile(join(rootPath, 'README.txt'), 'ignore', 'utf-8')
 
     const photoFiles = await fileSystem.listPhotoFiles(rootPath)
 
-    expect(photoFiles).toHaveLength(2)
+    expect(photoFiles).toHaveLength(3)
     expect(photoFiles[0]).toContain('/')
-    expect(photoFiles[0]).toMatch(/IMG_0001\.HEIC$|IMG_0002\.JPG$/)
-    expect(photoFiles[1]).toMatch(/IMG_0001\.HEIC$|IMG_0002\.JPG$/)
+    expect(photoFiles.some((photoPath) => photoPath.endsWith('clip.MP4'))).toBe(
+      true
+    )
+    expect(photoFiles.some((photoPath) => photoPath.endsWith('README.txt'))).toBe(
+      false
+    )
   })
 
   it('reads photo file fingerprint from size and mtime', async () => {

@@ -5,6 +5,11 @@ import { dirname, join } from 'node:path'
 import sharp from 'sharp'
 
 import type { ThumbnailGeneratorPort } from '@application/ports/ThumbnailGeneratorPort'
+import {
+  SHARP_IO_TIMEOUT_MS,
+  SHARP_IO_TIMEOUT_SECONDS
+} from '@shared/constants/ioTimeouts'
+import { withTimeout } from '@shared/utils/withTimeout'
 
 export class SharpThumbnailGenerator implements ThumbnailGeneratorPort {
   constructor(
@@ -17,11 +22,16 @@ export class SharpThumbnailGenerator implements ThumbnailGeneratorPort {
     const outputPath = join(this.thumbnailsRootPath, fileName)
 
     await mkdir(dirname(outputPath), { recursive: true })
-    await sharp(sourcePath)
-      .rotate()
-      .resize({ width: this.width, withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toFile(outputPath)
+    await withTimeout(
+      sharp(sourcePath)
+        .timeout({ seconds: SHARP_IO_TIMEOUT_SECONDS })
+        .rotate()
+        .resize({ width: this.width, withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toFile(outputPath),
+      SHARP_IO_TIMEOUT_MS,
+      `thumbnail ${sourcePath}`
+    )
 
     return fileName.replace(/\\/g, '/')
   }

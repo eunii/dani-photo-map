@@ -120,4 +120,16 @@ describe('ExifrPhotoMetadataReader', () => {
     })
     expect(parseMetadata).toHaveBeenCalledTimes(2)
   })
+
+  it('times out when exifr parse never returns', async () => {
+    const reader = new ExifrPhotoMetadataReader(
+      () => new Promise(() => undefined),
+      vi.fn(),
+      20
+    )
+
+    await expect(reader.read('C:/photos/stuck.JPG')).rejects.toThrow(
+      'exif C:/photos/stuck.JPG timed out after 20ms'
+    )
+  })
 })

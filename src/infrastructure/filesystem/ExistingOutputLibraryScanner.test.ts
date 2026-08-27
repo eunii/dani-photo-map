@@ -60,7 +60,7 @@ describe('ExistingOutputLibraryScanner', () => {
 
     expect(snapshot.photos).toHaveLength(1)
     expect(snapshot.photos[0]).toMatchObject({
-      sourceFileName: '2026-04-03_080000_IMG_0001.JPG',
+      sourceFileName: 'IMG_0001.JPG',
       regionName: 'seoul',
       folderGroupingLabel: 'seoul',
       outputRelativePath: '2026/04/seoul/2026-04-03_080000_IMG_0001.JPG',
@@ -98,5 +98,49 @@ describe('ExistingOutputLibraryScanner', () => {
       regionName: '요세미티_국립공원그룹',
       folderGroupingLabel: '요세미티_국립공원그룹'
     })
+  })
+
+  it('includes videos in organized output folders', async () => {
+    const outputRoot = await createTempDirectory()
+    const scanner = new ExistingOutputLibraryScanner()
+
+    await mkdir(join(outputRoot, '2026', '04', 'seoul'), { recursive: true })
+    await writeFile(
+      join(outputRoot, '2026', '04', 'seoul', '2026-04-03_080000_clip.mp4'),
+      'video',
+      'utf-8'
+    )
+
+    const snapshot = await scanner.scan(outputRoot)
+
+    expect(snapshot.photos).toHaveLength(1)
+    expect(snapshot.photos[0]?.outputRelativePath).toBe(
+      '2026/04/seoul/2026-04-03_080000_clip.mp4'
+    )
+  })
+
+  it('does not treat source dump folders as already organized output', async () => {
+    const outputRoot = await createTempDirectory()
+    const scanner = new ExistingOutputLibraryScanner()
+
+    await mkdir(join(outputRoot, '아이폰13', '201809__'), { recursive: true })
+    await mkdir(join(outputRoot, '2026', '04', 'seoul'), { recursive: true })
+    await writeFile(
+      join(outputRoot, '아이폰13', '201809__', 'IMG_0310.JPG'),
+      'dump-photo',
+      'utf-8'
+    )
+    await writeFile(
+      join(outputRoot, '2026', '04', 'seoul', '2026-04-03_080000_IMG_0001.JPG'),
+      'organized-photo',
+      'utf-8'
+    )
+
+    const snapshot = await scanner.scan(outputRoot)
+
+    expect(snapshot.photos).toHaveLength(1)
+    expect(snapshot.photos[0]?.outputRelativePath).toBe(
+      '2026/04/seoul/2026-04-03_080000_IMG_0001.JPG'
+    )
   })
 })

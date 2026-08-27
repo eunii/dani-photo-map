@@ -22,6 +22,7 @@ import {
   photoAppEventChannels,
   photoAppInvokeChannels
 } from '@shared/ipc/photoAppChannels'
+import { appLog } from '@shared/logging/appLog'
 import type {
   DeleteOutputFolderSubtreeRequest,
   DeletePhotosFromLibraryRequest,
@@ -324,6 +325,7 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
       })
     }
   } catch (error) {
+    appLog('error', `organize job failed mode=${request.mode}`, error)
     updateOrganizeJobStatus({
       phase: 'failed',
       message: toErrorMessage(error)
@@ -427,6 +429,7 @@ function registerIpcHandlers(): void {
 
         return result
       } catch (error) {
+        appLog('error', 'preview ipc failed', error)
         showOrganizeTaskNotification({
           kind: 'preview-load',
           ok: false,
@@ -455,6 +458,7 @@ function registerIpcHandlers(): void {
 
         return result
       } catch (error) {
+        appLog('error', 'scan ipc failed', error)
         throw error
       }
     }

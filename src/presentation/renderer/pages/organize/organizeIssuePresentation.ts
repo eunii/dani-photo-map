@@ -13,6 +13,8 @@ export function formatIssueStageLabel(stage: ScanPhotoLibraryIssue['stage']): st
       return '복사'
     case 'thumbnail':
       return '썸네일'
+    case 'prepare':
+      return '준비'
     default:
       return stage
   }

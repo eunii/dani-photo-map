@@ -74,6 +74,36 @@ describe('PhotoNamingService', () => {
     expect(fileName).toBe('2025-04-03_101112_x_001.png')
   })
 
+  it('does not duplicate the same timestamp prefix repeatedly', () => {
+    const fileName = createOrganizedPhotoFileName(
+      '2025-04-03_101112_2025-04-03_101112_IMG_1001.JPG',
+      {
+        iso: '2025-04-03T10:11:12.000Z',
+        year: '2025',
+        month: '04',
+        day: '03',
+        time: '101112'
+      }
+    )
+
+    expect(fileName).toBe('2025-04-03_101112_IMG_1001.JPG')
+  })
+
+  it('collapses repeated trailing collision suffixes in source names', () => {
+    const fileName = createOrganizedPhotoFileName(
+      'IMG_4942_001_001_001_001.JPG',
+      {
+        iso: '2025-04-03T10:11:12.000Z',
+        year: '2025',
+        month: '04',
+        day: '03',
+        time: '101112'
+      }
+    )
+
+    expect(fileName).toBe('2025-04-03_101112_IMG_4942_001.JPG')
+  })
+
   it('builds scan output path with year, month, group label folder', () => {
     const relativePath = buildScanPhotoOutputRelativePath(
       {

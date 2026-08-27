@@ -25,8 +25,13 @@ import {
 
 type PreviewGroup = PreviewPendingOrganizationResult['groups'][number]
 
+function sourcePathsForPreviewGroup(group: PreviewGroup): string[] {
+  return group.representativePhotos.map((photo) => photo.sourcePath)
+}
+
 export interface OrganizeSaveJob {
   copyGroupKeysInThisRun: string[]
+  copySourcePathsInThisRun: string[]
   isLastStep: boolean
   snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
   progressOffsetBeforeJob: number
@@ -231,7 +236,8 @@ export function useOrganizeSaveJobs({
           sourceRoot,
           outputRoot,
           ...nextJob.snapshotPayload,
-          copyGroupKeysInThisRun: nextJob.copyGroupKeysInThisRun
+          copyGroupKeysInThisRun: nextJob.copyGroupKeysInThisRun,
+          copySourcePathsInThisRun: nextJob.copySourcePathsInThisRun
         })
         const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
 
@@ -245,10 +251,22 @@ export function useOrganizeSaveJobs({
         }
 
         if (onlyKey) {
+          const expectedCopies = nextJob.copySourcePathsInThisRun.length
+          const savedNothing =
+            expectedCopies > 0 &&
+            nextSummary.copiedCount === 0 &&
+            nextSummary.skippedExistingCount === 0
+
           setGroupSavePhaseByKey((previous) => ({
             ...previous,
-            [onlyKey]: 'done'
+            [onlyKey]: savedNothing ? 'error' : 'done'
           }))
+
+          if (savedNothing) {
+            setErrorMessage(
+              '이 그룹 사진을 복사하지 못했습니다. 같은 이름을 쓴 경우 기존 그룹 폴더에 들어갔는지 확인해 주세요.'
+            )
+          }
         }
 
         const noMoreJobs = saveJobQueueRef.current.length === 0
@@ -432,6 +450,7 @@ export function useOrganizeSaveJobs({
 
       jobs.push({
         copyGroupKeysInThisRun: [group.groupKey],
+        copySourcePathsInThisRun: sourcePathsForPreviewGroup(group),
         isLastStep: index >= orderedPreviewGroups.length - 1,
         snapshotPayload,
         progressOffsetBeforeJob
@@ -538,6 +557,7 @@ export function useOrganizeSaveJobs({
       ...previous,
       {
         copyGroupKeysInThisRun: [currentGroup.groupKey],
+        copySourcePathsInThisRun: sourcePathsForPreviewGroup(currentGroup),
         isLastStep,
         snapshotPayload,
         progressOffsetBeforeJob

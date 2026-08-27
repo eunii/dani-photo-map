@@ -12,9 +12,12 @@ import { assignGroupDisplayTitledOutputRelativePaths } from '@application/servic
 import { createCanonicalPhotoIdByHash } from '@application/services/createCanonicalPhotoIdByHash'
 import type { OrganizationRules } from '@domain/policies/OrganizationRules'
 import type { Photo } from '@domain/entities/Photo'
+import { isVideoLibraryFileName } from '@shared/constants/mediaExtensions'
+import { appLog } from '@shared/logging/appLog'
 import {
   getPathDirectoryName,
-  joinPathSegments
+  joinPathSegments,
+  normalizePathSeparators
 } from '@shared/utils/path'
 
 import { getScanErrorMessage } from './photoLibraryScanIssues'
@@ -25,32 +28,57 @@ import type {
   ScanPhotoLibraryDependencies
 } from './photoLibraryScanTypes'
 
+export interface CopyPhotoFilter {
+  keys?: Set<string>
+  photoIdToGroupKey?: Map<string, string>
+  sourcePaths?: Set<string>
+}
+
+function photoRecordMatchesCopyFilter(
+  record: PreparedPhotoRecord,
+  copyFilter: CopyPhotoFilter | undefined
+): boolean {
+  if (!copyFilter) {
+    return true
+  }
+
+  if (copyFilter.sourcePaths && copyFilter.sourcePaths.size > 0) {
+    return copyFilter.sourcePaths.has(
+      normalizePathSeparators(record.photo.sourcePath)
+    )
+  }
+
+  if (copyFilter.keys && copyFilter.keys.size > 0 && copyFilter.photoIdToGroupKey) {
+    const groupKey = copyFilter.photoIdToGroupKey.get(record.photo.id)
+
+    return groupKey !== undefined && copyFilter.keys.has(groupKey)
+  }
+
+  if (
+    (copyFilter.sourcePaths && copyFilter.sourcePaths.size === 0) ||
+    (copyFilter.keys && copyFilter.keys.size === 0)
+  ) {
+    return false
+  }
+
+  return true
+}
+
 export async function finalizePreparedPhotos(
   preparedPhotoRecords: PreparedPhotoRecord[],
   outputRoot: string,
   existingOutputHashes: Set<string>,
   existingOutputHashToPath: Map<string, string>,
   issues: ScanPhotoLibraryIssue[],
-  copyFilter:
-    | {
-        keys: Set<string>
-        photoIdToGroupKey: Map<string, string>
-      }
-    | undefined,
+  copyFilter: CopyPhotoFilter | undefined,
   photoIdToGroupFileLabel: Map<string, string>,
   onScanProgress: ScanPhotoLibraryExecuteOptions['onScanProgress'] | undefined,
   dependencies: ScanPhotoLibraryDependencies,
   rules: OrganizationRules
 ): Promise<FinalizedScanResult> {
-  const photosForCanonical = copyFilter?.keys.size
-    ? preparedPhotoRecords
-        .filter((record) => {
-          const key = copyFilter.photoIdToGroupKey.get(record.photo.id)
-
-          return key !== undefined && copyFilter.keys.has(key)
-        })
-        .map((record) => record.photo)
-    : preparedPhotoRecords.map((record) => record.photo)
+  const photosForCanonical = preparedPhotoRecords
+    .filter((record) => photoRecordMatchesCopyFilter(record, copyFilter))
+    .map((record) => record.photo)
   const canonicalPhotoIdByHash = createCanonicalPhotoIdByHash(photosForCanonical)
   const copiedPhotos: Photo[] = []
   let duplicateCount = 0
@@ -58,15 +86,9 @@ export async function finalizePreparedPhotos(
   const inBatchDuplicateDetails: InBatchDuplicateDetail[] = []
   const existingOutputSkipDetails: ExistingOutputSkipDetail[] = []
 
-  const recordsToFinalize = copyFilter?.keys.size
-    ? preparedPhotoRecords.filter((record) => {
-        const groupKey = copyFilter.photoIdToGroupKey.get(record.photo.id)
-
-        return (
-          groupKey !== undefined && copyFilter.keys.has(groupKey)
-        )
-      })
-    : preparedPhotoRecords
+  const recordsToFinalize = preparedPhotoRecords.filter((record) =>
+    photoRecordMatchesCopyFilter(record, copyFilter)
+  )
 
   const photosToAssignOutputPaths: Photo[] = []
 
@@ -262,6 +284,7 @@ async function copyPhotoToOutput(
         destinationPath: error.destinationPath,
         message: error.message
       })
+      appLog('error', `scan skip copy-conflict: ${photo.sourcePath}`, error.message)
 
       return false
     }
@@ -276,6 +299,7 @@ async function copyPhotoToOutput(
       destinationPath,
       message: getScanErrorMessage(error)
     })
+    appLog('error', `scan skip copy: ${photo.sourcePath}`, error)
 
     return false
   }
@@ -288,6 +312,10 @@ async function generateThumbnailSafely(
   thumbnailGenerator: ScanPhotoLibraryDependencies['thumbnailGenerator'],
   rules: OrganizationRules
 ): Promise<string | undefined> {
+  if (isVideoLibraryFileName(context.sourcePath)) {
+    return undefined
+  }
+
   try {
     const thumbnailPath = await thumbnailGenerator.generateForPhoto(
       context.sourcePath
@@ -306,6 +334,7 @@ async function generateThumbnailSafely(
 
     metadataIssues.push(issue.code)
     issues.push(issue)
+    appLog('warn', `scan skip thumbnail: ${context.sourcePath}`, error)
 
     return undefined
   }

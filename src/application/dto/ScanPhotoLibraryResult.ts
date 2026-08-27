@@ -15,7 +15,8 @@ export const scanPhotoLibraryIssueStageSchema = z.enum([
   'hash',
   'region-resolve',
   'copy',
-  'thumbnail'
+  'thumbnail',
+  'prepare'
 ])
 
 export const scanPhotoLibraryIssueSchema = z.object({
