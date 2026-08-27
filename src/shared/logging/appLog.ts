@@ -1,23 +1,58 @@
 import { appendFile, mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 
 import { formatUnknownError } from '@shared/utils/formatUnknownError'
 
-let cachedLogFilePath: string | undefined
+let currentLogFilePath: string | undefined
 let ensureDirectoryPromise: Promise<void> | undefined
 
 function isTestRuntime(): boolean {
   return process.env.VITEST === 'true'
 }
 
+export function getAppLogsDirectory(): string {
+  return join(process.cwd(), 'logs')
+}
+
+export function createRunLogFileName(
+  kind: string,
+  at: Date = new Date()
+): string {
+  const pad = (value: number, size = 2) => String(value).padStart(size, '0')
+  const stamp = [
+    at.getFullYear(),
+    pad(at.getMonth() + 1),
+    pad(at.getDate()),
+    '-',
+    pad(at.getHours()),
+    pad(at.getMinutes()),
+    pad(at.getSeconds()),
+    '-',
+    pad(at.getMilliseconds(), 3)
+  ].join('')
+  const safeKind = kind.replaceAll(/[^a-z0-9_-]/gi, '').toLowerCase() || 'run'
+
+  return `${stamp}-${safeKind}.log`
+}
+
 export function getAppLogFilePath(): string {
-  if (cachedLogFilePath) {
-    return cachedLogFilePath
+  if (currentLogFilePath) {
+    return currentLogFilePath
   }
 
-  cachedLogFilePath = join(process.cwd(), 'logs', 'dani-photo-map.log')
+  currentLogFilePath = join(
+    getAppLogsDirectory(),
+    createRunLogFileName('session')
+  )
 
-  return cachedLogFilePath
+  return currentLogFilePath
+}
+
+export function startAppLogRun(kind: string): string {
+  currentLogFilePath = join(getAppLogsDirectory(), createRunLogFileName(kind))
+  ensureDirectoryPromise = undefined
+
+  return currentLogFilePath
 }
 
 function formatExtra(extra: unknown): string {
@@ -32,9 +67,9 @@ async function appendLogLine(line: string): Promise<void> {
   const filePath = getAppLogFilePath()
 
   try {
-    ensureDirectoryPromise ??= mkdir(dirname(filePath), { recursive: true }).then(
-      () => undefined
-    )
+    ensureDirectoryPromise ??= mkdir(getAppLogsDirectory(), {
+      recursive: true
+    }).then(() => undefined)
     await ensureDirectoryPromise
     await appendFile(filePath, `${line}\n`, 'utf8')
   } catch {

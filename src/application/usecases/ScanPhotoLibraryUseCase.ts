@@ -28,7 +28,7 @@ import {
   type OrganizationRules
 } from '@domain/policies/OrganizationRules'
 import type { Photo } from '@domain/entities/Photo'
-import { appLog, getAppLogFilePath } from '@shared/logging/appLog'
+import { appLog, startAppLogRun } from '@shared/logging/appLog'
 import { normalizePathSeparators } from '@shared/utils/path'
 
 export type { ScanPhotoLibraryDependencies } from '@application/services/photoLibraryScan/photoLibraryScanTypes'
@@ -48,9 +48,10 @@ export class ScanPhotoLibraryUseCase {
     const onScanProgress = options?.onScanProgress
     const paths = createScanPathContext(validatedCommand)
     const issues: ScanPhotoLibraryIssue[] = []
+    const logFilePath = startAppLogRun('scan')
     appLog(
       'info',
-      `scan start source=${paths.sourceRoot} output=${paths.outputRoot} log=${getAppLogFilePath()}`
+      `scan start source=${paths.sourceRoot} output=${paths.outputRoot} log=${logFilePath}`
     )
     const existingOutputSnapshot = await this.dependencies.existingOutputScanner.scan(
       paths.outputRoot

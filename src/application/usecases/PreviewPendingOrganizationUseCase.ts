@@ -31,7 +31,7 @@ import type { Photo } from '@domain/entities/Photo'
 import { groupKeyIdentitySignature } from '@domain/services/groupKeyIdentity'
 import { resolveGroupLabelForOutputFileName } from '@domain/services/PhotoNamingService'
 import { shouldSkipInlinePreviewImage } from '@shared/constants/mediaExtensions'
-import { appLog, getAppLogFilePath } from '@shared/logging/appLog'
+import { appLog, startAppLogRun } from '@shared/logging/appLog'
 import {
   getPathBaseName,
   normalizePathSeparators
@@ -150,10 +150,11 @@ export class PreviewPendingOrganizationUseCase {
     const sourceRoot = normalizePathSeparators(validatedCommand.sourceRoot)
     const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
     const skippedFailureDetails: PreviewSkipFailure[] = []
+    const logFilePath = startAppLogRun('preview')
 
     appLog(
       'info',
-      `preview start source=${sourceRoot} output=${outputRoot} log=${getAppLogFilePath()}`
+      `preview start source=${sourceRoot} output=${outputRoot} log=${logFilePath}`
     )
 
     const existingOutputSnapshot = await this.dependencies.existingOutputScanner.scan(
