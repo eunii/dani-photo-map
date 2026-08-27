@@ -215,13 +215,26 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
   try {
     if (request.mode === 'preview') {
       const useCase = createPreviewPendingOrganizationUseCase()
-      const previewResult = await useCase.execute({
-        sourceRoot: request.sourceRoot,
-        outputRoot: request.outputRoot,
-        forceFullRescan: request.forceFullRescan,
-        missingGpsGroupingBasis:
-          request.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
-      })
+      const previewResult = await useCase.execute(
+        {
+          sourceRoot: request.sourceRoot,
+          outputRoot: request.outputRoot,
+          forceFullRescan: request.forceFullRescan,
+          missingGpsGroupingBasis:
+            request.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
+        },
+        {
+          onPreviewProgress: (payload) => {
+            updateOrganizeJobStatus({
+              progress: {
+                completed: payload.completed,
+                total: payload.total,
+                stage: payload.stage === 'prepare' ? 'prepare' : 'preview'
+              }
+            })
+          }
+        }
+      )
 
       updateOrganizeJobStatus({
         phase: 'preview-completed',
@@ -412,14 +425,24 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(photoAppInvokeChannels.previewPendingOrganization)
   ipcMain.handle(
     photoAppInvokeChannels.previewPendingOrganization,
-    async (_event, command: PreviewPendingOrganizationRequest) => {
+    async (event, command: PreviewPendingOrganizationRequest) => {
       const useCase = createPreviewPendingOrganizationUseCase()
       try {
-        const result = await useCase.execute({
-          ...command,
-          missingGpsGroupingBasis:
-            command.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
-        })
+        const result = await useCase.execute(
+          {
+            ...command,
+            missingGpsGroupingBasis:
+              command.missingGpsGroupingBasis ?? defaultMissingGpsGroupingBasis
+          },
+          {
+            onPreviewProgress: (payload) => {
+              event.sender.send(
+                photoAppEventChannels.previewPendingOrganizationProgress,
+                payload
+              )
+            }
+          }
+        )
 
         showOrganizeTaskNotification({
           kind: 'preview-load',

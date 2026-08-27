@@ -12,6 +12,7 @@ import type {
   PhotoAppInvokeRequestMap,
   PhotoAppInvokeResponseMap,
   PreloadBridge,
+  PreviewPendingOrganizationProgressPayload,
   ScanPhotoLibraryProgressPayload
 } from '@shared/types/preload'
 
@@ -63,6 +64,26 @@ export const preloadBridge: PreloadBridge = {
 
     return () => {
       ipcRenderer.removeListener(photoAppEventChannels.scanPhotoLibraryProgress, listener)
+    }
+  },
+  onPreviewPendingOrganizationProgress(handler) {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: PreviewPendingOrganizationProgressPayload
+    ) => {
+      handler(payload)
+    }
+
+    ipcRenderer.on(
+      photoAppEventChannels.previewPendingOrganizationProgress,
+      listener
+    )
+
+    return () => {
+      ipcRenderer.removeListener(
+        photoAppEventChannels.previewPendingOrganizationProgress,
+        listener
+      )
     }
   },
   onOrganizeJobStatusChanged(handler) {

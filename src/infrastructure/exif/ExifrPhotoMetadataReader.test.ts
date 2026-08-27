@@ -132,4 +132,29 @@ describe('ExifrPhotoMetadataReader', () => {
       'exif C:/photos/stuck.JPG timed out after 20ms'
     )
   })
+
+  it('skips exifr parse for HEIC and MOV and uses file modified time', async () => {
+    const parseMetadata = vi.fn()
+    const reader = new ExifrPhotoMetadataReader(
+      parseMetadata,
+      vi.fn().mockResolvedValue({
+        mtime: new Date('2024-06-03T07:08:09.000Z')
+      })
+    )
+
+    await expect(reader.read('C:/photos/IMG_0001.HEIC')).resolves.toMatchObject({
+      capturedAt: {
+        ...localCapturedAtParts('2024-06-03T07:08:09.000Z')
+      },
+      capturedAtSource: 'file-modified-at',
+      gps: undefined,
+      missingGpsCategory: 'missing-imported-gps',
+      metadataIssues: ['metadata-skipped-container']
+    })
+    await expect(reader.read('C:/photos/clip.MOV')).resolves.toMatchObject({
+      capturedAtSource: 'file-modified-at',
+      metadataIssues: ['metadata-skipped-container']
+    })
+    expect(parseMetadata).not.toHaveBeenCalled()
+  })
 })

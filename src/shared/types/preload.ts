@@ -1,3 +1,4 @@
+import type { PreviewPendingOrganizationProgressPayload } from '@application/dto/PreviewPendingOrganizationProgress'
 import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
 import type {
   ExistingOutputSkipDetail,
@@ -8,6 +9,7 @@ import type { MissingGpsCategory } from '@domain/entities/Photo'
 import type { MissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
 import type { PhotoAppInvokeChannel } from '@shared/ipc/photoAppChannels'
 
+export type { PreviewPendingOrganizationProgressPayload }
 export type { ScanPhotoLibraryProgressPayload }
 export type {
   ExistingOutputSkipDetail,
@@ -437,6 +439,9 @@ export interface PreloadBridge {
   ) => Promise<ScanPhotoLibrarySummary>
   onScanPhotoLibraryProgress: (
     handler: (payload: ScanPhotoLibraryProgressPayload) => void
+  ) => () => void
+  onPreviewPendingOrganizationProgress: (
+    handler: (payload: PreviewPendingOrganizationProgressPayload) => void
   ) => () => void
   onOrganizeJobStatusChanged: (
     handler: (payload: OrganizeJobStatus) => void

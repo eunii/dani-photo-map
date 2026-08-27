@@ -148,6 +148,13 @@ export class ScanPhotoLibraryUseCase {
         copyKeys !== undefined &&
         copyKeys.length === 0)
 
+    if (skipAllCopies) {
+      appLog(
+        'info',
+        'copy-audit skip-all: 이번 실행은 복사할 파일이 없음 (copySourcePaths/copyGroupKeys 비어 있음)'
+      )
+    }
+
     const finalizedScanResult =
       skipAllCopies
         ? {
@@ -189,7 +196,7 @@ export class ScanPhotoLibraryUseCase {
 
     appLog(
       'info',
-      `scan done copied=${finalizedScanResult.copiedCount} existingSkip=${finalizedScanResult.skippedExistingCount} issues=${issues.length}`
+      `scan done copied=${finalizedScanResult.copiedCount} existingSkip=${finalizedScanResult.skippedExistingCount} incrementalSkip=${skippedUnchangedCount} issues=${issues.length}`
     )
 
     return {

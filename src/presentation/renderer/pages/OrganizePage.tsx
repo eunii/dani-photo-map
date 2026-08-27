@@ -50,6 +50,7 @@ export function OrganizePage({ onNavigateToSettings }: OrganizePageProps) {
     previewResult,
     setPreviewResult,
     isLoadingPreview,
+    previewProgress,
     handlePreview
   } = useOrganizePreview({
     sourceRoot,
@@ -195,6 +196,7 @@ export function OrganizePage({ onNavigateToSettings }: OrganizePageProps) {
           sourceRoot={sourceRoot}
           previewResult={previewResult}
           isLoadingPreview={isLoadingPreview}
+          previewProgress={previewProgress}
           savePipelineBusy={savePipelineBusy}
           missingGpsGroupingBasis={missingGpsGroupingBasis}
           onSelectSource={() => void selectSourceRoot()}
@@ -217,6 +219,7 @@ export function OrganizePage({ onNavigateToSettings }: OrganizePageProps) {
           orderedPreviewGroupCount={orderedPreviewGroups.length}
           wizardStepIndex={wizardStepIndex}
           isLoadingPreview={isLoadingPreview}
+          previewProgress={previewProgress}
           savePipelineBusy={savePipelineBusy}
           onWizardPrev={() =>
             setWizardStepIndex((step) => Math.max(0, step - 1))

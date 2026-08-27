@@ -6,6 +6,7 @@ import type {
   PhotoMetadataReaderPort
 } from '@application/ports/PhotoMetadataReaderPort'
 import { EXIF_IO_TIMEOUT_MS } from '@shared/constants/ioTimeouts'
+import { shouldSkipEmbeddedMetadata } from '@shared/constants/mediaExtensions'
 import { withTimeout } from '@shared/utils/withTimeout'
 import type { PhotoCapturedAtSource } from '@domain/entities/Photo'
 import type { PhotoTimestamp } from '@domain/value-objects/PhotoTimestamp'
@@ -111,11 +112,37 @@ export class ExifrPhotoMetadataReader implements PhotoMetadataReaderPort {
   ) {}
 
   async read(sourcePath: string): Promise<PhotoMetadata> {
+    if (shouldSkipEmbeddedMetadata(sourcePath)) {
+      return this.readSkippedContainerMetadata(sourcePath)
+    }
+
     return withTimeout(
       this.readWithoutTimeout(sourcePath),
       this.parseTimeoutMs,
       `exif ${sourcePath}`
     )
+  }
+
+  private async readSkippedContainerMetadata(
+    sourcePath: string
+  ): Promise<PhotoMetadata> {
+    const capturedAt = await this.readFileModifiedTimestamp(sourcePath)
+    const metadataIssues = ['metadata-skipped-container']
+
+    if (!capturedAt) {
+      metadataIssues.push('captured-at-missing')
+    }
+
+    return {
+      capturedAt,
+      capturedAtSource: capturedAt ? 'file-modified-at' : undefined,
+      gps: undefined,
+      originalGps: undefined,
+      missingGpsCategory: capturedAt
+        ? 'missing-imported-gps'
+        : 'missing-original-gps',
+      metadataIssues
+    }
   }
 
   private async readWithoutTimeout(sourcePath: string): Promise<PhotoMetadata> {

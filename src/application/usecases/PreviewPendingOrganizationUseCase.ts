@@ -2,6 +2,7 @@ import {
   type PreviewPendingOrganizationCommand,
   previewPendingOrganizationCommandSchema
 } from '@application/dto/PreviewPendingOrganizationCommand'
+import type { PreviewPendingOrganizationExecuteOptions } from '@application/dto/PreviewPendingOrganizationProgress'
 import type { ExistingOutputScannerPort } from '@application/ports/ExistingOutputScannerPort'
 import type { LibraryIndexStorePort } from '@application/ports/LibraryIndexStorePort'
 import type { PhotoLibraryFileSystemPort } from '@application/ports/PhotoLibraryFileSystemPort'
@@ -141,9 +142,11 @@ export class PreviewPendingOrganizationUseCase {
   }
 
   async execute(
-    command: PreviewPendingOrganizationCommand
+    command: PreviewPendingOrganizationCommand,
+    options?: PreviewPendingOrganizationExecuteOptions
   ): Promise<PreviewPendingOrganizationResult> {
     const validatedCommand = previewPendingOrganizationCommandSchema.parse(command)
+    const onPreviewProgress = options?.onPreviewProgress
     const sourceRoot = normalizePathSeparators(validatedCommand.sourceRoot)
     const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
     const skippedFailureDetails: PreviewSkipFailure[] = []
@@ -195,31 +198,45 @@ export class PreviewPendingOrganizationUseCase {
       'info',
       `preview incremental candidates=${sourcePhotoCandidates.length} unchangedSkip=${skippedUnchangedCount}`
     )
+    onPreviewProgress?.({
+      stage: 'prepare',
+      completed: 0,
+      total: sourcePhotoCandidates.length
+    })
+    let prepareCompleted = 0
     const candidatePhotos = (
       await mapWithConcurrencyLimit(
         sourcePhotoCandidates,
         PREVIEW_PREPARE_CONCURRENCY_LIMIT,
         async (candidate, index) => {
-          if (
-            (index + 1) % PREVIEW_PREPARE_LOG_INTERVAL === 0 ||
-            index + 1 === sourcePhotoCandidates.length
-          ) {
-            appLog(
-              'info',
-              `preview prepare ${index + 1}/${sourcePhotoCandidates.length}`
+          try {
+            return await this.prepareCandidatePhoto(
+              {
+                photoId: `preview-photo-${index + 1}`,
+                sourcePath: normalizePathSeparators(candidate.sourcePath),
+                sourceFileName: candidate.sourceFileName,
+                sourceFingerprint: candidate.sourceFingerprint
+              },
+              validatedCommand.missingGpsGroupingBasis,
+              skippedFailureDetails
             )
+          } finally {
+            prepareCompleted += 1
+            onPreviewProgress?.({
+              stage: 'prepare',
+              completed: prepareCompleted,
+              total: sourcePhotoCandidates.length
+            })
+            if (
+              prepareCompleted % PREVIEW_PREPARE_LOG_INTERVAL === 0 ||
+              prepareCompleted === sourcePhotoCandidates.length
+            ) {
+              appLog(
+                'info',
+                `preview prepare ${prepareCompleted}/${sourcePhotoCandidates.length}`
+              )
+            }
           }
-
-          return this.prepareCandidatePhoto(
-            {
-              photoId: `preview-photo-${index + 1}`,
-              sourcePath: normalizePathSeparators(candidate.sourcePath),
-              sourceFileName: candidate.sourceFileName,
-              sourceFingerprint: candidate.sourceFingerprint
-            },
-            validatedCommand.missingGpsGroupingBasis,
-            skippedFailureDetails
-          )
         }
       )
     ).filter((candidatePhoto): candidatePhoto is Photo => candidatePhoto !== null)
@@ -287,14 +304,21 @@ export class PreviewPendingOrganizationUseCase {
       fileSystem: this.dependencies.fileSystem
     })
 
+    onPreviewProgress?.({
+      stage: 'preview-images',
+      completed: 0,
+      total: previewGroups.length
+    })
+    let previewImagesCompleted = 0
     const groups = await mapWithConcurrencyLimit(
       previewGroups,
       PREVIEW_GROUP_CONCURRENCY_LIMIT,
       async (group) => {
-        const representativePhoto = group.representativePhotoId
-          ? photosById.get(group.representativePhotoId)
-          : undefined
-        const assignmentMode = this.resolveAssignmentMode(group, representativePhoto)
+        try {
+          const representativePhoto = group.representativePhotoId
+            ? photosById.get(group.representativePhotoId)
+            : undefined
+          const assignmentMode = this.resolveAssignmentMode(group, representativePhoto)
         const sameGroupTitle = this.resolveSameGroupTitle(group.groupKey, storedIndex)
         const primarySuggestions = buildNearbyGroupTitleSuggestions(
           group,
@@ -367,6 +391,14 @@ export class PreviewPendingOrganizationUseCase {
               outputRelativePath: previewOutputPaths.get(photo.id)
             })
           )
+        }
+        } finally {
+          previewImagesCompleted += 1
+          onPreviewProgress?.({
+            stage: 'preview-images',
+            completed: previewImagesCompleted,
+            total: previewGroups.length
+          })
         }
       }
     )

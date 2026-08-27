@@ -1,12 +1,15 @@
 import { Button } from '@heroui/react'
 
 import type { MissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
+import type { PreviewPendingOrganizationProgressPayload } from '@shared/types/preload'
 import { MISSING_GPS_GROUPING_OPTIONS } from '@presentation/renderer/pages/organize/organizePageConstants'
+import { formatPreviewLoadingButtonLabel, formatPreviewLoadingStatusLine } from '@presentation/renderer/pages/organize/previewLoadingLabel'
 
 interface OrganizeSourceAndGroupingSectionProps {
   sourceRoot: string | null
   previewResult: unknown | null
   isLoadingPreview: boolean
+  previewProgress: PreviewPendingOrganizationProgressPayload | null
   savePipelineBusy: boolean
   missingGpsGroupingBasis: MissingGpsGroupingBasis
   onSelectSource: () => void
@@ -18,6 +21,7 @@ export function OrganizeSourceAndGroupingSection({
   sourceRoot,
   previewResult,
   isLoadingPreview,
+  previewProgress,
   savePipelineBusy,
   missingGpsGroupingBasis,
   onSelectSource,
@@ -56,11 +60,20 @@ export function OrganizeSourceAndGroupingSection({
                 isDisabled={isLoadingPreview}
                 onPress={onStartPreview}
               >
-                {isLoadingPreview ? '불러오는 중…' : '정리 시작하기'}
+                {formatPreviewLoadingButtonLabel(
+                  isLoadingPreview,
+                  previewProgress,
+                  '정리 시작하기'
+                )}
               </Button>
             ) : null}
           </div>
         </div>
+        {isLoadingPreview ? (
+          <p className="text-[11px] text-[var(--app-muted)]">
+            {formatPreviewLoadingStatusLine(previewProgress)}
+          </p>
+        ) : null}
 
         <div
           className="border-t border-[var(--app-border)] pt-2"

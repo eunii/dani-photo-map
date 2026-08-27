@@ -1,11 +1,15 @@
 import { Button } from '@heroui/react'
 
+import type { PreviewPendingOrganizationProgressPayload } from '@shared/types/preload'
+import { formatPreviewLoadingButtonLabel } from '@presentation/renderer/pages/organize/previewLoadingLabel'
+
 interface OrganizePreviewActionBarProps {
   previewResult: unknown | null
   hasPendingPreviewGroups: boolean
   orderedPreviewGroupCount: number
   wizardStepIndex: number
   isLoadingPreview: boolean
+  previewProgress: PreviewPendingOrganizationProgressPayload | null
   savePipelineBusy: boolean
   onWizardPrev: () => void
   onReloadPreview: () => void
@@ -18,6 +22,7 @@ export function OrganizePreviewActionBar({
   orderedPreviewGroupCount,
   wizardStepIndex,
   isLoadingPreview,
+  previewProgress,
   savePipelineBusy,
   onWizardPrev,
   onReloadPreview,
@@ -45,7 +50,11 @@ export function OrganizePreviewActionBar({
                 isDisabled={isLoadingPreview || savePipelineBusy}
                 onPress={onReloadPreview}
               >
-                후보 다시 불러오기
+                {formatPreviewLoadingButtonLabel(
+                  isLoadingPreview,
+                  previewProgress,
+                  '후보 다시 불러오기'
+                )}
               </Button>
               {hasPendingPreviewGroups && orderedPreviewGroupCount > 0 ? (
                 <Button

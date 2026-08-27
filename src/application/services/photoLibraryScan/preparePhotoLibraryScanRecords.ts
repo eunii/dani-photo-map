@@ -60,6 +60,10 @@ async function createSha256Safely(
       message: getScanErrorMessage(error)
     })
     appLog('error', `scan skip hash: ${context.sourcePath}`, error)
+    appLog(
+      'info',
+      `copy-audit skip: ${context.sourcePath} | 해시 실패로 복사하지 않음 (${getScanErrorMessage(error)})`
+    )
 
     return null
   }
@@ -196,6 +200,10 @@ export async function preparePhotoRecords(
           message: getScanErrorMessage(error)
         })
         appLog('error', `scan skip prepare: ${sourcePath}`, error)
+        appLog(
+          'info',
+          `copy-audit skip: ${sourcePath} | 준비 단계에서 실패해 복사하지 않음 (${getScanErrorMessage(error)})`
+        )
         return {
           preparedPhotoRecord: null,
           issues: localIssues

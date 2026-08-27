@@ -15,6 +15,8 @@ export const photoAppInvokeChannels = {
 
 export const photoAppEventChannels = {
   scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress',
+  previewPendingOrganizationProgress:
+    'photo-app/preview-pending-organization-progress',
   organizeJobStatusChanged: 'photo-app/organize-job-status-changed'
 } as const
 

@@ -592,4 +592,67 @@ describe('PreviewPendingOrganizationUseCase', () => {
       }
     ])
   })
+
+  it('emits prepare and preview-image progress as files complete', async () => {
+    const dependencies = createDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_0001.JPG',
+      'C:\\source\\IMG_0002.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({
+      metadataIssues: [],
+      gps: {
+        latitude: 37.5665,
+        longitude: 126.978
+      },
+      capturedAt: {
+        iso: '2026-04-10T08:00:00.000Z',
+        year: '2026',
+        month: '04',
+        day: '10',
+        time: '080000'
+      },
+      capturedAtSource: 'exif-date-time-original'
+    })
+    dependencies.hasher.createSha256.mockImplementation(async (sourcePath: string) =>
+      sourcePath.replaceAll('\\', '/').endsWith('IMG_0001.JPG') ? 'hash-1' : 'hash-2'
+    )
+    dependencies.regionResolver.resolveName.mockResolvedValue('seoul')
+    dependencies.photoPreview.createDataUrl.mockResolvedValue(
+      'data:image/webp;base64,preview'
+    )
+    vi.mocked(dependencies.existingOutputScanner.scan).mockResolvedValue({
+      outputRoot: 'C:/output',
+      photos: []
+    })
+    dependencies.libraryIndexStore.load.mockResolvedValue(null)
+
+    const progress: Array<{ stage: string; completed: number; total: number }> =
+      []
+    const useCase = new PreviewPendingOrganizationUseCase(dependencies)
+    await useCase.execute(
+      {
+        sourceRoot: 'C:\\source',
+        outputRoot: 'C:\\output'
+      },
+      {
+        onPreviewProgress: (payload) => progress.push(payload)
+      }
+    )
+
+    expect(progress.filter((item) => item.stage === 'prepare')).toEqual([
+      { stage: 'prepare', completed: 0, total: 2 },
+      { stage: 'prepare', completed: 1, total: 2 },
+      { stage: 'prepare', completed: 2, total: 2 }
+    ])
+    const imageProgress = progress.filter((item) => item.stage === 'preview-images')
+    expect(imageProgress[0]).toEqual({
+      stage: 'preview-images',
+      completed: 0,
+      total: expect.any(Number)
+    })
+    expect(imageProgress.at(-1)?.completed).toBe(imageProgress.at(-1)?.total)
+    expect(imageProgress.at(-1)?.total).toBeGreaterThan(0)
+  })
 })

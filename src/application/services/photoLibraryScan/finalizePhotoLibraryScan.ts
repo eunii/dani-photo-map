@@ -64,6 +64,14 @@ function photoRecordMatchesCopyFilter(
   return true
 }
 
+function logCopyAuditSkip(sourcePath: string, reason: string): void {
+  appLog('info', `copy-audit skip: ${sourcePath} | ${reason}`)
+}
+
+function logCopyAuditCopied(sourcePath: string, destinationPath: string): void {
+  appLog('info', `copy-audit copied: ${sourcePath} -> ${destinationPath}`)
+}
+
 export async function finalizePreparedPhotos(
   preparedPhotoRecords: PreparedPhotoRecord[],
   outputRoot: string,
@@ -89,6 +97,16 @@ export async function finalizePreparedPhotos(
   const recordsToFinalize = preparedPhotoRecords.filter((record) =>
     photoRecordMatchesCopyFilter(record, copyFilter)
   )
+
+  const notInThisRunCount =
+    preparedPhotoRecords.length - recordsToFinalize.length
+
+  if (notInThisRunCount > 0) {
+    appLog(
+      'info',
+      `copy-audit skip-count: 이번 저장 대상이 아닌 파일 ${notInThisRunCount}개`
+    )
+  }
 
   const photosToAssignOutputPaths: Photo[] = []
 
@@ -166,6 +184,11 @@ export async function finalizePreparedPhotos(
     }
   }
 
+  appLog(
+    'info',
+    `copy-audit summary copied=${copiedPhotos.length} inBatchDuplicate=${duplicateCount} existingSkip=${skippedExistingCount} notInThisRun=${notInThisRunCount}`
+  )
+
   return {
     copiedPhotos,
     copiedCount: copiedPhotos.length,
@@ -210,46 +233,61 @@ async function finalizePreparedPhoto(
       duplicateSourcePath: preparedPhotoRecord.context.sourcePath,
       canonicalSourcePath: canonicalRecord?.context.sourcePath ?? ''
     })
+    logCopyAuditSkip(
+      preparedPhotoRecord.context.sourcePath,
+      `이번 배치 안 중복 (이미 복사하는 원본: ${canonicalRecord?.context.sourcePath ?? canonicalPhotoId})`
+    )
 
     return 'duplicate'
   }
 
   if (photo.sha256 && existingOutputHashes.has(photo.sha256)) {
+    const existingOutputRelativePath =
+      existingOutputHashToPath.get(photo.sha256) ?? ''
     existingOutputSkipDetails.push({
       sourcePhotoId: photo.id,
       sourcePath: preparedPhotoRecord.context.sourcePath,
       sha256: photo.sha256,
-      existingOutputRelativePath:
-        existingOutputHashToPath.get(photo.sha256) ?? ''
+      existingOutputRelativePath
     })
+    logCopyAuditSkip(
+      preparedPhotoRecord.context.sourcePath,
+      `출력 폴더에 같은 파일이 이미 있음 (${existingOutputRelativePath || '경로 없음'})`
+    )
 
     return 'existing-output-duplicate'
   }
 
-  if (photo.outputRelativePath) {
-    const copySucceeded = await copyPhotoToOutput(
-      outputRoot,
-      photo,
-      issues,
-      dependencies.fileSystem
+  if (!photo.outputRelativePath) {
+    logCopyAuditSkip(
+      preparedPhotoRecord.context.sourcePath,
+      '출력 경로를 만들지 못해 물리 복사를 하지 않음'
     )
-
-    if (!copySucceeded) {
-      return null
-    }
-
-    if (!photo.metadataIssues) {
-      photo.metadataIssues = []
-    }
-
-    photo.thumbnailRelativePath = await generateThumbnailSafely(
-      preparedPhotoRecord.context,
-      photo.metadataIssues,
-      issues,
-      dependencies.thumbnailGenerator,
-      rules
-    )
+    return null
   }
+
+  const copySucceeded = await copyPhotoToOutput(
+    outputRoot,
+    photo,
+    issues,
+    dependencies.fileSystem
+  )
+
+  if (!copySucceeded) {
+    return null
+  }
+
+  if (!photo.metadataIssues) {
+    photo.metadataIssues = []
+  }
+
+  photo.thumbnailRelativePath = await generateThumbnailSafely(
+    preparedPhotoRecord.context,
+    photo.metadataIssues,
+    issues,
+    dependencies.thumbnailGenerator,
+    rules
+  )
 
   return photo
 }
@@ -261,7 +299,11 @@ async function copyPhotoToOutput(
   fileSystem: PhotoLibraryFileSystemPort
 ): Promise<boolean> {
   if (!photo.outputRelativePath) {
-    return true
+    logCopyAuditSkip(
+      photo.sourcePath,
+      '출력 경로가 없어 물리 복사를 하지 않음'
+    )
+    return false
   }
 
   const destinationPath = joinPathSegments(outputRoot, photo.outputRelativePath)
@@ -270,6 +312,7 @@ async function copyPhotoToOutput(
   try {
     await fileSystem.ensureDirectory(destinationDirectory)
     await fileSystem.copyFile(photo.sourcePath, destinationPath)
+    logCopyAuditCopied(photo.sourcePath, destinationPath)
 
     return true
   } catch (error) {
@@ -284,7 +327,10 @@ async function copyPhotoToOutput(
         destinationPath: error.destinationPath,
         message: error.message
       })
-      appLog('error', `scan skip copy-conflict: ${photo.sourcePath}`, error.message)
+      logCopyAuditSkip(
+        photo.sourcePath,
+        `대상에 같은 이름 파일이 이미 있어 복사 실패 (${error.destinationPath})`
+      )
 
       return false
     }
@@ -299,7 +345,10 @@ async function copyPhotoToOutput(
       destinationPath,
       message: getScanErrorMessage(error)
     })
-    appLog('error', `scan skip copy: ${photo.sourcePath}`, error)
+    logCopyAuditSkip(
+      photo.sourcePath,
+      `복사 실패 dest=${destinationPath} (${getScanErrorMessage(error)})`
+    )
 
     return false
   }

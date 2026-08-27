@@ -4,6 +4,7 @@ import {
   isHeicLikeLibraryFileName,
   isPhotoLibraryMediaFileName,
   isVideoLibraryFileName,
+  shouldSkipEmbeddedMetadata,
   shouldSkipInlinePreviewImage
 } from '@shared/constants/mediaExtensions'
 
@@ -20,5 +21,9 @@ describe('mediaExtensions', () => {
     expect(shouldSkipInlinePreviewImage('clip.MOV')).toBe(true)
     expect(shouldSkipInlinePreviewImage('IMG_0001.HEIC')).toBe(true)
     expect(shouldSkipInlinePreviewImage('IMG_0001.JPG')).toBe(false)
+    expect(shouldSkipEmbeddedMetadata('IMG_0001.HEIC')).toBe(true)
+    expect(shouldSkipEmbeddedMetadata('clip.MOV')).toBe(true)
+    expect(shouldSkipEmbeddedMetadata('clip.mp4')).toBe(true)
+    expect(shouldSkipEmbeddedMetadata('IMG_0001.JPG')).toBe(false)
   })
 })

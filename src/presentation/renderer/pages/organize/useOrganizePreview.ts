@@ -1,7 +1,8 @@
-import { useCallback, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 
 import type { MissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
 import type {
+  PreviewPendingOrganizationProgressPayload,
   PreviewPendingOrganizationResult,
   LoadLibraryIndexResult
 } from '@shared/types/preload'
@@ -48,8 +49,16 @@ export function useOrganizePreview({
   setOpenScanResultDetail
 }: UseOrganizePreviewOptions) {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
+  const [previewProgress, setPreviewProgress] =
+    useState<PreviewPendingOrganizationProgressPayload | null>(null)
   const [previewResult, setPreviewResult] =
     useState<PreviewPendingOrganizationResult | null>(null)
+
+  useEffect(() => {
+    return window.photoApp.onPreviewPendingOrganizationProgress((payload) => {
+      setPreviewProgress(payload)
+    })
+  }, [])
 
   const handlePreview = useCallback(
     async (basisOverride?: MissingGpsGroupingBasis): Promise<void> => {
@@ -61,6 +70,7 @@ export function useOrganizePreview({
       const basis = basisOverride ?? missingGpsGroupingBasis
 
       setIsLoadingPreview(true)
+      setPreviewProgress(null)
       setErrorMessage(null)
 
       try {
@@ -104,6 +114,7 @@ export function useOrganizePreview({
         )
       } finally {
         setIsLoadingPreview(false)
+        setPreviewProgress(null)
       }
     },
     [
@@ -126,6 +137,7 @@ export function useOrganizePreview({
     previewResult,
     setPreviewResult,
     isLoadingPreview,
+    previewProgress,
     handlePreview
   }
 }
