@@ -17,7 +17,13 @@ export default defineConfig({
     build: {
       outDir: 'dist/main',
       lib: {
-        entry: resolve(__dirname, 'src/presentation/electron/main/index.ts')
+        entry: {
+          index: resolve(__dirname, 'src/presentation/electron/main/index.ts'),
+          generateThumbnailWorker: resolve(
+            __dirname,
+            'src/presentation/electron/main/workers/generateThumbnailWorker.ts'
+          )
+        }
       }
     },
     plugins: [externalizeDepsPlugin()],

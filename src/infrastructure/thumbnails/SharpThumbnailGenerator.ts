@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import sharp from 'sharp'
 
 import type { ThumbnailGeneratorPort } from '@application/ports/ThumbnailGeneratorPort'
+import { decodeHeicLikeToJpegBuffer } from '@infrastructure/thumbnails/decodeHeicLikeToJpegBuffer'
 import {
   SHARP_IO_TIMEOUT_MS,
   SHARP_IO_TIMEOUT_SECONDS
@@ -22,8 +23,11 @@ export class SharpThumbnailGenerator implements ThumbnailGeneratorPort {
     const outputPath = join(this.thumbnailsRootPath, fileName)
 
     await mkdir(dirname(outputPath), { recursive: true })
+
+    const heicJpegBuffer = await decodeHeicLikeToJpegBuffer(sourcePath)
+
     await withTimeout(
-      sharp(sourcePath)
+      sharp(heicJpegBuffer ?? sourcePath)
         .timeout({ seconds: SHARP_IO_TIMEOUT_SECONDS })
         .rotate()
         .resize({ width: this.width, withoutEnlargement: true })

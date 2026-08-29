@@ -1,7 +1,11 @@
 import type {
   DeleteOutputFolderSubtreeRequest,
   DeletePhotosFromLibraryRequest,
-  LibraryIndexView
+  GenerateMissingThumbnailsRequest,
+  GenerateMissingThumbnailsResult,
+  LibraryIndexView,
+  OpenOutputFileRequest,
+  OpenOutputFileResult
 } from '@shared/types/preload'
 
 const RESTART_HINT =
@@ -35,6 +39,32 @@ export async function deleteOutputFolderSubtreeIpc(
       'photo-app/delete-output-folder-subtree',
       request
     )
+  }
+  throw new Error(RESTART_HINT)
+}
+
+export async function openOutputFileIpc(
+  request: OpenOutputFileRequest
+): Promise<OpenOutputFileResult> {
+  const app = window.photoApp
+  if (typeof app.openOutputFile === 'function') {
+    return app.openOutputFile(request)
+  }
+  if (typeof app.invokePhotoApp === 'function') {
+    return app.invokePhotoApp('photo-app/open-output-file', request)
+  }
+  throw new Error(RESTART_HINT)
+}
+
+export async function generateMissingThumbnailsIpc(
+  request: GenerateMissingThumbnailsRequest
+): Promise<GenerateMissingThumbnailsResult> {
+  const app = window.photoApp
+  if (typeof app.generateMissingThumbnails === 'function') {
+    return app.generateMissingThumbnails(request)
+  }
+  if (typeof app.invokePhotoApp === 'function') {
+    return app.invokePhotoApp('photo-app/generate-missing-thumbnails', request)
   }
   throw new Error(RESTART_HINT)
 }

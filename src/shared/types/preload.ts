@@ -181,6 +181,28 @@ export interface DeleteOutputFolderSubtreeRequest {
   pathSegments: string[]
 }
 
+export interface OpenOutputFileRequest {
+  outputRoot: string
+  relativePath: string
+}
+
+export interface OpenOutputFileResult {
+  opened: boolean
+  errorMessage?: string
+}
+
+export interface GenerateMissingThumbnailsRequest {
+  outputRoot: string
+  pathSegments: string[]
+}
+
+export interface GenerateMissingThumbnailsResult {
+  index: LibraryIndexView
+  attemptedCount: number
+  succeededCount: number
+  failedCount: number
+}
+
 export interface MapGroupSummary {
   id: string
   title: string
@@ -209,6 +231,12 @@ export interface GroupPhotoSummary {
   outputRelativePath?: string
   hasGps: boolean
   missingGpsCategory?: MissingGpsCategory
+}
+
+export interface FlatPhotoRow {
+  photo: GroupPhotoSummary
+  groupId: string
+  groupDisplayTitle: string
 }
 
 export interface GroupDetail {
@@ -271,6 +299,7 @@ export interface LibraryIndexView {
   generatedAt: string
   outputRoot: string
   groups: GroupSummary[]
+  photoRows: FlatPhotoRow[]
 }
 
 export interface LoadLibraryIndexResult {
@@ -395,6 +424,8 @@ export interface PhotoAppInvokeRequestMap {
   'photo-app/move-photos-to-group': MovePhotosToGroupRequest
   'photo-app/delete-photos-from-library': DeletePhotosFromLibraryRequest
   'photo-app/delete-output-folder-subtree': DeleteOutputFolderSubtreeRequest
+  'photo-app/open-output-file': OpenOutputFileRequest
+  'photo-app/generate-missing-thumbnails': GenerateMissingThumbnailsRequest
   'photo-app/start-organize-job': StartOrganizeJobRequest
   'photo-app/get-organize-job-status': null
   'photo-app/cancel-organize-job': null
@@ -410,6 +441,8 @@ export interface PhotoAppInvokeResponseMap {
   'photo-app/move-photos-to-group': LibraryIndexView
   'photo-app/delete-photos-from-library': LibraryIndexView
   'photo-app/delete-output-folder-subtree': LibraryIndexView
+  'photo-app/open-output-file': OpenOutputFileResult
+  'photo-app/generate-missing-thumbnails': GenerateMissingThumbnailsResult
   'photo-app/start-organize-job': OrganizeJobStatus
   'photo-app/get-organize-job-status': OrganizeJobStatus
   'photo-app/cancel-organize-job': OrganizeJobCancellationResult
@@ -458,6 +491,10 @@ export interface PreloadBridge {
   deleteOutputFolderSubtree: (
     request: DeleteOutputFolderSubtreeRequest
   ) => Promise<LibraryIndexView>
+  openOutputFile: (request: OpenOutputFileRequest) => Promise<OpenOutputFileResult>
+  generateMissingThumbnails: (
+    request: GenerateMissingThumbnailsRequest
+  ) => Promise<GenerateMissingThumbnailsResult>
   /**
    * 등록된 invoke 채널만 허용합니다. 프리로드에 개별 메서드가 없을 때도 동작합니다.
    */

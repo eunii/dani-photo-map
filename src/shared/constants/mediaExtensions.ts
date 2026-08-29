@@ -43,7 +43,7 @@ export function isHeicLikeLibraryFileName(fileName: string): boolean {
 }
 
 export function shouldSkipInlinePreviewImage(fileName: string): boolean {
-  return isVideoLibraryFileName(fileName) || isHeicLikeLibraryFileName(fileName)
+  return isVideoLibraryFileName(fileName)
 }
 
 export function shouldSkipEmbeddedMetadata(fileName: string): boolean {

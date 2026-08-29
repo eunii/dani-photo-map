@@ -5,12 +5,12 @@ import {
   DEST_YEAR_MONTH_ONLY
 } from '@presentation/renderer/pages/fileList/fileListPageConstants'
 import { folderLabelMatches } from '@presentation/renderer/pages/fileList/fileListPageFormat'
+import type { FlatPhotoRow } from '@presentation/renderer/view-models/flattenLibraryPhotos'
 import {
-  findFirstGroupIdUnderSubfolder as findFirstGroupIdUnderSummaryPath,
-  listSubfoldersAtPath as listGroupSubfoldersAtPath
-} from '@presentation/renderer/view-models/groupFolderNavigation'
-import { formatPathSegmentLabel } from '@presentation/renderer/view-models/outputPathNavigation'
-import type { GroupSummary } from '@shared/types/preload'
+  findFirstGroupIdUnderSubfolder,
+  formatPathSegmentLabel,
+  listSubfoldersAtPath
+} from '@presentation/renderer/view-models/outputPathNavigation'
 
 export interface MoveDestinationFolderOption {
   groupId: string
@@ -20,7 +20,7 @@ export interface MoveDestinationFolderOption {
 }
 
 export function useFileListMoveDestination(
-  groups: GroupSummary[],
+  photoRows: FlatPhotoRow[],
   pathSegments: string[]
 ) {
   const [destinationSelect, setDestinationSelect] = useState('')
@@ -50,11 +50,11 @@ export function useFileListMoveDestination(
       : pathSegments.length > 0
         ? pathSegments.slice(0, -1)
         : ([] as string[])
-    const entries = listGroupSubfoldersAtPath(groups, listBasePath)
+    const entries = listSubfoldersAtPath(photoRows, listBasePath)
     const out: MoveDestinationFolderOption[] = []
     for (const entry of entries) {
-      const groupId = findFirstGroupIdUnderSummaryPath(
-        groups,
+      const groupId = findFirstGroupIdUnderSubfolder(
+        photoRows,
         listBasePath,
         entry.segment
       )
@@ -68,7 +68,7 @@ export function useFileListMoveDestination(
       }
     }
     return out
-  }, [groups, pathSegments, moveDestinationUsesChildFolders])
+  }, [photoRows, pathSegments, moveDestinationUsesChildFolders])
 
   function applyDestinationFromSelect(value: string): void {
     if (value === '') {

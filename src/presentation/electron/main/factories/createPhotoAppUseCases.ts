@@ -2,6 +2,7 @@ import { join } from 'node:path'
 
 import { DeleteOutputFolderSubtreeUseCase } from '@application/usecases/DeleteOutputFolderSubtreeUseCase'
 import { DeletePhotosFromLibraryUseCase } from '@application/usecases/DeletePhotosFromLibraryUseCase'
+import { GenerateMissingThumbnailsUseCase } from '@application/usecases/GenerateMissingThumbnailsUseCase'
 import { LoadLibraryGroupDetailUseCase } from '@application/usecases/LoadLibraryGroupDetailUseCase'
 import { LoadLibraryIndexUseCase } from '@application/usecases/LoadLibraryIndexUseCase'
 import { MovePhotosToGroupUseCase } from '@application/usecases/MovePhotosToGroupUseCase'
@@ -19,6 +20,7 @@ import { NodePhotoHasher } from '@infrastructure/hashing/NodePhotoHasher'
 import { JsonLibraryIndexStore } from '@infrastructure/storage/JsonLibraryIndexStore'
 import { SharpPhotoPreviewGenerator } from '@infrastructure/thumbnails/SharpPhotoPreviewGenerator'
 import { SharpThumbnailGenerator } from '@infrastructure/thumbnails/SharpThumbnailGenerator'
+import { WorkerPoolThumbnailGenerator } from '@infrastructure/thumbnails/WorkerPoolThumbnailGenerator'
 import type { ScanPhotoLibraryRequest } from '@shared/types/preload'
 
 function createLibraryIndexStore(): JsonLibraryIndexStore {
@@ -111,6 +113,22 @@ export function createDeleteOutputFolderSubtreeUseCase(): DeleteOutputFolderSubt
   return new DeleteOutputFolderSubtreeUseCase(
     createLibraryIndexStore(),
     new NodePhotoLibraryFileSystem(),
+    new ExistingOutputLibraryScanner(defaultOrganizationRules)
+  )
+}
+
+export function createGenerateMissingThumbnailsUseCase(command: {
+  outputRoot: string
+}): GenerateMissingThumbnailsUseCase {
+  const rules = defaultOrganizationRules
+  const thumbnailsRootPath = join(
+    command.outputRoot,
+    rules.outputThumbnailsRelativePath
+  )
+
+  return new GenerateMissingThumbnailsUseCase(
+    createLibraryIndexStore(),
+    new WorkerPoolThumbnailGenerator(thumbnailsRootPath),
     new ExistingOutputLibraryScanner(defaultOrganizationRules)
   )
 }

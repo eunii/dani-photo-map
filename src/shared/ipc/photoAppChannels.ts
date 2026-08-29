@@ -8,6 +8,8 @@ export const photoAppInvokeChannels = {
   movePhotosToGroup: 'photo-app/move-photos-to-group',
   deletePhotosFromLibrary: 'photo-app/delete-photos-from-library',
   deleteOutputFolderSubtree: 'photo-app/delete-output-folder-subtree',
+  openOutputFile: 'photo-app/open-output-file',
+  generateMissingThumbnails: 'photo-app/generate-missing-thumbnails',
   startOrganizeJob: 'photo-app/start-organize-job',
   getOrganizeJobStatus: 'photo-app/get-organize-job-status',
   cancelOrganizeJob: 'photo-app/cancel-organize-job'

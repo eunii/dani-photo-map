@@ -51,7 +51,7 @@ export function FileListRenameGroupDialog({
       onClick={onOverlayClick}
     >
       <div
-        className="w-full max-w-[460px] rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)]"
+        className="flex w-full max-w-[460px] max-h-[90vh] flex-col overflow-y-auto rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[0_18px_60px_rgba(15,23,42,0.12)]"
         onClick={onContentClick}
       >
         <h2
@@ -159,7 +159,7 @@ export function FileListRenameGroupDialog({
             )}
           </div>
         </div>
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="sticky bottom-0 mt-6 flex justify-end gap-2 bg-[var(--app-surface)] pt-2">
           <button
             type="button"
             className="rounded-[12px] border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-medium text-[var(--app-foreground)] disabled:opacity-50"

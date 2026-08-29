@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 import { FileListPhotoPreviewPanel } from '@presentation/renderer/components/fileList/FileListPhotoPreviewPanel'
 import { FileListToolbarStrip } from '@presentation/renderer/components/fileList/FileListToolbarStrip'
 import { OutputFolderTreePanel } from '@presentation/renderer/components/OutputFolderTreePanel'
@@ -14,8 +16,11 @@ import { FileListSourceBadgeBanner } from '@presentation/renderer/pages/fileList
 import { useFileListLibraryContext } from '@presentation/renderer/pages/fileList/useFileListLibraryContext'
 import { useFileListMoveDestination } from '@presentation/renderer/pages/fileList/useFileListMoveDestination'
 import { useFileListPathAndRows } from '@presentation/renderer/pages/fileList/useFileListPathAndRows'
+import { useFileListPreviewSplit } from '@presentation/renderer/pages/fileList/useFileListPreviewSplit'
 import { useFileListRenamePreview } from '@presentation/renderer/pages/fileList/useFileListRenamePreview'
 import { useFileListSelectionAndMutations } from '@presentation/renderer/pages/fileList/useFileListSelectionAndMutations'
+import { openOutputFileIpc } from '@presentation/renderer/utils/photoAppIpc'
+import type { FlatPhotoRow } from '@presentation/renderer/view-models/flattenLibraryPhotos'
 
 interface FileListPageProps {
   onNavigateToSettings?: () => void
@@ -42,9 +47,9 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     setSortOption,
     selectedPhotoId,
     setSelectedPhotoId,
-    groupAtPath,
-    groupDetail,
-    isLoadingGroupDetail,
+    canMutate,
+    groupsInCurrentFolder: groupsAtPath,
+    missingThumbnailCount,
     groupDetailErrorMessage,
     rowsInFolder,
     visibleRows,
@@ -54,6 +59,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     previewThumbUrl,
     outputRootForUrls,
     folderTree,
+    photoRows,
     totalCount,
     folderCount,
     subtreeCount,
@@ -77,7 +83,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     setManualDestinationFolder,
     applyDestinationFromSelect,
     handleManualDestinationInput
-  } = useFileListMoveDestination(groups, pathSegments)
+  } = useFileListMoveDestination(photoRows, pathSegments)
 
   const mutations = useFileListSelectionAndMutations({
     outputRoot,
@@ -95,16 +101,40 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     visibleRows
   })
 
+  const { splitLayoutRef, previewPanelWidth, handleStartPreviewResize } =
+    useFileListPreviewSplit()
+
+  async function handleOpenPhoto(row: FlatPhotoRow): Promise<void> {
+    if (!outputRootForUrls || !row.photo.outputRelativePath) {
+      setErrorMessage('이 사진의 실제 파일 경로를 찾을 수 없습니다.')
+      return
+    }
+    try {
+      const result = await openOutputFileIpc({
+        outputRoot: outputRootForUrls,
+        relativePath: row.photo.outputRelativePath
+      })
+      if (!result.opened) {
+        setErrorMessage(result.errorMessage || '파일을 열지 못했습니다.')
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '파일을 열지 못했습니다.'
+      )
+    }
+  }
+
   const {
     canRenameGroupFolderFromTree,
     groupsInCurrentFolder,
     renamePreviewRows,
     renamePreviewSummary
   } = useFileListRenamePreview({
+    outputRoot,
+    libraryIndex,
     pathSegments,
-    groupAtPath,
-    groupDetail,
-    rowsInFolder,
+    groupsAtPath,
+    renameDialogOpen: mutations.renameDialogOpen,
     renameNewTitle: mutations.renameNewTitle,
     renameTargetGroupId: mutations.renameTargetGroupId
   })
@@ -161,7 +191,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
               <div className="flex min-h-0 w-full flex-col overflow-hidden rounded-xl bg-[var(--app-surface)]">
                 <FileListBreadcrumbToolbar
                   pathSegments={pathSegments}
-                  groups={groups}
+                  photoRows={photoRows}
                   libraryIndex={libraryIndex}
                   rootBreadcrumbOptions={rootBreadcrumbOptions}
                   onNavigate={setPathSegments}
@@ -169,6 +199,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                     mutations.setDeleteFolderConfirmOpen(true)
                   }
                   isDeleteFolderDisabled={
+                    !canMutate ||
                     mutations.isDeletingFolder ||
                     mutations.isDeletingPhotos ||
                     mutations.isMovingPhotos
@@ -177,14 +208,16 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
 
                 <FileListGroupActionBar
                   libraryIndex={libraryIndex}
-                  groupAtPath={groupAtPath}
+                  canMutate={canMutate}
                   selectedForMoveSize={mutations.selectedForMove.size}
                   folderCount={folderCount}
                   visibleRowsLength={visibleRows.length}
+                  missingThumbnailCount={missingThumbnailCount}
                   isMovingPhotos={mutations.isMovingPhotos}
                   isRenaming={mutations.isRenaming}
                   isDeletingPhotos={mutations.isDeletingPhotos}
                   isDeletingFolder={mutations.isDeletingFolder}
+                  isGeneratingThumbnails={mutations.isGeneratingThumbnails}
                   moveDestinationFolderOptions={moveDestinationFolderOptions}
                   canRenameGroupFolderFromTree={canRenameGroupFolderFromTree}
                   groupsInCurrentFolder={groupsInCurrentFolder}
@@ -196,6 +229,9 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                       setManualDestinationFolder,
                       mutations.setMoveDialogOpen
                     )
+                  }
+                  onGenerateMissingThumbnails={() =>
+                    void mutations.handleGenerateMissingThumbnails()
                   }
                   onOpenRenameDialog={() => {
                     if (!libraryIndex) {
@@ -216,22 +252,29 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                 />
               </div>
 
-              <div className="grid min-h-0 flex-1 w-full min-w-0 gap-1.5 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(200px,260px)]">
-                <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl bg-[var(--app-surface)]">
+              <div
+                ref={splitLayoutRef}
+                className="flex min-h-0 flex-1 w-full min-w-0 flex-col gap-1.5 overflow-hidden lg:flex-row"
+                style={
+                  {
+                    '--filelist-preview-width': `${previewPanelWidth}px`
+                  } as CSSProperties
+                }
+              >
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-[var(--app-surface)]">
                   <div className="border-b border-[var(--app-border)] px-2 py-1">
                     <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                       이 폴더의 사진
                     </h3>
                   </div>
                   <FileListPhotoGrid
-                    groupAtPath={groupAtPath}
                     pathSegments={pathSegments}
-                    isLoadingGroupDetail={isLoadingGroupDetail}
                     folderCount={folderCount}
                     visibleRows={visibleRows}
                     outputRootForUrls={outputRootForUrls}
                     selectedPhotoId={selectedPhotoId}
                     onSelectPhoto={setSelectedPhotoId}
+                    onOpenPhoto={(row) => void handleOpenPhoto(row)}
                     selectedForMove={mutations.selectedForMove}
                     onToggleMoveSelection={mutations.toggleMoveSelection}
                     hasMore={hasMore}
@@ -239,10 +282,21 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
                   />
                 </div>
 
-                <FileListPhotoPreviewPanel
-                  selectedRow={selectedRow}
-                  previewThumbUrl={previewThumbUrl}
-                />
+                <button
+                  type="button"
+                  aria-label="미리보기 너비 조절"
+                  className="hidden shrink-0 cursor-col-resize rounded-full border border-[var(--app-border)] bg-[var(--app-surface)]/90 px-1 text-[10px] text-[var(--app-muted)] transition hover:bg-[var(--app-surface-strong)] lg:block"
+                  onMouseDown={handleStartPreviewResize}
+                >
+                  ⋮
+                </button>
+
+                <div className="min-h-0 min-w-0 lg:h-full lg:w-[var(--filelist-preview-width)] lg:flex-none">
+                  <FileListPhotoPreviewPanel
+                    selectedRow={selectedRow}
+                    previewThumbUrl={previewThumbUrl}
+                  />
+                </div>
               </div>
             </div>
           </div>

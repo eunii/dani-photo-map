@@ -19,7 +19,7 @@ describe('mediaExtensions', () => {
     expect(isVideoLibraryFileName('IMG_0001.JPG')).toBe(false)
     expect(isHeicLikeLibraryFileName('IMG_0001.HEIC')).toBe(true)
     expect(shouldSkipInlinePreviewImage('clip.MOV')).toBe(true)
-    expect(shouldSkipInlinePreviewImage('IMG_0001.HEIC')).toBe(true)
+    expect(shouldSkipInlinePreviewImage('IMG_0001.HEIC')).toBe(false)
     expect(shouldSkipInlinePreviewImage('IMG_0001.JPG')).toBe(false)
     expect(shouldSkipEmbeddedMetadata('IMG_0001.HEIC')).toBe(true)
     expect(shouldSkipEmbeddedMetadata('clip.MOV')).toBe(true)

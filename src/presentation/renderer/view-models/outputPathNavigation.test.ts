@@ -124,4 +124,28 @@ describe('buildOutputFolderTree', () => {
     expect(seoul?.pathSegments).toEqual(['2026', '04', 'seoul'])
     expect(seoul?.directRows).toHaveLength(2)
   })
+
+  it('keeps a single group split across two folders visible as two separate nodes', () => {
+    // Regression test for a merged group (same title, e.g. "week1") whose
+    // photos physically live under two different months. The tree must show
+    // both real folders instead of collapsing to whichever has more photos.
+    const rows = [
+      row('1', '2024/03/week1/a.jpg'),
+      row('2', '2024/03/week1/b.jpg'),
+      row('3', '2024/05/week1/c.jpg')
+    ]
+    const root = buildOutputFolderTree(rows)
+
+    const march = root.children
+      .find((c) => c.segmentKey === '2024')
+      ?.children.find((c) => c.segmentKey === '03')
+      ?.children.find((c) => c.segmentKey === 'week1')
+    const may = root.children
+      .find((c) => c.segmentKey === '2024')
+      ?.children.find((c) => c.segmentKey === '05')
+      ?.children.find((c) => c.segmentKey === 'week1')
+
+    expect(march?.totalPhotoCount).toBe(2)
+    expect(may?.totalPhotoCount).toBe(1)
+  })
 })

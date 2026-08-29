@@ -1,19 +1,17 @@
 import type { RefObject } from 'react'
 
 import { formatCapturedLabel } from '@presentation/renderer/pages/fileList/fileListPageFormat'
-import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
+import { toDisplayThumbUrl } from '@presentation/renderer/utils/fileUrl'
 import type { FlatPhotoRow } from '@presentation/renderer/view-models/flattenLibraryPhotos'
-import type { GroupSummary } from '@shared/types/preload'
 
 interface FileListPhotoGridProps {
-  groupAtPath: GroupSummary | undefined
   pathSegments: string[]
-  isLoadingGroupDetail: boolean
   folderCount: number
   visibleRows: FlatPhotoRow[]
   outputRootForUrls: string | undefined
   selectedPhotoId: string | undefined
   onSelectPhoto: (photoId: string) => void
+  onOpenPhoto: (row: FlatPhotoRow) => void
   selectedForMove: Set<string>
   onToggleMoveSelection: (photoId: string) => void
   hasMore: boolean
@@ -21,14 +19,13 @@ interface FileListPhotoGridProps {
 }
 
 export function FileListPhotoGrid({
-  groupAtPath,
   pathSegments,
-  isLoadingGroupDetail,
   folderCount,
   visibleRows,
   outputRootForUrls,
   selectedPhotoId,
   onSelectPhoto,
+  onOpenPhoto,
   selectedForMove,
   onToggleMoveSelection,
   hasMore,
@@ -36,18 +33,10 @@ export function FileListPhotoGrid({
 }: FileListPhotoGridProps) {
   return (
     <div className="app-scroll min-h-0 flex-1">
-      {!groupAtPath && pathSegments.length > 0 ? (
+      {folderCount === 0 ? (
         <p className="px-3 py-6 text-center text-xs text-slate-500">
-          년·월·그룹(지역) 폴더까지 들어가면 그 안의 사진 목록을 불러옵니다.
-        </p>
-      ) : groupAtPath && isLoadingGroupDetail ? (
-        <p className="px-3 py-6 text-center text-xs text-slate-500">
-          이 그룹의 사진을 불러오는 중입니다…
-        </p>
-      ) : folderCount === 0 ? (
-        <p className="px-3 py-6 text-center text-xs text-slate-500">
-          {groupAtPath
-            ? '이 그룹에 표시할 사진이 없습니다.'
+          {pathSegments.length > 0
+            ? '이 폴더에 바로 있는 파일은 없습니다.'
             : '왼쪽 트리에서 폴더를 선택하세요.'}
         </p>
       ) : (
@@ -55,16 +44,11 @@ export function FileListPhotoGrid({
           <div className="grid grid-cols-2 gap-1 p-1 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
             {visibleRows.map((row) => {
               const isSelected = row.photo.id === selectedPhotoId
-              const thumb =
-                outputRootForUrls &&
-                (toOutputFileUrl(
-                  outputRootForUrls,
-                  row.photo.thumbnailRelativePath
-                ) ??
-                  toOutputFileUrl(
-                    outputRootForUrls,
-                    row.photo.outputRelativePath
-                  ))
+              const thumb = toDisplayThumbUrl(
+                outputRootForUrls,
+                row.photo.thumbnailRelativePath,
+                row.photo.outputRelativePath
+              )
 
               return (
                 <div
@@ -75,6 +59,8 @@ export function FileListPhotoGrid({
                       : 'bg-[var(--app-surface)] hover:bg-[var(--app-surface-strong)]'
                   }`}
                   style={{ containIntrinsicSize: '160px 188px' }}
+                  onDoubleClick={() => onOpenPhoto(row)}
+                  title="더블클릭하면 사진 파일을 엽니다"
                 >
                   <div className="relative aspect-square w-full bg-[var(--app-surface-strong)]">
                     <label className="absolute left-1 top-1 z-10 flex cursor-pointer items-center rounded bg-white/88 p-0.5">

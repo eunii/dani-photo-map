@@ -115,6 +115,15 @@ export const preloadBridge: PreloadBridge = {
   async deleteOutputFolderSubtree(request) {
     return ipcRenderer.invoke(photoAppInvokeChannels.deleteOutputFolderSubtree, request)
   },
+  async openOutputFile(request) {
+    return ipcRenderer.invoke(photoAppInvokeChannels.openOutputFile, request)
+  },
+  async generateMissingThumbnails(request) {
+    return ipcRenderer.invoke(
+      photoAppInvokeChannels.generateMissingThumbnails,
+      request
+    )
+  },
   async invokePhotoApp<TChannel extends PhotoAppInvokeChannel>(
     channel: TChannel,
     payload: PhotoAppInvokeRequestMap[TChannel]

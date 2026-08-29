@@ -1,11 +1,12 @@
 import { Button } from '@heroui/react'
 
 import { BreadcrumbDropdown } from '@presentation/renderer/components/files/BreadcrumbDropdown'
+import type { FlatPhotoRow } from '@presentation/renderer/view-models/flattenLibraryPhotos'
 import {
-  listSubfoldersAtPath as listGroupSubfoldersAtPath
-} from '@presentation/renderer/view-models/groupFolderNavigation'
-import { formatPathSegmentLabel } from '@presentation/renderer/view-models/outputPathNavigation'
-import type { GroupSummary, LibraryIndexView } from '@shared/types/preload'
+  formatPathSegmentLabel,
+  listSubfoldersAtPath
+} from '@presentation/renderer/view-models/outputPathNavigation'
+import type { LibraryIndexView } from '@shared/types/preload'
 
 interface RootBreadcrumbOption {
   key: string
@@ -16,7 +17,7 @@ interface RootBreadcrumbOption {
 
 interface FileListBreadcrumbToolbarProps {
   pathSegments: string[]
-  groups: GroupSummary[]
+  photoRows: FlatPhotoRow[]
   libraryIndex: LibraryIndexView | null
   rootBreadcrumbOptions: RootBreadcrumbOption[]
   onNavigate: (segments: string[]) => void
@@ -26,7 +27,7 @@ interface FileListBreadcrumbToolbarProps {
 
 export function FileListBreadcrumbToolbar({
   pathSegments,
-  groups,
+  photoRows,
   libraryIndex,
   rootBreadcrumbOptions,
   onNavigate,
@@ -53,8 +54,8 @@ export function FileListBreadcrumbToolbar({
             <BreadcrumbDropdown
               label={formatPathSegmentLabel(segment)}
               currentPathSegments={pathSegments.slice(0, index + 1)}
-              options={listGroupSubfoldersAtPath(
-                groups,
+              options={listSubfoldersAtPath(
+                photoRows,
                 pathSegments.slice(0, index)
               ).map((entry) => ({
                 key: `sibling:${pathSegments.slice(0, index).join('/')}:${

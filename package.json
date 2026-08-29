@@ -23,7 +23,10 @@
     "icon": "build/dani_photo_map_camera_icon.ico",
     "asarUnpack": [
       "**/node_modules/sharp/**/*",
-      "**/node_modules/@img/**/*"
+      "**/node_modules/@img/**/*",
+      "**/node_modules/libheif-js/**/*",
+      "**/node_modules/heic-decode/**/*",
+      "**/node_modules/heic-convert/**/*"
     ],
     "win": {
       "executableName": "dani-photo-map",
@@ -42,6 +45,7 @@
   "dependencies": {
     "@heroui/react": "3.0.1",
     "exifr": "7.1.3",
+    "heic-convert": "2.1.0",
     "maplibre-gl": "5.21.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",

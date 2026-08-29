@@ -15,7 +15,8 @@ import { folderLabelMatches } from '@presentation/renderer/pages/fileList/fileLi
 import type { FlatPhotoRow } from '@presentation/renderer/view-models/flattenLibraryPhotos'
 import {
   deleteOutputFolderSubtreeIpc,
-  deletePhotosFromLibraryIpc
+  deletePhotosFromLibraryIpc,
+  generateMissingThumbnailsIpc
 } from '@presentation/renderer/utils/photoAppIpc'
 import type { LibraryIndexView } from '@shared/types/preload'
 
@@ -63,6 +64,7 @@ export function useFileListSelectionAndMutations({
   const [deleteFolderConfirmOpen, setDeleteFolderConfirmOpen] = useState(false)
   const [isDeletingPhotos, setIsDeletingPhotos] = useState(false)
   const [isDeletingFolder, setIsDeletingFolder] = useState(false)
+  const [isGeneratingThumbnails, setIsGeneratingThumbnails] = useState(false)
 
   useEffect(() => {
     setSelectedForMove(new Set())
@@ -266,6 +268,32 @@ export function useFileListSelectionAndMutations({
     }
   }
 
+  async function handleGenerateMissingThumbnails(): Promise<void> {
+    if (!outputRoot) {
+      return
+    }
+    setIsGeneratingThumbnails(true)
+    setErrorMessage(null)
+    try {
+      const result = await generateMissingThumbnailsIpc({
+        outputRoot,
+        pathSegments
+      })
+      if (result.failedCount > 0) {
+        setErrorMessage(
+          `썸네일 ${result.succeededCount}개 생성, ${result.failedCount}개 실패`
+        )
+      }
+      await reloadLibraryIndex()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : '썸네일 생성에 실패했습니다.'
+      )
+    } finally {
+      setIsGeneratingThumbnails(false)
+    }
+  }
+
   return {
     selectedForMove,
     moveDialogOpen,
@@ -284,12 +312,14 @@ export function useFileListSelectionAndMutations({
     setDeleteFolderConfirmOpen,
     isDeletingPhotos,
     isDeletingFolder,
+    isGeneratingThumbnails,
     toggleMoveSelection,
     allVisibleSelected,
     toggleSelectAllVisible,
     handleConfirmMoveToGroup,
     handleConfirmRename,
     handleConfirmDeletePhotos,
-    handleConfirmDeleteFolder
+    handleConfirmDeleteFolder,
+    handleGenerateMissingThumbnails
   }
 }

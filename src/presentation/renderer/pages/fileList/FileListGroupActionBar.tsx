@@ -7,18 +7,20 @@ import {
   folderRenameLabelWithoutDate
 } from '@presentation/renderer/pages/fileList/fileListPageFormat'
 import type { MoveDestinationFolderOption } from '@presentation/renderer/pages/fileList/useFileListMoveDestination'
-import type { GroupSummary, LibraryIndexView } from '@shared/types/preload'
+import type { LibraryIndexView } from '@shared/types/preload'
 
 interface FileListGroupActionBarProps {
   libraryIndex: LibraryIndexView | null
-  groupAtPath: GroupSummary | undefined
+  canMutate: boolean
   selectedForMoveSize: number
   folderCount: number
   visibleRowsLength: number
+  missingThumbnailCount: number
   isMovingPhotos: boolean
   isRenaming: boolean
   isDeletingPhotos: boolean
   isDeletingFolder: boolean
+  isGeneratingThumbnails: boolean
   moveDestinationFolderOptions: MoveDestinationFolderOption[]
   canRenameGroupFolderFromTree: boolean
   groupsInCurrentFolder: { id: string; title: string }[]
@@ -27,18 +29,21 @@ interface FileListGroupActionBarProps {
   onOpenRenameDialog: () => void
   onToggleSelectAllVisible: () => void
   onRequestDeleteSelectedPhotos: () => void
+  onGenerateMissingThumbnails: () => void
 }
 
 export function FileListGroupActionBar({
   libraryIndex,
-  groupAtPath,
+  canMutate,
   selectedForMoveSize,
   folderCount,
   visibleRowsLength,
+  missingThumbnailCount,
   isMovingPhotos,
   isRenaming,
   isDeletingPhotos,
   isDeletingFolder,
+  isGeneratingThumbnails,
   moveDestinationFolderOptions,
   canRenameGroupFolderFromTree,
   groupsInCurrentFolder,
@@ -46,9 +51,10 @@ export function FileListGroupActionBar({
   onOpenMoveDialog,
   onOpenRenameDialog,
   onToggleSelectAllVisible,
-  onRequestDeleteSelectedPhotos
+  onRequestDeleteSelectedPhotos,
+  onGenerateMissingThumbnails
 }: FileListGroupActionBarProps) {
-  if (!libraryIndex || !groupAtPath) {
+  if (!libraryIndex || folderCount === 0) {
     return null
   }
 
@@ -59,7 +65,10 @@ export function FileListGroupActionBar({
           variant="primary"
           className="h-7 rounded-[10px] bg-[var(--app-button)] px-2.5 text-xs font-medium text-[var(--app-button-foreground)] disabled:opacity-60"
           isDisabled={
-            selectedForMoveSize === 0 || isMovingPhotos || folderCount === 0
+            !canMutate ||
+            selectedForMoveSize === 0 ||
+            isMovingPhotos ||
+            folderCount === 0
           }
           onPress={onOpenMoveDialog}
         >
@@ -71,10 +80,22 @@ export function FileListGroupActionBar({
           <Button
             variant="ghost"
             className="h-7 rounded-[10px] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-foreground)] disabled:opacity-50"
-            isDisabled={groupsInCurrentFolder.length === 0 || isRenaming}
+            isDisabled={!canMutate || groupsInCurrentFolder.length === 0 || isRenaming}
             onPress={onOpenRenameDialog}
           >
             이름 변경
+          </Button>
+        ) : null}
+        {missingThumbnailCount > 0 ? (
+          <Button
+            variant="ghost"
+            className="h-7 rounded-[10px] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-medium text-[var(--app-foreground)] disabled:opacity-50"
+            isDisabled={!canMutate || isGeneratingThumbnails}
+            onPress={onGenerateMissingThumbnails}
+          >
+            {isGeneratingThumbnails
+              ? '썸네일 생성 중…'
+              : `썸네일 생성하기 (${missingThumbnailCount})`}
           </Button>
         ) : null}
       </div>
@@ -95,6 +116,7 @@ export function FileListGroupActionBar({
           variant="ghost"
           className="h-7 rounded-[10px] border border-[var(--app-danger)] bg-[var(--app-danger)] px-2.5 text-xs font-medium text-[var(--app-danger-foreground)] disabled:opacity-50"
           isDisabled={
+            !canMutate ||
             selectedForMoveSize === 0 ||
             isDeletingPhotos ||
             isDeletingFolder ||

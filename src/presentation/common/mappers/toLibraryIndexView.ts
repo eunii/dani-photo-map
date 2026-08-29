@@ -6,6 +6,7 @@ import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import type { Photo } from '@domain/entities/Photo'
 import type { PhotoGroup } from '@domain/entities/PhotoGroup'
 import {
+  type FlatPhotoRow,
   type GroupDetail,
   type GroupGpsBreakdownSummary,
   type GroupPhotoSummary,
@@ -14,6 +15,7 @@ import {
   type LibraryIndexView
 } from '@shared/types/preload'
 import { parseOutputDir } from '@shared/utils/outputRelativePath'
+import { stripLeadingDateFromGroupTitle } from '@presentation/common/formatters/groupTitle'
 
 const UNKNOWN_LOCATION_LABEL = 'Unknown Location'
 
@@ -274,13 +276,35 @@ function toGroupSummary(
   }
 }
 
+function toGroupDisplayTitle(group: PhotoGroup): string {
+  return group.title.trim().length > 0
+    ? group.title
+    : stripLeadingDateFromGroupTitle(group.displayTitle)
+}
+
+function toPhotoRows(group: PhotoGroup, photos: Photo[]): FlatPhotoRow[] {
+  const groupDisplayTitle = toGroupDisplayTitle(group)
+
+  return photos.map((photo) => ({
+    photo: toGroupPhotoSummary(photo),
+    groupId: group.id,
+    groupDisplayTitle
+  }))
+}
+
 export function toLibraryIndexView(index: LibraryIndex): LibraryIndexView {
   const photosById = new Map(index.photos.map((photo) => [photo.id, photo]))
 
   return {
     generatedAt: index.generatedAt,
     outputRoot: index.outputRoot,
-    groups: index.groups.map((group) => toGroupSummary(group, photosById))
+    groups: index.groups.map((group) => toGroupSummary(group, photosById)),
+    photoRows: index.groups.flatMap((group) => {
+      const photos = group.photoIds
+        .map((photoId) => photosById.get(photoId))
+        .filter((photo): photo is Photo => Boolean(photo))
+      return toPhotoRows(group, photos)
+    })
   }
 }
 
@@ -292,6 +316,7 @@ export function toFallbackLibraryIndexView(
   return {
     generatedAt,
     outputRoot,
+    photoRows: [],
     groups: groups.map((group) => ({
       id: group.id,
       groupKey: group.groupKey,

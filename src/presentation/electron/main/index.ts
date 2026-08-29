@@ -1,5 +1,5 @@
-import { join } from 'node:path'
-import { app, BrowserWindow, Notification, dialog, ipcMain } from 'electron'
+import { join, resolve } from 'node:path'
+import { app, BrowserWindow, Notification, dialog, ipcMain, shell } from 'electron'
 
 import { defaultMissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
 import {
@@ -11,6 +11,7 @@ import {
 import {
   createDeleteOutputFolderSubtreeUseCase,
   createDeletePhotosFromLibraryUseCase,
+  createGenerateMissingThumbnailsUseCase,
   createLoadLibraryGroupDetailUseCase,
   createLoadLibraryIndexUseCase,
   createMovePhotosToGroupUseCase,
@@ -23,13 +24,17 @@ import {
   photoAppInvokeChannels
 } from '@shared/ipc/photoAppChannels'
 import { appLog } from '@shared/logging/appLog'
+import { normalizePathSeparators } from '@shared/utils/path'
+import { isResolvedPathUnderRoot } from '@shared/utils/pathScope'
 import type {
   DeleteOutputFolderSubtreeRequest,
   DeletePhotosFromLibraryRequest,
   DirectorySelectionOptions,
+  GenerateMissingThumbnailsRequest,
   LoadLibraryGroupDetailRequest,
   LoadLibraryIndexRequest,
   MovePhotosToGroupRequest,
+  OpenOutputFileRequest,
   OrganizeJobStatus,
   PreviewPendingOrganizationRequest,
   ScanPhotoLibraryRequest,
@@ -570,6 +575,42 @@ function registerIpcHandlers(): void {
       const index = await useCase.execute(command)
 
       return toLibraryIndexView(index)
+    }
+  )
+
+  ipcMain.removeHandler(photoAppInvokeChannels.openOutputFile)
+  ipcMain.handle(
+    photoAppInvokeChannels.openOutputFile,
+    async (_event, command: OpenOutputFileRequest) => {
+      const outputRoot = normalizePathSeparators(command.outputRoot)
+      const fileAbsolutePath = resolve(join(outputRoot, command.relativePath))
+
+      if (!isResolvedPathUnderRoot(outputRoot, fileAbsolutePath)) {
+        return {
+          opened: false,
+          errorMessage: '파일 경로가 출력 폴더 밖을 가리킵니다.'
+        }
+      }
+
+      const errorMessage = await shell.openPath(fileAbsolutePath)
+
+      return errorMessage ? { opened: false, errorMessage } : { opened: true }
+    }
+  )
+
+  ipcMain.removeHandler(photoAppInvokeChannels.generateMissingThumbnails)
+  ipcMain.handle(
+    photoAppInvokeChannels.generateMissingThumbnails,
+    async (_event, command: GenerateMissingThumbnailsRequest) => {
+      const useCase = createGenerateMissingThumbnailsUseCase(command)
+      const result = await useCase.execute(command)
+
+      return {
+        index: toLibraryIndexView(result.index),
+        attemptedCount: result.attemptedCount,
+        succeededCount: result.succeededCount,
+        failedCount: result.failedCount
+      }
     }
   )
 }

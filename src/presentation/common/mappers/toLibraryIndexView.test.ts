@@ -4,7 +4,10 @@ import {
   LIBRARY_INDEX_VERSION,
   type LibraryIndex
 } from '@domain/entities/LibraryIndex'
-import { toLibraryIndexView } from '@presentation/common/mappers/toLibraryIndexView'
+import {
+  toFallbackLibraryIndexView,
+  toLibraryIndexView
+} from '@presentation/common/mappers/toLibraryIndexView'
 
 function createLibraryIndex(): LibraryIndex {
   return {
@@ -47,6 +50,30 @@ function createLibraryIndex(): LibraryIndex {
         outputRelativePath: '2026/04/seoul/IMG_0002.JPG',
         isDuplicate: false,
         metadataIssues: []
+      },
+      {
+        id: 'photo-3',
+        sourcePath: 'C:/photos/source/IMG_0003.JPG',
+        sourceFileName: 'IMG_0003.JPG',
+        outputRelativePath: '2026/03/week1/IMG_0003.JPG',
+        isDuplicate: false,
+        metadataIssues: []
+      },
+      {
+        id: 'photo-4',
+        sourcePath: 'C:/photos/source/IMG_0004.JPG',
+        sourceFileName: 'IMG_0004.JPG',
+        outputRelativePath: '2026/03/week1/IMG_0004.JPG',
+        isDuplicate: false,
+        metadataIssues: []
+      },
+      {
+        id: 'photo-5',
+        sourcePath: 'C:/photos/source/IMG_0005.JPG',
+        sourceFileName: 'IMG_0005.JPG',
+        outputRelativePath: '2026/05/week1/IMG_0005.JPG',
+        isDuplicate: false,
+        metadataIssues: []
       }
     ],
     groups: [
@@ -64,6 +91,15 @@ function createLibraryIndex(): LibraryIndex {
         representativeThumbnailRelativePath: '.photo-organizer/thumbnails/photo-1.webp',
         companions: ['Alice'],
         notes: 'sample'
+      },
+      {
+        id: 'group-2',
+        groupKey: 'group|title=week1',
+        title: 'week1',
+        displayTitle: 'week1',
+        photoIds: ['photo-3', 'photo-4', 'photo-5'],
+        companions: [],
+        notes: undefined
       }
     ]
   }
@@ -83,5 +119,29 @@ describe('toLibraryIndexView', () => {
     })
     expect(view.groups[0]?.searchText.length).toBeGreaterThan(0)
     expect(view.groups[0]?.gpsBreakdown).toBeDefined()
+  })
+
+  it('keeps each photo\'s real output path in photoRows even when the group majority-votes a different folder', () => {
+    const view = toLibraryIndexView(createLibraryIndex())
+
+    const group2 = view.groups.find((group) => group.id === 'group-2')
+    expect(group2?.pathSegments).toEqual(['2026', '03', 'week1'])
+
+    const group2Rows = view.photoRows.filter((row) => row.groupId === 'group-2')
+    expect(group2Rows).toHaveLength(3)
+    expect(group2Rows.map((row) => row.photo.outputRelativePath).sort()).toEqual(
+      [
+        '2026/03/week1/IMG_0003.JPG',
+        '2026/03/week1/IMG_0004.JPG',
+        '2026/05/week1/IMG_0005.JPG'
+      ].sort()
+    )
+    expect(view.photoRows).toHaveLength(5)
+  })
+
+  it('returns an empty photoRows array for the fallback recovery view', () => {
+    const fallbackView = toFallbackLibraryIndexView('C:/photos/output', '2026-04-03T10:11:12.000Z', [])
+
+    expect(fallbackView.photoRows).toEqual([])
   })
 })

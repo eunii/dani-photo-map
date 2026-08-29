@@ -1,13 +1,9 @@
 import { stripLeadingDateFromGroupTitle } from '@presentation/common/formatters/groupTitle'
-import type { GroupDetail, GroupPhotoSummary } from '@shared/types/preload'
+import type { FlatPhotoRow, GroupDetail } from '@shared/types/preload'
+
+export type { FlatPhotoRow } from '@shared/types/preload'
 
 export type PhotoListSortOption = 'captured-desc' | 'filename-asc'
-
-export interface FlatPhotoRow {
-  photo: GroupPhotoSummary
-  groupId: string
-  groupDisplayTitle: string
-}
 
 /** One row per photo; skips duplicate photo ids if they ever appear in multiple groups. */
 export function flattenLibraryGroupsToPhotos(groups: GroupDetail[]): FlatPhotoRow[] {

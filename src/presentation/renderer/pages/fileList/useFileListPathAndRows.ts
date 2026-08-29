@@ -7,7 +7,7 @@ import {
 } from 'react'
 
 import { useLibraryGroupDetail } from '@presentation/renderer/hooks/useLibraryGroupDetail'
-import { toOutputFileUrl } from '@presentation/renderer/utils/fileUrl'
+import { toDisplayThumbUrl } from '@presentation/renderer/utils/fileUrl'
 import {
   flattenLibraryGroupsToPhotos,
   sortFlatPhotoRows,
@@ -16,11 +16,17 @@ import {
 import {
   buildGroupFolderTree,
   countPhotosInGroupSubtree,
-  findGroupByPath,
-  listSubfoldersAtPath as listGroupSubfoldersAtPath
+  findGroupByPath
 } from '@presentation/renderer/view-models/groupFolderNavigation'
-import { formatPathSegmentLabel } from '@presentation/renderer/view-models/outputPathNavigation'
-import type { LibraryIndexView } from '@shared/types/preload'
+import {
+  buildOutputFolderTree,
+  countPhotosInSubtree,
+  filterRowsAtPath,
+  formatPathSegmentLabel,
+  listSubfoldersAtPath
+} from '@presentation/renderer/view-models/outputPathNavigation'
+import { isVideoLibraryFileName } from '@shared/constants/mediaExtensions'
+import type { GroupSummary, LibraryIndexView } from '@shared/types/preload'
 
 import { LIST_CHUNK } from '@presentation/renderer/pages/fileList/fileListPageConstants'
 
@@ -44,33 +50,65 @@ export function useFileListPathAndRows({
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | undefined>()
   const [visibleCount, setVisibleCount] = useState(LIST_CHUNK)
 
-  const groupAtPath = useMemo(
-    () => findGroupByPath(groups, pathSegments),
-    [groups, pathSegments]
+  const photoRows = libraryIndex?.photoRows ?? []
+  // `photoRows` is only empty for the disk-scan fallback recovery index, which
+  // has no per-photo output paths. In that rare case we fall back to the old
+  // group-based browsing (view-only; move/rename stay disabled, see
+  // `canMutate` below) instead of showing an empty tree.
+  const canMutate = photoRows.length > 0
+
+  const fallbackGroupAtPath = useMemo(
+    () => (canMutate ? undefined : findGroupByPath(groups, pathSegments)),
+    [canMutate, groups, pathSegments]
   )
 
-  const {
-    groupDetail,
-    isLoading: isLoadingGroupDetail,
-    errorMessage: groupDetailErrorMessage
-  } = useLibraryGroupDetail({
-    outputRoot: libraryIndex?.outputRoot ?? outputRoot,
-    group: groupAtPath ?? null
-  })
+  const { groupDetail: fallbackGroupDetail, errorMessage: groupDetailErrorMessage } =
+    useLibraryGroupDetail({
+      outputRoot: libraryIndex?.outputRoot ?? outputRoot,
+      group: fallbackGroupAtPath ?? null
+    })
 
-  const flatRows = useMemo(
-    () => (groupDetail ? flattenLibraryGroupsToPhotos([groupDetail]) : []),
-    [groupDetail]
+  const fallbackRowsAtPath = useMemo(
+    () =>
+      fallbackGroupDetail ? flattenLibraryGroupsToPhotos([fallbackGroupDetail]) : [],
+    [fallbackGroupDetail]
   )
 
-  const sortedRows = useMemo(
-    () => sortFlatPhotoRows(flatRows, sortOption),
-    [flatRows, sortOption]
+  const folderTree = useMemo(
+    () => (canMutate ? buildOutputFolderTree(photoRows) : buildGroupFolderTree(groups)),
+    [canMutate, photoRows, groups]
   )
 
-  const folderTree = useMemo(() => buildGroupFolderTree(groups), [groups])
+  const rowsAtPath = useMemo(
+    () => (canMutate ? filterRowsAtPath(photoRows, pathSegments) : fallbackRowsAtPath),
+    [canMutate, photoRows, pathSegments, fallbackRowsAtPath]
+  )
 
-  const rowsInFolder = sortedRows
+  const rowsInFolder = useMemo(
+    () => sortFlatPhotoRows(rowsAtPath, sortOption),
+    [rowsAtPath, sortOption]
+  )
+
+  const groupsInCurrentFolder = useMemo(() => {
+    if (!canMutate) {
+      return []
+    }
+    const ids = [...new Set(rowsInFolder.map((row) => row.groupId))]
+    return ids
+      .map((id) => groups.find((group) => group.id === id))
+      .filter((group): group is GroupSummary => Boolean(group))
+  }, [canMutate, rowsInFolder, groups])
+
+  const missingThumbnailCount = useMemo(() => {
+    if (!canMutate) {
+      return 0
+    }
+    return rowsInFolder.filter(
+      (row) =>
+        !row.photo.thumbnailRelativePath &&
+        !isVideoLibraryFileName(row.photo.sourceFileName)
+    ).length
+  }, [canMutate, rowsInFolder])
 
   useEffect(() => {
     setPathSegments([])
@@ -143,23 +181,30 @@ export function useFileListPathAndRows({
   const outputRootForUrls = libraryIndex?.outputRoot ?? outputRoot
 
   const previewThumbUrl = useMemo(() => {
-    if (!outputRootForUrls || !selectedRow) {
+    if (!selectedRow) {
       return undefined
     }
-    return (
-      toOutputFileUrl(outputRootForUrls, selectedRow.photo.thumbnailRelativePath) ??
-      toOutputFileUrl(outputRootForUrls, selectedRow.photo.outputRelativePath)
+    return toDisplayThumbUrl(
+      outputRootForUrls,
+      selectedRow.photo.thumbnailRelativePath,
+      selectedRow.photo.outputRelativePath
     )
   }, [outputRootForUrls, selectedRow])
 
   const totalCount = useMemo(
-    () => countPhotosInGroupSubtree(groups, []),
-    [groups]
+    () =>
+      canMutate
+        ? countPhotosInSubtree(photoRows, [])
+        : countPhotosInGroupSubtree(groups, []),
+    [canMutate, photoRows, groups]
   )
   const folderCount = rowsInFolder.length
   const subtreeCount = useMemo(
-    () => countPhotosInGroupSubtree(groups, pathSegments),
-    [groups, pathSegments]
+    () =>
+      canMutate
+        ? countPhotosInSubtree(photoRows, pathSegments)
+        : countPhotosInGroupSubtree(groups, pathSegments),
+    [canMutate, photoRows, groups, pathSegments]
   )
 
   const breadcrumbPathLabel = useMemo(() => {
@@ -171,13 +216,13 @@ export function useFileListPathAndRows({
 
   const rootBreadcrumbOptions = useMemo(
     () =>
-      listGroupSubfoldersAtPath(groups, []).map((entry) => ({
+      listSubfoldersAtPath(photoRows, []).map((entry) => ({
         key: `root:${entry.segment}`,
         label: entry.displayLabel,
         pathSegments: [entry.segment],
         photoCount: entry.photoCount
       })),
-    [groups]
+    [photoRows]
   )
 
   return {
@@ -187,9 +232,9 @@ export function useFileListPathAndRows({
     setSortOption,
     selectedPhotoId,
     setSelectedPhotoId,
-    groupAtPath,
-    groupDetail,
-    isLoadingGroupDetail,
+    canMutate,
+    groupsInCurrentFolder,
+    missingThumbnailCount,
     groupDetailErrorMessage,
     rowsInFolder,
     visibleRows,
@@ -199,6 +244,7 @@ export function useFileListPathAndRows({
     previewThumbUrl,
     outputRootForUrls,
     folderTree,
+    photoRows,
     totalCount,
     folderCount,
     subtreeCount,

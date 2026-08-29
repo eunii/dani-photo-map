@@ -1,13 +1,6 @@
 import type { GroupSummary } from '@shared/types/preload'
 
-import { type OutputFolderTreeNode, outputPathKey } from '@presentation/renderer/view-models/outputPathNavigation'
-
-export interface GroupSubfolderEntry {
-  segment: string
-  displayLabel: string
-  photoCount: number
-  pathSegments: string[]
-}
+import { type OutputFolderTreeNode } from '@presentation/renderer/view-models/outputPathNavigation'
 
 class MutableTreeNode {
   pathSegments: string[] = []
@@ -90,39 +83,6 @@ export function countPhotosInGroupSubtree(
     .reduce((sum, group) => sum + group.photoCount, 0)
 }
 
-export function listSubfoldersAtPath(
-  groups: GroupSummary[],
-  pathSegments: string[]
-): GroupSubfolderEntry[] {
-  const entries = new Map<string, GroupSubfolderEntry>()
-
-  for (const group of groups) {
-    if (!pathStartsWith(group.pathSegments, pathSegments)) {
-      continue
-    }
-
-    if (group.pathSegments.length <= pathSegments.length) {
-      continue
-    }
-
-    const nextSegment = group.pathSegments[pathSegments.length]!
-    const nextPath = group.pathSegments.slice(0, pathSegments.length + 1)
-    const key = outputPathKey(nextPath)
-    const current = entries.get(key)
-
-    entries.set(key, {
-      segment: nextSegment,
-      displayLabel: nextSegment,
-      photoCount: (current?.photoCount ?? 0) + group.photoCount,
-      pathSegments: nextPath
-    })
-  }
-
-  return [...entries.values()].sort((left, right) =>
-    left.displayLabel.localeCompare(right.displayLabel)
-  )
-}
-
 export function findGroupByPath(
   groups: GroupSummary[],
   pathSegments: string[]
@@ -132,33 +92,4 @@ export function findGroupByPath(
       group.pathSegments.length === pathSegments.length &&
       group.pathSegments.every((segment, index) => segment === pathSegments[index])
   )
-}
-
-/** `pathSegments` + `subfolderSegment` 접두로 시작하는 첫 그룹 id (이동 대화상자 등). */
-export function findFirstGroupIdUnderSubfolder(
-  groups: GroupSummary[],
-  pathSegments: string[],
-  subfolderSegment: string
-): string | undefined {
-  const prefix = [...pathSegments, subfolderSegment]
-  return groups.find((group) => pathStartsWith(group.pathSegments, prefix))?.id
-}
-
-export function listSiblingGroups(
-  groups: GroupSummary[],
-  pathSegments: string[]
-): GroupSummary[] {
-  if (pathSegments.length === 0) {
-    return []
-  }
-
-  const parentPath = pathSegments.slice(0, -1)
-
-  return groups
-    .filter(
-      (group) =>
-        group.pathSegments.length === pathSegments.length &&
-        pathStartsWith(group.pathSegments, parentPath)
-    )
-    .sort((left, right) => left.displayTitle.localeCompare(right.displayTitle))
 }
