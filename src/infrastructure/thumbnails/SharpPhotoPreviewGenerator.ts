@@ -12,19 +12,23 @@ export class SharpPhotoPreviewGenerator implements PhotoPreviewPort {
   constructor(private readonly width = 480) {}
 
   async createDataUrl(sourcePath: string): Promise<string> {
-    const heicJpegBuffer = await decodeHeicLikeToJpegBuffer(sourcePath)
-
     const buffer = await withTimeout(
-      sharp(heicJpegBuffer ?? sourcePath)
-        .timeout({ seconds: SHARP_IO_TIMEOUT_SECONDS })
-        .rotate()
-        .resize({ width: this.width, withoutEnlargement: true })
-        .webp({ quality: 82 })
-        .toBuffer(),
+      this.createResizedWebpBuffer(sourcePath),
       SHARP_IO_TIMEOUT_MS,
       `preview ${sourcePath}`
     )
 
     return `data:image/webp;base64,${buffer.toString('base64')}`
+  }
+
+  private async createResizedWebpBuffer(sourcePath: string): Promise<Buffer> {
+    const heicJpegBuffer = await decodeHeicLikeToJpegBuffer(sourcePath)
+
+    return sharp(heicJpegBuffer ?? sourcePath)
+      .timeout({ seconds: SHARP_IO_TIMEOUT_SECONDS })
+      .rotate()
+      .resize({ width: this.width, withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer()
   }
 }

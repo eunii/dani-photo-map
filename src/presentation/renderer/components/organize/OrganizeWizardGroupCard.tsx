@@ -16,18 +16,11 @@ import {
 
 type PreviewGroup = PreviewPendingOrganizationResult['groups'][number]
 
-export interface OrganizeSaveJobSnapshot {
-  copyGroupKeysInThisRun: string[]
-  isLastStep: boolean
-  progressOffsetBeforeJob: number
-}
-
 interface OrganizeWizardGroupCardProps {
   group: PreviewGroup
   missingGpsGroupingBasis: MissingGpsGroupingBasis
   orderedPreviewGroups: PreviewGroup[]
   wizardStepIndex: number
-  saveJobQueue: OrganizeSaveJobSnapshot[]
   runningSaveTarget: string | null
   groupSavePhaseByKey: Record<string, GroupSavePhase>
   groupTitleInputs: Record<string, string>
@@ -49,7 +42,6 @@ export function OrganizeWizardGroupCard({
   missingGpsGroupingBasis,
   orderedPreviewGroups,
   wizardStepIndex,
-  saveJobQueue,
   runningSaveTarget,
   groupSavePhaseByKey,
   groupTitleInputs,
@@ -66,9 +58,8 @@ export function OrganizeWizardGroupCard({
   const phaseForGroup = groupSavePhaseByKey[group.groupKey] ?? 'idle'
   const saveBusyForThisGroup =
     runningSaveTarget === group.groupKey ||
-    saveJobQueue.some((job) =>
-      job.copyGroupKeysInThisRun.includes(group.groupKey)
-    ) ||
+    phaseForGroup === 'queued' ||
+    phaseForGroup === 'saving' ||
     phaseForGroup === 'done'
   const isLastInWizard =
     orderedPreviewGroups.length > 0 &&

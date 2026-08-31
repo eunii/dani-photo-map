@@ -4,12 +4,14 @@ interface AppTopbarProps {
   title: string
   description: string
   organizeJobBadgeText?: string
+  onOrganizeJobBadgeClick?: () => void
 }
 
 export function AppTopbar({
   title,
   description,
-  organizeJobBadgeText
+  organizeJobBadgeText,
+  onOrganizeJobBadgeClick
 }: AppTopbarProps) {
   const hasDescription = Boolean(description.trim())
 
@@ -30,9 +32,14 @@ export function AppTopbar({
         ) : null}
         </div>
         {organizeJobBadgeText ? (
-          <div className="shrink-0 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-2.5 py-1 text-[11px] font-medium text-[var(--app-accent-strong)]">
+          <button
+            type="button"
+            onClick={onOrganizeJobBadgeClick}
+            disabled={!onOrganizeJobBadgeClick}
+            className="shrink-0 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-strong)] px-2.5 py-1 text-[11px] font-medium text-[var(--app-accent-strong)] transition-opacity hover:opacity-80 disabled:cursor-default disabled:hover:opacity-100"
+          >
             {organizeJobBadgeText}
-          </div>
+          </button>
         ) : null}
       </div>
     </div>

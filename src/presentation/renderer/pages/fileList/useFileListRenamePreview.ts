@@ -8,6 +8,7 @@ import {
   folderRenameLabelWithoutDate,
   toPreviewTimestamp
 } from '@presentation/renderer/pages/fileList/fileListPageFormat'
+import { matchesOutputPath } from '@shared/utils/outputRelativePath'
 import type { GroupSummary, LibraryIndexView } from '@shared/types/preload'
 
 export interface UseFileListRenamePreviewOptions {
@@ -49,24 +50,46 @@ export function useFileListRenamePreview({
     [libraryIndex, renameTargetGroupId]
   )
 
-  // Renaming applies to the whole group, wherever its photos physically live
-  // (a group can span multiple output folders, which is the exact bug this
-  // page's tree/grid fix addresses), so the preview is fetched for the full
-  // group detail rather than just the photos in the current folder — and only
-  // while the dialog is actually open, not on every folder navigation.
+  // A group can span multiple output folders (e.g. a merged "week1" group
+  // with photos from both March and May). "이름 변경" only renames the
+  // photos actually in the folder being browsed — the rest of the group
+  // stays under its old name — so we fetch the full group detail (only
+  // while the dialog is open, not on every folder navigation) and split it
+  // by path below.
   const { groupDetail } = useLibraryGroupDetail({
     outputRoot: libraryIndex?.outputRoot ?? outputRoot,
     group: renameDialogOpen ? renameTargetGroupSummary ?? null : null
   })
+
+  const renameScope = useMemo(() => {
+    if (!groupDetail || groupDetail.id !== renameTargetGroupId) {
+      return { photoIdsInCurrentFolder: [] as string[], hasPhotosOutsideCurrentFolder: false }
+    }
+
+    const photoIdsInCurrentFolder: string[] = []
+    let hasPhotosOutsideCurrentFolder = false
+
+    for (const photo of groupDetail.photos) {
+      if (matchesOutputPath(photo.outputRelativePath, pathSegments)) {
+        photoIdsInCurrentFolder.push(photo.id)
+      } else {
+        hasPhotosOutsideCurrentFolder = true
+      }
+    }
+
+    return { photoIdsInCurrentFolder, hasPhotosOutsideCurrentFolder }
+  }, [groupDetail, renameTargetGroupId, pathSegments])
 
   const renamePreviewRows = useMemo(() => {
     if (!groupDetail || groupDetail.id !== renameTargetGroupId) {
       return []
     }
 
+    const photoIdsInCurrentFolder = new Set(renameScope.photoIdsInCurrentFolder)
     const effectiveTitle = renameNewTitle.trim() || groupDetail.displayTitle
 
-    return [...groupDetail.photos]
+    return groupDetail.photos
+      .filter((photo) => photoIdsInCurrentFolder.has(photo.id))
       .sort((left, right) => {
         const leftIso = left.capturedAtIso ?? ''
         const rightIso = right.capturedAtIso ?? ''
@@ -99,7 +122,7 @@ export function useFileListRenamePreview({
           willChange: photo.outputRelativePath !== nextOutputRelativePath
         }
       })
-  }, [groupDetail, renameNewTitle, renameTargetGroupId])
+  }, [groupDetail, renameNewTitle, renameTargetGroupId, renameScope])
 
   const renamePreviewSummary = useMemo(() => {
     const changedCount = renamePreviewRows.filter((row) => row.willChange).length
@@ -114,6 +137,7 @@ export function useFileListRenamePreview({
     canRenameGroupFolderFromTree,
     groupsInCurrentFolder,
     renamePreviewRows,
-    renamePreviewSummary
+    renamePreviewSummary,
+    renameScope
   }
 }

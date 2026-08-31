@@ -18,6 +18,7 @@ import { CuratedRegionResolver } from '@infrastructure/geo/CuratedRegionResolver
 import { FallbackRegionResolver } from '@infrastructure/geo/FallbackRegionResolver'
 import { NodePhotoHasher } from '@infrastructure/hashing/NodePhotoHasher'
 import { JsonLibraryIndexStore } from '@infrastructure/storage/JsonLibraryIndexStore'
+import { JsonSaveHistoryStore } from '@infrastructure/storage/JsonSaveHistoryStore'
 import { SharpPhotoPreviewGenerator } from '@infrastructure/thumbnails/SharpPhotoPreviewGenerator'
 import { SharpThumbnailGenerator } from '@infrastructure/thumbnails/SharpThumbnailGenerator'
 import { WorkerPoolThumbnailGenerator } from '@infrastructure/thumbnails/WorkerPoolThumbnailGenerator'
@@ -25,6 +26,10 @@ import type { ScanPhotoLibraryRequest } from '@shared/types/preload'
 
 function createLibraryIndexStore(): JsonLibraryIndexStore {
   return new JsonLibraryIndexStore(defaultOrganizationRules.outputIndexRelativePath)
+}
+
+export function createSaveHistoryStore(): JsonSaveHistoryStore {
+  return new JsonSaveHistoryStore()
 }
 
 function createRegionResolver(): CachedRegionResolver {

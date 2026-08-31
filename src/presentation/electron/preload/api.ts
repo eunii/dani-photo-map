@@ -8,11 +8,13 @@ import {
   type PhotoAppInvokeChannel
 } from '@shared/ipc/photoAppChannels'
 import type {
+  FileOutcomePayload,
   OrganizeJobStatus,
   PhotoAppInvokeRequestMap,
   PhotoAppInvokeResponseMap,
   PreloadBridge,
   PreviewPendingOrganizationProgressPayload,
+  RenamePlanProgressPayload,
   ScanPhotoLibraryProgressPayload
 } from '@shared/types/preload'
 
@@ -48,6 +50,26 @@ export const preloadBridge: PreloadBridge = {
   },
   async cancelOrganizeJob() {
     return ipcRenderer.invoke(photoAppInvokeChannels.cancelOrganizeJob)
+  },
+  async getOrganizeFileOutcomeLog() {
+    return ipcRenderer.invoke(photoAppInvokeChannels.getOrganizeFileOutcomeLog)
+  },
+  async getSaveHistory(request) {
+    return ipcRenderer.invoke(photoAppInvokeChannels.getSaveHistory, request)
+  },
+  onOrganizeFileOutcome(handler) {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: FileOutcomePayload
+    ) => {
+      handler(payload)
+    }
+
+    ipcRenderer.on(photoAppEventChannels.organizeFileOutcome, listener)
+
+    return () => {
+      ipcRenderer.removeListener(photoAppEventChannels.organizeFileOutcome, listener)
+    }
   },
   async scanPhotoLibrary(request) {
     return ipcRenderer.invoke(photoAppInvokeChannels.scanPhotoLibrary, request)
@@ -108,6 +130,20 @@ export const preloadBridge: PreloadBridge = {
   },
   async movePhotosToGroup(request) {
     return ipcRenderer.invoke(photoAppInvokeChannels.movePhotosToGroup, request)
+  },
+  onRenamePlanProgress(handler) {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: RenamePlanProgressPayload
+    ) => {
+      handler(payload)
+    }
+
+    ipcRenderer.on(photoAppEventChannels.renamePlanProgress, listener)
+
+    return () => {
+      ipcRenderer.removeListener(photoAppEventChannels.renamePlanProgress, listener)
+    }
   },
   async deletePhotosFromLibrary(request) {
     return ipcRenderer.invoke(photoAppInvokeChannels.deletePhotosFromLibrary, request)

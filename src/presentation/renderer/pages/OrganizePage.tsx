@@ -22,9 +22,13 @@ import { useOrganizeScanResultReview } from '@presentation/renderer/pages/organi
 
 interface OrganizePageProps {
   onNavigateToSettings?: () => void
+  onOpenSaveHistory?: () => void
 }
 
-export function OrganizePage({ onNavigateToSettings }: OrganizePageProps) {
+export function OrganizePage({
+  onNavigateToSettings,
+  onOpenSaveHistory
+}: OrganizePageProps) {
   const sourceRoot = useLibraryWorkspaceStore((state) => state.sourceRoot)
   const outputRoot = useLibraryWorkspaceStore((state) => state.outputRoot)
   const setSourceRoot = useLibraryWorkspaceStore((state) => state.setSourceRoot)
@@ -86,10 +90,8 @@ export function OrganizePage({ onNavigateToSettings }: OrganizePageProps) {
   )
 
   const {
-    saveJobQueue,
     runningSaveTarget,
     bulkSaveActive,
-    prepareProgress,
     photoFlowTotal,
     groupSavePhaseByKey,
     hidePreviewPanelWhileSaving,
@@ -213,6 +215,18 @@ export function OrganizePage({ onNavigateToSettings }: OrganizePageProps) {
           <OrganizeOutputMissingCard onNavigateToSettings={onNavigateToSettings} />
         ) : null}
 
+        {outputRoot && onOpenSaveHistory ? (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={onOpenSaveHistory}
+              className="text-[11px] font-medium text-[var(--app-accent-strong)] underline-offset-2 hover:underline"
+            >
+              저장 이력 보기
+            </button>
+          </div>
+        ) : null}
+
         <OrganizePreviewActionBar
           previewResult={previewResult}
           hasPendingPreviewGroups={hasPendingPreviewGroups}
@@ -250,7 +264,6 @@ export function OrganizePage({ onNavigateToSettings }: OrganizePageProps) {
           photoFlowTotal={photoFlowTotal}
           totalPhotosInPreview={totalPhotosInPreview}
           photosSavedCount={photosSavedCount}
-          prepareProgress={prepareProgress}
           groupSavePhaseByKey={groupSavePhaseByKey}
           runningSaveTarget={runningSaveTarget}
           activeSaveJobMeta={activeSaveJobMeta}
@@ -271,7 +284,6 @@ export function OrganizePage({ onNavigateToSettings }: OrganizePageProps) {
           photosSavedCount={photosSavedCount}
           groupSavePhaseByKey={groupSavePhaseByKey}
           runningSaveTarget={runningSaveTarget}
-          saveJobQueue={saveJobQueue}
           groupTitleInputs={groupInputs.groupTitleInputs}
           setGroupTitleInputs={groupInputs.setGroupTitleInputs}
           groupCompanionsInputs={groupInputs.groupCompanionsInputs}

@@ -388,4 +388,97 @@ describe('UpdatePhotoGroupUseCase', () => {
     expect(savedIndexes).toHaveLength(1)
     expect(savedIndexes[0]?.groups).toHaveLength(1)
   })
+
+  it('checkpoints the index mid-rename for a group larger than the batch size', async () => {
+    const photoCount = 45
+    const photos = Array.from({ length: photoCount }, (_, i) => {
+      const n = i + 1
+      const suffix = String(n).padStart(4, '0')
+
+      return {
+        id: `photo-${n}`,
+        sourcePath: `C:/photos/source/IMG_${suffix}.JPG`,
+        sourceFileName: `IMG_${suffix}.JPG`,
+        capturedAt: {
+          iso: `2026-04-03T08:${String(n).padStart(2, '0')}:00.000Z`,
+          year: '2026',
+          month: '04',
+          day: '03',
+          time: `08${String(n).padStart(2, '0')}00`
+        },
+        gps: { latitude: 37.5665, longitude: 126.978 },
+        outputRelativePath: `2026/04/seoul/IMG_${suffix}.JPG`,
+        thumbnailRelativePath: `.photo-organizer/thumbnails/photo-${n}.webp`,
+        isDuplicate: false,
+        metadataIssues: []
+      }
+    })
+    const originalPathsByPhotoId = new Map(
+      photos.map((photo) => [photo.id, photo.outputRelativePath])
+    )
+    const index: LibraryIndex = {
+      version: LIBRARY_INDEX_VERSION,
+      generatedAt: '2026-04-03T10:11:12.000Z',
+      sourceRoot: 'C:/photos/source',
+      outputRoot: 'C:/photos/output',
+      photos,
+      groups: [
+        {
+          id: 'group-1',
+          groupKey: 'group|region=seoul|year=2026|month=04|day=00|slot=1',
+          title: '2026-04 seoul',
+          displayTitle: '2026-04 seoul',
+          photoIds: photos.map((photo) => photo.id),
+          representativePhotoId: 'photo-1',
+          representativeGps: { latitude: 37.5665, longitude: 126.978 },
+          representativeThumbnailRelativePath:
+            '.photo-organizer/thumbnails/photo-1.webp',
+          companions: [],
+          notes: undefined
+        }
+      ]
+    }
+
+    const savedIndexes: LibraryIndex[] = []
+    const fileSystem = createFileSystem()
+    const store = {
+      load: vi.fn().mockResolvedValue(index),
+      save: vi.fn(async (saved: LibraryIndex) => {
+        savedIndexes.push(saved)
+      })
+    }
+    const useCase = new UpdatePhotoGroupUseCase(store, fileSystem)
+    const progress: Array<{ completed: number; total: number }> = []
+
+    const result = await useCase.execute(
+      {
+        outputRoot: 'C:/photos/output',
+        groupId: 'group-1',
+        title: '큰 그룹 이름 변경',
+        companions: []
+      },
+      {
+        onRenameProgress: (payload) => {
+          progress.push(payload)
+        }
+      }
+    )
+
+    expect(result.photos).toHaveLength(photoCount)
+    // 45장, 기본 checkpointBatchSize(40) -> 도중 체크포인트 저장 1번 + 병합 후 최종 저장 1번.
+    expect(savedIndexes).toHaveLength(2)
+
+    const changedInCheckpoint = savedIndexes[0]!.photos.filter(
+      (photo) => photo.outputRelativePath !== originalPathsByPhotoId.get(photo.id)
+    ).length
+    const changedInFinal = savedIndexes[1]!.photos.filter(
+      (photo) => photo.outputRelativePath !== originalPathsByPhotoId.get(photo.id)
+    ).length
+
+    expect(changedInCheckpoint).toBe(40)
+    expect(changedInFinal).toBe(photoCount)
+
+    expect(progress).toHaveLength(photoCount)
+    expect(progress.at(-1)).toEqual({ completed: photoCount, total: photoCount })
+  })
 })

@@ -1,5 +1,11 @@
 import type { PreviewPendingOrganizationProgressPayload } from '@application/dto/PreviewPendingOrganizationProgress'
-import type { ScanPhotoLibraryProgressPayload } from '@application/dto/ScanPhotoLibraryProgress'
+import type { RenamePlanProgressPayload } from '@application/dto/RenamePlanProgress'
+import type { SaveHistoryEntry, SaveHistoryPhase } from '@application/dto/SaveHistoryEntry'
+import type {
+  FileOutcomePayload,
+  FileOutcomeStatus,
+  ScanPhotoLibraryProgressPayload
+} from '@application/dto/ScanPhotoLibraryProgress'
 import type {
   ExistingOutputSkipDetail,
   IncrementalSkipDetail,
@@ -10,7 +16,13 @@ import type { MissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupin
 import type { PhotoAppInvokeChannel } from '@shared/ipc/photoAppChannels'
 
 export type { PreviewPendingOrganizationProgressPayload }
-export type { ScanPhotoLibraryProgressPayload }
+export type { ScanPhotoLibraryProgressPayload, FileOutcomePayload, FileOutcomeStatus }
+export type { RenamePlanProgressPayload }
+export type { SaveHistoryEntry, SaveHistoryPhase }
+
+export interface GetSaveHistoryRequest {
+  outputRoot: string
+}
 export type {
   ExistingOutputSkipDetail,
   IncrementalSkipDetail,
@@ -168,6 +180,9 @@ export interface MovePhotosToGroupRequest {
   /** 기존 목적지 대신 새 그룹을 만들고 그쪽으로 모읍니다. */
   newGroup?: {
     title: string
+    /** 생략 시 빈 배열. 그룹 분리 이름 변경 등에서 원본 그룹 값을 이어받을 때 사용. */
+    companions?: string[]
+    notes?: string
   }
 }
 
@@ -429,6 +444,8 @@ export interface PhotoAppInvokeRequestMap {
   'photo-app/start-organize-job': StartOrganizeJobRequest
   'photo-app/get-organize-job-status': null
   'photo-app/cancel-organize-job': null
+  'photo-app/get-organize-file-outcome-log': null
+  'photo-app/get-save-history': GetSaveHistoryRequest
 }
 
 export interface PhotoAppInvokeResponseMap {
@@ -446,6 +463,8 @@ export interface PhotoAppInvokeResponseMap {
   'photo-app/start-organize-job': OrganizeJobStatus
   'photo-app/get-organize-job-status': OrganizeJobStatus
   'photo-app/cancel-organize-job': OrganizeJobCancellationResult
+  'photo-app/get-organize-file-outcome-log': FileOutcomePayload[]
+  'photo-app/get-save-history': SaveHistoryEntry[]
 }
 
 export interface PreloadBridge {
@@ -467,6 +486,11 @@ export interface PreloadBridge {
   ) => Promise<OrganizeJobStatus>
   getOrganizeJobStatus: () => Promise<OrganizeJobStatus>
   cancelOrganizeJob: () => Promise<OrganizeJobCancellationResult>
+  getOrganizeFileOutcomeLog: () => Promise<FileOutcomePayload[]>
+  getSaveHistory: (request: GetSaveHistoryRequest) => Promise<SaveHistoryEntry[]>
+  onOrganizeFileOutcome: (
+    handler: (payload: FileOutcomePayload) => void
+  ) => () => void
   scanPhotoLibrary: (
     request: ScanPhotoLibraryRequest
   ) => Promise<ScanPhotoLibrarySummary>
@@ -485,6 +509,9 @@ export interface PreloadBridge {
   movePhotosToGroup: (
     request: MovePhotosToGroupRequest
   ) => Promise<LibraryIndexView>
+  onRenamePlanProgress: (
+    handler: (payload: RenamePlanProgressPayload) => void
+  ) => () => void
   deletePhotosFromLibrary: (
     request: DeletePhotosFromLibraryRequest
   ) => Promise<LibraryIndexView>

@@ -24,20 +24,27 @@ export class SharpThumbnailGenerator implements ThumbnailGeneratorPort {
 
     await mkdir(dirname(outputPath), { recursive: true })
 
-    const heicJpegBuffer = await decodeHeicLikeToJpegBuffer(sourcePath)
-
     await withTimeout(
-      sharp(heicJpegBuffer ?? sourcePath)
-        .timeout({ seconds: SHARP_IO_TIMEOUT_SECONDS })
-        .rotate()
-        .resize({ width: this.width, withoutEnlargement: true })
-        .webp({ quality: 82 })
-        .toFile(outputPath),
+      this.writeThumbnail(sourcePath, outputPath),
       SHARP_IO_TIMEOUT_MS,
       `thumbnail ${sourcePath}`
     )
 
     return fileName.replace(/\\/g, '/')
+  }
+
+  private async writeThumbnail(
+    sourcePath: string,
+    outputPath: string
+  ): Promise<void> {
+    const heicJpegBuffer = await decodeHeicLikeToJpegBuffer(sourcePath)
+
+    await sharp(heicJpegBuffer ?? sourcePath)
+      .timeout({ seconds: SHARP_IO_TIMEOUT_SECONDS })
+      .rotate()
+      .resize({ width: this.width, withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toFile(outputPath)
   }
 
   private createThumbnailFileName(sourcePath: string): string {

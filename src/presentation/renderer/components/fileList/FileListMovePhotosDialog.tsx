@@ -4,6 +4,7 @@ import {
   DEST_CUSTOM,
   DEST_YEAR_MONTH_ONLY
 } from '@presentation/renderer/pages/fileList/fileListPageConstants'
+import type { RenamePlanProgressPayload } from '@shared/types/preload'
 
 export interface FileListMoveDestinationOption {
   groupId: string
@@ -21,6 +22,7 @@ export interface FileListMovePhotosDialogProps {
   destinationSelect: string
   manualDestinationFolder: string
   isMovingPhotos: boolean
+  moveProgress: RenamePlanProgressPayload | null
   onOverlayClick: () => void
   onContentClick: (event: MouseEvent) => void
   onDestinationSelectChange: (value: string) => void
@@ -38,6 +40,7 @@ export function FileListMovePhotosDialog({
   destinationSelect,
   manualDestinationFolder,
   isMovingPhotos,
+  moveProgress,
   onOverlayClick,
   onContentClick,
   onDestinationSelectChange,
@@ -140,6 +143,33 @@ export function FileListMovePhotosDialog({
           ) : null}
         </label>
 
+        {isMovingPhotos && moveProgress ? (
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-[11px] text-[var(--app-muted)]">
+              <span>
+                이동 중 {moveProgress.completed} / {moveProgress.total}장
+              </span>
+              <span>
+                {Math.min(
+                  100,
+                  Math.round(
+                    (moveProgress.completed / Math.max(1, moveProgress.total)) * 100
+                  )
+                )}
+                %
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--app-border)_42%,transparent)]">
+              <div
+                className="h-full rounded-full bg-[var(--app-accent-strong)] transition-[width] duration-300"
+                style={{
+                  width: `${Math.min(100, Math.round((moveProgress.completed / Math.max(1, moveProgress.total)) * 100))}%`
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-6 flex justify-end gap-2">
           <button
             type="button"
@@ -158,7 +188,11 @@ export function FileListMovePhotosDialog({
             }
             onClick={onConfirm}
           >
-            {isMovingPhotos ? '이동 중…' : '이동'}
+            {isMovingPhotos
+              ? moveProgress
+                ? `이동 중… (${moveProgress.completed}/${moveProgress.total})`
+                : '이동 중…'
+              : '이동'}
           </button>
         </div>
       </div>

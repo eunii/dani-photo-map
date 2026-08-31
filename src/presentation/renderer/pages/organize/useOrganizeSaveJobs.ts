@@ -8,33 +8,21 @@ import {
 } from 'react'
 
 import type { MissingGpsGroupingBasis } from '@domain/policies/MissingGpsGroupingBasis'
-import type { ScanPhotoLibrarySummary } from '@shared/types/preload'
 import type {
+  LoadLibraryIndexResult,
+  OrganizeJobSaveStepRequest,
   PreviewPendingOrganizationResult,
-  LoadLibraryIndexResult
+  ScanPhotoLibrarySummary
 } from '@shared/types/preload'
 import { buildOrganizeScanPayload } from '@presentation/renderer/pages/organizeScanPayload'
-import {
-  buildEffectiveOrganizeInputs,
-  type GroupSavePhase
-} from '@presentation/renderer/pages/organize/organizeGroupForm'
-import {
-  computeGlobalBarProgress,
-  mergeScanSummaries
-} from '@presentation/renderer/pages/organize/organizeScanSummaryMerge'
+import { buildEffectiveOrganizeInputs } from '@presentation/renderer/pages/organize/organizeGroupForm'
+import { computeGroupSavePhasesFromJobStatus } from '@presentation/renderer/pages/organize/organizeScanSummaryMerge'
+import { useOrganizeJobStore } from '@presentation/renderer/store/useOrganizeJobStore'
 
 type PreviewGroup = PreviewPendingOrganizationResult['groups'][number]
 
 function sourcePathsForPreviewGroup(group: PreviewGroup): string[] {
   return group.representativePhotos.map((photo) => photo.sourcePath)
-}
-
-export interface OrganizeSaveJob {
-  copyGroupKeysInThisRun: string[]
-  copySourcePathsInThisRun: string[]
-  isLastStep: boolean
-  snapshotPayload: ReturnType<typeof buildOrganizeScanPayload>
-  progressOffsetBeforeJob: number
 }
 
 export interface UseOrganizeSaveJobsOptions {
@@ -63,13 +51,23 @@ export interface UseOrganizeSaveJobsOptions {
   setErrorMessage: (message: string | null) => void
 }
 
+/**
+ * 정리 저장(scan-photo-library)을 메인 프로세스의 `startOrganizeJob`
+ * 백그라운드 잡으로 실행한다. 예전에는 이 훅이 렌더러 로컬 큐로 그룹을
+ * 하나씩 직접 호출했는데, 그 큐를 비우는 useEffect가 이 훅이 마운트된
+ * OrganizePage에 묶여 있어서 화면을 벗어나면(언마운트되면) 진행 중이던
+ * 그룹만 끝내고 다음 그룹은 영영 시작되지 않는 버그가 있었다.
+ * `startOrganizeJob`은 메인 프로세스 모듈 상태(`organizeJobStatus`)로
+ * 진행 상황을 들고 있어 렌더러 언마운트와 무관하게 계속 진행되고, 모든
+ * 창에 브로드캐스트되므로 다른 화면으로 이동했다가 돌아와도 진행 상황을
+ * 이어서 볼 수 있다.
+ */
 export function useOrganizeSaveJobs({
   sourceRoot,
   outputRoot,
   setLastLoadedIndex,
   previewResult,
   orderedPreviewGroups,
-  totalPhotosInPreview,
   missingGpsGroupingBasis,
   groupTitleInputs,
   groupCompanionsInputs,
@@ -84,289 +82,125 @@ export function useOrganizeSaveJobs({
   setPreviewImageLoadFailedByPhotoId,
   setErrorMessage
 }: UseOrganizeSaveJobsOptions) {
-  const [saveJobQueue, setSaveJobQueue] = useState<OrganizeSaveJob[]>([])
-  const [runningSaveTarget, setRunningSaveTarget] = useState<string | null>(null)
-  const runningSaveTargetRef = useRef<string | null>(null)
+  const status = useOrganizeJobStore((state) => state.status)
+
   const [bulkSaveActive, setBulkSaveActive] = useState(false)
-  const bulkSaveActiveRef = useRef(false)
-  const [prepareProgress, setPrepareProgress] = useState<{
-    completed: number
-    total: number
-  } | null>(null)
-  const [photoFlowTotal, setPhotoFlowTotal] = useState(0)
-  const [groupSavePhaseByKey, setGroupSavePhaseByKey] = useState<
-    Record<string, GroupSavePhase>
-  >({})
+  const [bulkRunStartIndex, setBulkRunStartIndex] = useState<number | null>(null)
   const [hidePreviewPanelWhileSaving, setHidePreviewPanelWhileSaving] =
     useState(false)
-  const [photosSavedCount, setPhotosSavedCount] = useState(0)
-  const [activeSaveJobMeta, setActiveSaveJobMeta] = useState<{
-    progressOffsetBeforeJob: number
-    groupPhotoCount: number
-  } | null>(null)
+  const [groupKeysInRun, setGroupKeysInRun] = useState<string[]>([])
 
-  const saveJobQueueRef = useRef(saveJobQueue)
-  const mergedBulkSummaryRef = useRef<ScanPhotoLibrarySummary | null>(null)
-  const cancelRemainingBulkJobsRef = useRef(false)
-  const bulkSaveStartIndexRef = useRef(0)
-  const bulkRunTotalPhotosRef = useRef<number | null>(null)
-  const [bulkRunStartIndex, setBulkRunStartIndex] = useState<number | null>(null)
+  const bulkSaveActiveRef = useRef(false)
+  const clearPreviewOnSuccessRef = useRef(false)
+  const stepOffsetByGroupKeyRef = useRef<Record<string, number>>({})
+  const stepPhotoCountByGroupKeyRef = useRef<Record<string, number>>({})
+  const handledJobKeyRef = useRef<string | null>(null)
+
+  const isOurSaveJob = status.mode === 'save-bulk'
+  const savePipelineBusy = isOurSaveJob && status.phase === 'save-running'
+  const photosSavedCount = isOurSaveJob ? status.progress.completed : 0
+  const photoFlowTotal = isOurSaveJob ? status.progress.total : 0
+  const runningSaveTarget = savePipelineBusy
+    ? (status.progress.currentGroupKey ?? null)
+    : null
+  const groupSavePhaseByKey =
+    isOurSaveJob && groupKeysInRun.length > 0
+      ? computeGroupSavePhasesFromJobStatus(groupKeysInRun, status)
+      : {}
+  const activeSaveJobMeta =
+    runningSaveTarget &&
+    stepPhotoCountByGroupKeyRef.current[runningSaveTarget] !== undefined
+      ? {
+          progressOffsetBeforeJob:
+            stepOffsetByGroupKeyRef.current[runningSaveTarget] ?? 0,
+          groupPhotoCount: stepPhotoCountByGroupKeyRef.current[runningSaveTarget] ?? 0
+        }
+      : null
 
   useEffect(() => {
-    saveJobQueueRef.current = saveJobQueue
-  }, [saveJobQueue])
-
-  useEffect(() => {
-    runningSaveTargetRef.current = runningSaveTarget
-  }, [runningSaveTarget])
-
-  useEffect(() => {
-    bulkSaveActiveRef.current = bulkSaveActive
-  }, [bulkSaveActive])
-
-  const savePipelineBusy =
-    runningSaveTarget !== null || saveJobQueue.length > 0
-
-  useEffect(() => {
-    if (runningSaveTarget !== null) {
+    if (!isOurSaveJob) {
+      return
+    }
+    if (
+      status.phase !== 'completed' &&
+      status.phase !== 'failed' &&
+      status.phase !== 'cancelled'
+    ) {
       return
     }
 
-    if (saveJobQueue.length === 0) {
+    const jobKey = `${status.jobId ?? ''}:${status.phase}`
+    if (handledJobKeyRef.current === jobKey) {
       return
     }
-
-    if (!sourceRoot || !outputRoot) {
-      return
-    }
-
-    const queueSnapshot = saveJobQueue
-    const nextJob = queueSnapshot[0]
-
-    if (!nextJob) {
-      return
-    }
-
-    const remainderQueue = queueSnapshot.slice(1)
-    saveJobQueueRef.current = remainderQueue
-    setSaveJobQueue(remainderQueue)
-
-    const onlyKey = nextJob.copyGroupKeysInThisRun[0]
-    setRunningSaveTarget(onlyKey ?? null)
-
-    const groupPhotoCountForJob =
-      onlyKey !== undefined
-        ? (orderedPreviewGroups.find((g) => g.groupKey === onlyKey)?.photoCount ??
-          0)
-        : 0
-
-    setActiveSaveJobMeta(
-      onlyKey
-        ? {
-            progressOffsetBeforeJob: nextJob.progressOffsetBeforeJob,
-            groupPhotoCount: groupPhotoCountForJob
-          }
-        : null
-    )
-
-    if (bulkSaveActive && onlyKey) {
-      const jobIndex = orderedPreviewGroups.findIndex(
-        (g) => g.groupKey === onlyKey
-      )
-      const bulkStart = bulkSaveStartIndexRef.current
-      const remainingKeys = new Set(
-        remainderQueue.map((j) => j.copyGroupKeysInThisRun[0]).filter(Boolean)
-      )
-      setGroupSavePhaseByKey(
-        Object.fromEntries(
-          orderedPreviewGroups.map((g, i) => {
-            if (i < bulkStart) {
-              return [g.groupKey, 'idle' as const]
-            }
-            if (jobIndex >= 0 && i < jobIndex) {
-              return [g.groupKey, 'done' as const]
-            }
-            if (g.groupKey === onlyKey) {
-              return [g.groupKey, 'saving' as const]
-            }
-            if (remainingKeys.has(g.groupKey)) {
-              return [g.groupKey, 'queued' as const]
-            }
-            return [g.groupKey, 'idle' as const]
-          })
-        )
-      )
-    } else if (onlyKey) {
-      setGroupSavePhaseByKey((previous) => ({
-        ...previous,
-        [onlyKey]: 'saving'
-      }))
-    }
-
-    setPhotosSavedCount(nextJob.progressOffsetBeforeJob)
-    setPhotoFlowTotal(
-      bulkRunTotalPhotosRef.current ?? totalPhotosInPreview
-    )
-    setPrepareProgress(null)
+    handledJobKeyRef.current = jobKey
 
     void (async () => {
-      const offset = nextJob.progressOffsetBeforeJob
-      const flowTotal =
-        bulkRunTotalPhotosRef.current ?? totalPhotosInPreview
-      const unsubscribe = window.photoApp.onScanPhotoLibraryProgress(
-        (payload) => {
-          if (payload.kind === 'prepare') {
-            setPrepareProgress({
-              completed: payload.completed,
-              total: payload.total
-            })
-          } else {
-            setPrepareProgress(null)
-          }
-
-          setPhotosSavedCount(
-            computeGlobalBarProgress(offset, groupPhotoCountForJob, payload)
-          )
-          setPhotoFlowTotal(flowTotal)
+      if (outputRoot) {
+        try {
+          const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
+          setLastLoadedIndex(loadedIndex)
+        } catch {
+          // 목록 새로고침은 최선 노력으로만 처리 — 실패해도 잡 상태/요약은 이미 반영됨.
         }
-      )
+      }
 
-      try {
-        const nextSummary = await window.photoApp.scanPhotoLibrary({
-          sourceRoot,
-          outputRoot,
-          ...nextJob.snapshotPayload,
-          copyGroupKeysInThisRun: nextJob.copyGroupKeysInThisRun,
-          copySourcePathsInThisRun: nextJob.copySourcePathsInThisRun
-        })
-        const loadedIndex = await window.photoApp.loadLibraryIndex({ outputRoot })
+      if (status.summary) {
+        setSummary(status.summary)
+      }
 
-        setLastLoadedIndex(loadedIndex)
-
-        if (bulkSaveActiveRef.current) {
-          mergedBulkSummaryRef.current = mergeScanSummaries(
-            mergedBulkSummaryRef.current,
-            nextSummary
-          )
-        }
-
-        if (onlyKey) {
-          const expectedCopies = nextJob.copySourcePathsInThisRun.length
-          const savedNothing =
-            expectedCopies > 0 &&
-            nextSummary.copiedCount === 0 &&
-            nextSummary.skippedExistingCount === 0
-
-          setGroupSavePhaseByKey((previous) => ({
-            ...previous,
-            [onlyKey]: savedNothing ? 'error' : 'done'
-          }))
-
-          if (savedNothing) {
-            setErrorMessage(
-              '이 그룹 사진을 복사하지 못했습니다. 같은 이름을 쓴 경우 기존 그룹 폴더에 들어갔는지 확인해 주세요.'
-            )
-          }
-        }
-
-        const noMoreJobs = saveJobQueueRef.current.length === 0
-
-        if (bulkSaveActiveRef.current && noMoreJobs) {
-          const cancelledBulk = cancelRemainingBulkJobsRef.current
-          cancelRemainingBulkJobsRef.current = false
-          bulkSaveActiveRef.current = false
-          setBulkSaveActive(false)
-          bulkRunTotalPhotosRef.current = null
-          bulkSaveStartIndexRef.current = 0
-          setBulkRunStartIndex(null)
-          setGroupSavePhaseByKey({})
-          setHidePreviewPanelWhileSaving(false)
-          setPhotosSavedCount(0)
-          setPhotoFlowTotal(0)
-          setPrepareProgress(null)
-          setActiveSaveJobMeta(null)
-          setSummary(mergedBulkSummaryRef.current ?? nextSummary)
-          mergedBulkSummaryRef.current = null
-          setPreviewResult(null)
-          setGroupTitleInputs({})
-          setGroupCompanionsInputs({})
-          setGroupNotesInputs({})
-          setPreviewImageLoadFailedByPhotoId({})
-          setWizardStepIndex(0)
-          if (cancelledBulk) {
-            setErrorMessage(
-              '남은 저장 작업을 취소했습니다. 완료된 그룹까지 결과가 반영되었습니다.'
-            )
-          }
-        } else if (!bulkSaveActiveRef.current && nextJob.isLastStep) {
-          bulkRunTotalPhotosRef.current = null
-          bulkSaveStartIndexRef.current = 0
-          setBulkRunStartIndex(null)
-          setGroupSavePhaseByKey({})
-          setHidePreviewPanelWhileSaving(false)
-          setPhotosSavedCount(0)
-          setPhotoFlowTotal(0)
-          setPrepareProgress(null)
-          setActiveSaveJobMeta(null)
-          setSummary(nextSummary)
-          setPreviewResult(null)
-          setGroupTitleInputs({})
-          setGroupCompanionsInputs({})
-          setGroupNotesInputs({})
-          setPreviewImageLoadFailedByPhotoId({})
-          setWizardStepIndex(0)
-        }
-      } catch (error) {
+      if (status.phase === 'failed') {
+        setErrorMessage(status.message ?? '사진 정리에 실패했습니다.')
         bulkSaveActiveRef.current = false
         setBulkSaveActive(false)
-        bulkRunTotalPhotosRef.current = null
-        bulkSaveStartIndexRef.current = 0
         setBulkRunStartIndex(null)
-        cancelRemainingBulkJobsRef.current = false
-        mergedBulkSummaryRef.current = null
-        setSaveJobQueue([])
         setHidePreviewPanelWhileSaving(false)
-        setPhotosSavedCount(0)
-        setPhotoFlowTotal(0)
-        setPrepareProgress(null)
-        setActiveSaveJobMeta(null)
-        setGroupSavePhaseByKey((previous) => {
-          const next: Record<string, GroupSavePhase> = { ...previous }
-          for (const key of nextJob.copyGroupKeysInThisRun) {
-            next[key] = 'error'
-          }
-          for (const key of Object.keys(next)) {
-            if (next[key] === 'queued') {
-              next[key] = 'idle'
-            }
-          }
-          return next
-        })
+        // groupKeysInRun/단계는 남겨 두어 실패한 그룹의 "저장 실패" 배지가
+        // 다음 재시도 전까지 계속 보이게 한다.
+        return
+      }
+
+      if (status.phase === 'cancelled') {
         setErrorMessage(
-          error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
+          '남은 저장 작업을 취소했습니다. 완료된 그룹까지 결과가 반영되었습니다.'
         )
-      } finally {
-        unsubscribe()
-        setRunningSaveTarget(null)
+      } else {
+        setErrorMessage(null)
+      }
+
+      bulkSaveActiveRef.current = false
+      setBulkSaveActive(false)
+      setBulkRunStartIndex(null)
+      setGroupKeysInRun([])
+      stepOffsetByGroupKeyRef.current = {}
+      stepPhotoCountByGroupKeyRef.current = {}
+
+      if (status.phase === 'cancelled' || clearPreviewOnSuccessRef.current) {
+        setHidePreviewPanelWhileSaving(false)
+        setPreviewResult(null)
+        setGroupTitleInputs({})
+        setGroupCompanionsInputs({})
+        setGroupNotesInputs({})
+        setPreviewImageLoadFailedByPhotoId({})
+        setWizardStepIndex(0)
       }
     })()
   }, [
-    runningSaveTarget,
-    saveJobQueue,
-    sourceRoot,
+    isOurSaveJob,
+    status.phase,
+    status.jobId,
+    status.message,
+    status.summary,
     outputRoot,
     setLastLoadedIndex,
-    orderedPreviewGroups,
-    totalPhotosInPreview,
-    bulkSaveActive,
+    setErrorMessage,
     setSummary,
     setPreviewResult,
     setGroupTitleInputs,
     setGroupCompanionsInputs,
     setGroupNotesInputs,
     setPreviewImageLoadFailedByPhotoId,
-    setWizardStepIndex,
-    setErrorMessage
+    setWizardStepIndex
   ])
 
   const enqueueSaveAllGroups = useCallback((): void => {
@@ -396,44 +230,28 @@ export function useOrganizeSaveJobs({
       groupNotesInputs
     })
 
-    setErrorMessage(null)
-    mergedBulkSummaryRef.current = null
-    cancelRemainingBulkJobsRef.current = false
-    bulkSaveActiveRef.current = true
-    setBulkSaveActive(true)
-
     const startIndex = Math.min(
       wizardStepIndex,
       Math.max(0, orderedPreviewGroups.length - 1)
     )
-    bulkSaveStartIndexRef.current = startIndex
-    setBulkRunStartIndex(startIndex)
-
     const remainingGroups = orderedPreviewGroups.slice(startIndex)
-    const totalPhotosInThisBulk = remainingGroups.reduce(
-      (sum, g) => sum + g.photoCount,
-      0
-    )
-    bulkRunTotalPhotosRef.current = totalPhotosInThisBulk
 
-    const queuedPhases: Record<string, GroupSavePhase> = {}
-    for (let i = 0; i < orderedPreviewGroups.length; i += 1) {
-      const g = orderedPreviewGroups[i]
-      if (g && i >= startIndex) {
-        queuedPhases[g.groupKey] = 'queued'
-      }
+    if (remainingGroups.length === 0) {
+      setErrorMessage('이후에 저장할 그룹이 없습니다.')
+      return
     }
-    setGroupSavePhaseByKey((previous) => ({ ...previous, ...queuedPhases }))
-    setHidePreviewPanelWhileSaving(true)
-    setPhotosSavedCount(0)
-    setPhotoFlowTotal(totalPhotosInThisBulk)
-    setActiveSaveJobMeta(null)
 
-    const jobs: OrganizeSaveJob[] = []
-
+    const steps: OrganizeJobSaveStepRequest[] = []
+    const nextGroupKeys: string[] = []
     let progressOffsetBeforeJob = 0
 
     for (let index = startIndex; index < orderedPreviewGroups.length; index += 1) {
+      const group = orderedPreviewGroups[index]
+
+      if (!group) {
+        continue
+      }
+
       const includedGroupKeySet = new Set(
         orderedPreviewGroups.slice(0, index + 1).map((g) => g.groupKey)
       )
@@ -442,32 +260,48 @@ export function useOrganizeSaveJobs({
         includedGroupKeySet,
         effectiveInputs
       )
-      const group = orderedPreviewGroups[index]
 
-      if (!group) {
-        continue
-      }
-
-      jobs.push({
+      steps.push({
         copyGroupKeysInThisRun: [group.groupKey],
         copySourcePathsInThisRun: sourcePathsForPreviewGroup(group),
-        isLastStep: index >= orderedPreviewGroups.length - 1,
-        snapshotPayload,
-        progressOffsetBeforeJob
+        progressOffsetBeforeJob,
+        groupPhotoCount: group.photoCount,
+        snapshotPayload
       })
+      stepOffsetByGroupKeyRef.current[group.groupKey] = progressOffsetBeforeJob
+      stepPhotoCountByGroupKeyRef.current[group.groupKey] = group.photoCount
+      nextGroupKeys.push(group.groupKey)
       progressOffsetBeforeJob += group.photoCount
     }
 
-    if (jobs.length === 0) {
-      bulkSaveActiveRef.current = false
-      setBulkSaveActive(false)
-      bulkRunTotalPhotosRef.current = null
-      setBulkRunStartIndex(null)
-      setErrorMessage('이후에 저장할 그룹이 없습니다.')
-      return
-    }
+    const totalPhotoCount = progressOffsetBeforeJob
 
-    setSaveJobQueue((previous) => [...previous, ...jobs])
+    setErrorMessage(null)
+    bulkSaveActiveRef.current = true
+    clearPreviewOnSuccessRef.current = true
+    setBulkSaveActive(true)
+    setBulkRunStartIndex(startIndex)
+    setGroupKeysInRun(nextGroupKeys)
+    setHidePreviewPanelWhileSaving(true)
+
+    void window.photoApp
+      .startOrganizeJob({
+        mode: 'save-bulk',
+        sourceRoot,
+        outputRoot,
+        totalPhotoCount,
+        steps
+      })
+      .catch((error) => {
+        bulkSaveActiveRef.current = false
+        setBulkSaveActive(false)
+        setBulkRunStartIndex(null)
+        setGroupKeysInRun([])
+        setHidePreviewPanelWhileSaving(false)
+        setErrorMessage(
+          error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
+        )
+      })
   }, [
     sourceRoot,
     outputRoot,
@@ -482,16 +316,6 @@ export function useOrganizeSaveJobs({
     setErrorMessage
   ])
 
-  const cancelRemainingSaveJobs = useCallback((): void => {
-    if (!savePipelineBusy) {
-      return
-    }
-
-    cancelRemainingBulkJobsRef.current = true
-    saveJobQueueRef.current = []
-    setSaveJobQueue([])
-  }, [savePipelineBusy])
-
   const enqueueSaveCurrentGroup = useCallback((): void => {
     if (!sourceRoot || !outputRoot) {
       setErrorMessage('원본 폴더와 설정의 출력 폴더를 먼저 준비하세요.')
@@ -500,6 +324,10 @@ export function useOrganizeSaveJobs({
 
     if (!previewResult) {
       setErrorMessage('먼저 정리 후보를 불러오세요.')
+      return
+    }
+
+    if (savePipelineBusy) {
       return
     }
 
@@ -529,48 +357,52 @@ export function useOrganizeSaveJobs({
     )
 
     const isLastStep = snapshotStepIndex >= orderedPreviewGroups.length - 1
-
     const progressOffsetBeforeJob = orderedPreviewGroups
       .slice(0, snapshotStepIndex)
       .reduce((sum, g) => sum + g.photoCount, 0)
 
     setErrorMessage(null)
-
-    const alreadyQueuedOrRunning =
-      runningSaveTargetRef.current === currentGroup.groupKey ||
-      saveJobQueue.some(
-        (job) =>
-          job.copyGroupKeysInThisRun.length === 1 &&
-          job.copyGroupKeysInThisRun[0] === currentGroup.groupKey
-      )
-
-    if (alreadyQueuedOrRunning) {
-      return
+    bulkSaveActiveRef.current = false
+    clearPreviewOnSuccessRef.current = isLastStep
+    setBulkSaveActive(false)
+    setBulkRunStartIndex(null)
+    setGroupKeysInRun([currentGroup.groupKey])
+    stepOffsetByGroupKeyRef.current = {
+      [currentGroup.groupKey]: progressOffsetBeforeJob
     }
-
-    setGroupSavePhaseByKey((previous) => ({
-      ...previous,
-      [currentGroup.groupKey]: 'queued'
-    }))
-
-    setSaveJobQueue((previous) => [
-      ...previous,
-      {
-        copyGroupKeysInThisRun: [currentGroup.groupKey],
-        copySourcePathsInThisRun: sourcePathsForPreviewGroup(currentGroup),
-        isLastStep,
-        snapshotPayload,
-        progressOffsetBeforeJob
-      }
-    ])
+    stepPhotoCountByGroupKeyRef.current = {
+      [currentGroup.groupKey]: currentGroup.photoCount
+    }
 
     if (isLastStep) {
       setHidePreviewPanelWhileSaving(true)
-    }
-
-    if (!isLastStep) {
+    } else {
       setWizardStepIndex((step) => step + 1)
     }
+
+    void window.photoApp
+      .startOrganizeJob({
+        mode: 'save-bulk',
+        sourceRoot,
+        outputRoot,
+        totalPhotoCount: progressOffsetBeforeJob + currentGroup.photoCount,
+        steps: [
+          {
+            copyGroupKeysInThisRun: [currentGroup.groupKey],
+            copySourcePathsInThisRun: sourcePathsForPreviewGroup(currentGroup),
+            progressOffsetBeforeJob,
+            groupPhotoCount: currentGroup.photoCount,
+            snapshotPayload
+          }
+        ]
+      })
+      .catch((error) => {
+        setGroupKeysInRun([])
+        setHidePreviewPanelWhileSaving(false)
+        setErrorMessage(
+          error instanceof Error ? error.message : '사진 정리에 실패했습니다.'
+        )
+      })
   }, [
     sourceRoot,
     outputRoot,
@@ -581,32 +413,33 @@ export function useOrganizeSaveJobs({
     groupTitleInputs,
     groupCompanionsInputs,
     groupNotesInputs,
-    saveJobQueue,
+    savePipelineBusy,
     setWizardStepIndex,
     setErrorMessage
   ])
 
+  const cancelRemainingSaveJobs = useCallback((): void => {
+    if (!savePipelineBusy) {
+      return
+    }
+
+    void window.photoApp.cancelOrganizeJob()
+  }, [savePipelineBusy])
+
   const resetSavePipelineToIdle = useCallback(() => {
-    setSaveJobQueue([])
-    setRunningSaveTarget(null)
     bulkSaveActiveRef.current = false
+    clearPreviewOnSuccessRef.current = false
     setBulkSaveActive(false)
-    bulkRunTotalPhotosRef.current = null
-    bulkSaveStartIndexRef.current = 0
     setBulkRunStartIndex(null)
-    setGroupSavePhaseByKey({})
+    setGroupKeysInRun([])
     setHidePreviewPanelWhileSaving(false)
-    setPhotosSavedCount(0)
-    setPhotoFlowTotal(0)
-    setPrepareProgress(null)
-    setActiveSaveJobMeta(null)
+    stepOffsetByGroupKeyRef.current = {}
+    stepPhotoCountByGroupKeyRef.current = {}
   }, [])
 
   return {
-    saveJobQueue,
     runningSaveTarget,
     bulkSaveActive,
-    prepareProgress,
     photoFlowTotal,
     groupSavePhaseByKey,
     hidePreviewPanelWhileSaving,

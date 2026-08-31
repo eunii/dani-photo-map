@@ -46,6 +46,7 @@ export class ScanPhotoLibraryUseCase {
   ): Promise<ScanPhotoLibraryResult> {
     const validatedCommand = scanPhotoLibraryCommandSchema.parse(command)
     const onScanProgress = options?.onScanProgress
+    const onFileOutcome = options?.onFileOutcome
     const paths = createScanPathContext(validatedCommand)
     const issues: ScanPhotoLibraryIssue[] = []
     const logFilePath = startAppLogRun('scan')
@@ -176,7 +177,8 @@ export class ScanPhotoLibraryUseCase {
             photoIdToGroupFileLabel,
             onScanProgress,
             this.dependencies,
-            this.rules
+            this.rules,
+            onFileOutcome
           )
     const index = await buildMergedLibraryIndex(
       paths,

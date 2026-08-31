@@ -1,3 +1,4 @@
+import type { RenamePlanExecuteOptions } from '@application/dto/RenamePlanProgress'
 import {
   type UpdatePhotoGroupCommand,
   updatePhotoGroupCommandSchema
@@ -46,7 +47,10 @@ export class UpdatePhotoGroupUseCase {
     private readonly rules: OrganizationRules = defaultOrganizationRules
   ) {}
 
-  async execute(command: UpdatePhotoGroupCommand): Promise<LibraryIndex> {
+  async execute(
+    command: UpdatePhotoGroupCommand,
+    options?: RenamePlanExecuteOptions
+  ): Promise<LibraryIndex> {
     const validatedCommand = updatePhotoGroupCommandSchema.parse(command)
     const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
     const index = await this.loadEditableIndex(outputRoot)
@@ -77,19 +81,9 @@ export class UpdatePhotoGroupUseCase {
       rules: this.rules
     })
 
-    await applyRenamePlan(renamePlan, this.fileSystem)
-
-    const updatedPhotos = index.photos.map((photo) => {
-      const plannedRename = renamePlan.find((plan) => plan.photoId === photo.id)
-
-      return plannedRename
-        ? {
-            ...photo,
-            outputRelativePath: plannedRename.nextOutputRelativePath
-          }
-        : photo
-    })
-
+    // 그룹의 제목/동행자/메모/대표 사진은 물리적 이동과 무관하게 결정되므로
+    // 파일 이동을 시작하기 전에 미리 계산해 둔다 — 이동 도중 체크포인트
+    // 저장을 하더라도 그룹 정보는 항상 최종 상태와 동일하다.
     const updatedGroups = index.groups.map((currentGroup) =>
       currentGroup.id === validatedCommand.groupId
         ? {
@@ -104,6 +98,38 @@ export class UpdatePhotoGroupUseCase {
               representativePhoto?.thumbnailRelativePath
           }
         : currentGroup
+    )
+
+    let checkpointedPhotos = index.photos
+
+    await applyRenamePlan(renamePlan, this.fileSystem, {
+      onProgress: options?.onRenameProgress,
+      onBatchComplete: async ({ completedRenames }) => {
+        const patch = new Map(
+          completedRenames.map((plan) => [plan.photoId, plan.nextOutputRelativePath])
+        )
+
+        checkpointedPhotos = checkpointedPhotos.map((photo) =>
+          patch.has(photo.id)
+            ? { ...photo, outputRelativePath: patch.get(photo.id)! }
+            : photo
+        )
+
+        await this.libraryIndexStore.save({
+          ...index,
+          photos: checkpointedPhotos,
+          groups: updatedGroups
+        })
+      }
+    })
+
+    const finalPatch = new Map(
+      renamePlan.map((plan) => [plan.photoId, plan.nextOutputRelativePath])
+    )
+    const updatedPhotos = index.photos.map((photo) =>
+      finalPatch.has(photo.id)
+        ? { ...photo, outputRelativePath: finalPatch.get(photo.id)! }
+        : photo
     )
     const updatedIndex: LibraryIndex = {
       ...index,

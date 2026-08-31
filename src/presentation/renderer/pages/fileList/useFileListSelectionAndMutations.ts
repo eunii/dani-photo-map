@@ -18,7 +18,7 @@ import {
   deletePhotosFromLibraryIpc,
   generateMissingThumbnailsIpc
 } from '@presentation/renderer/utils/photoAppIpc'
-import type { LibraryIndexView } from '@shared/types/preload'
+import type { LibraryIndexView, RenamePlanProgressPayload } from '@shared/types/preload'
 
 import type { MoveDestinationFolderOption } from '@presentation/renderer/pages/fileList/useFileListMoveDestination'
 
@@ -60,6 +60,10 @@ export function useFileListSelectionAndMutations({
   const [renameNewTitle, setRenameNewTitle] = useState('')
   const [isRenaming, setIsRenaming] = useState(false)
   const [isMovingPhotos, setIsMovingPhotos] = useState(false)
+  const [renameProgress, setRenameProgress] =
+    useState<RenamePlanProgressPayload | null>(null)
+  const [moveProgress, setMoveProgress] =
+    useState<RenamePlanProgressPayload | null>(null)
   const [deletePhotosConfirmOpen, setDeletePhotosConfirmOpen] = useState(false)
   const [deleteFolderConfirmOpen, setDeleteFolderConfirmOpen] = useState(false)
   const [isDeletingPhotos, setIsDeletingPhotos] = useState(false)
@@ -153,7 +157,12 @@ export function useFileListSelectionAndMutations({
     }
 
     setIsMovingPhotos(true)
+    setMoveProgress(null)
     setErrorMessage(null)
+
+    const unsubscribe = window.photoApp.onRenamePlanProgress((payload) => {
+      setMoveProgress(payload)
+    })
 
     try {
       if (destinationGroupId) {
@@ -180,11 +189,16 @@ export function useFileListSelectionAndMutations({
         error instanceof Error ? error.message : '사진 이동에 실패했습니다.'
       )
     } finally {
+      unsubscribe()
       setIsMovingPhotos(false)
+      setMoveProgress(null)
     }
   }
 
-  async function handleConfirmRename(): Promise<void> {
+  async function handleConfirmRename(scope: {
+    photoIdsInCurrentFolder: string[]
+    hasPhotosOutsideCurrentFolder: boolean
+  }): Promise<void> {
     if (!outputRoot || !libraryIndex || !renameTargetGroupId) {
       return
     }
@@ -199,15 +213,39 @@ export function useFileListSelectionAndMutations({
       return
     }
     setIsRenaming(true)
+    setRenameProgress(null)
     setErrorMessage(null)
+    const unsubscribe = window.photoApp.onRenamePlanProgress((payload) => {
+      setRenameProgress(payload)
+    })
     try {
-      await window.photoApp.updatePhotoGroup({
-        outputRoot,
-        groupId: renameTargetGroupId,
-        title: trimmed,
-        companions: group.companions ?? [],
-        notes: group.notes
-      })
+      if (scope.hasPhotosOutsideCurrentFolder) {
+        // The group also has photos in other folders — only split off the
+        // photos actually in the folder being browsed into a new group, so
+        // the rest of the group keeps its current name.
+        if (scope.photoIdsInCurrentFolder.length === 0) {
+          setErrorMessage('이 폴더에 속한 사진을 찾을 수 없습니다.')
+          return
+        }
+        await window.photoApp.movePhotosToGroup({
+          outputRoot,
+          sourceGroupId: renameTargetGroupId,
+          photoIds: scope.photoIdsInCurrentFolder,
+          newGroup: {
+            title: trimmed,
+            companions: group.companions ?? [],
+            notes: group.notes
+          }
+        })
+      } else {
+        await window.photoApp.updatePhotoGroup({
+          outputRoot,
+          groupId: renameTargetGroupId,
+          title: trimmed,
+          companions: group.companions ?? [],
+          notes: group.notes
+        })
+      }
       setRenameDialogOpen(false)
       await reloadLibraryIndex()
     } catch (error) {
@@ -215,7 +253,9 @@ export function useFileListSelectionAndMutations({
         error instanceof Error ? error.message : '이름 변경에 실패했습니다.'
       )
     } finally {
+      unsubscribe()
       setIsRenaming(false)
+      setRenameProgress(null)
     }
   }
 
@@ -306,6 +346,8 @@ export function useFileListSelectionAndMutations({
     setRenameNewTitle,
     isRenaming,
     isMovingPhotos,
+    renameProgress,
+    moveProgress,
     deletePhotosConfirmOpen,
     setDeletePhotosConfirmOpen,
     deleteFolderConfirmOpen,

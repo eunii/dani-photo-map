@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
+import type { RenamePlanExecuteOptions } from '@application/dto/RenamePlanProgress'
 import {
   type MovePhotosToGroupCommand,
   movePhotosToGroupCommandSchema
@@ -51,7 +52,10 @@ export class MovePhotosToGroupUseCase {
     private readonly rules: OrganizationRules = defaultOrganizationRules
   ) {}
 
-  async execute(command: MovePhotosToGroupCommand): Promise<LibraryIndex> {
+  async execute(
+    command: MovePhotosToGroupCommand,
+    options?: RenamePlanExecuteOptions
+  ): Promise<LibraryIndex> {
     const validatedCommand = movePhotosToGroupCommandSchema.parse(command)
     const outputRoot = normalizePathSeparators(validatedCommand.outputRoot)
     let index = await this.loadEditableIndex(outputRoot)
@@ -70,9 +74,9 @@ export class MovePhotosToGroupUseCase {
         title,
         displayTitle: title,
         photoIds: [],
-        companions: [],
+        companions: validatedCommand.newGroup.companions ?? [],
         representativeGps,
-        notes: undefined
+        notes: validatedCommand.newGroup.notes
       }
 
       index = {
@@ -114,7 +118,9 @@ export class MovePhotosToGroupUseCase {
         allowDestinationWithoutGps: allowDestinationWithoutGpsForIndex(
           index,
           destinationGroupId
-        )
+        ),
+        onRenameProgress: options?.onRenameProgress,
+        onIndexCheckpoint: (partialIndex) => this.libraryIndexStore.save(partialIndex)
       })
     } else {
       const bySource = groupPhotoIdsBySourceGroup(index, photoIds)
@@ -138,7 +144,9 @@ export class MovePhotosToGroupUseCase {
           allowDestinationWithoutGps: allowDestinationWithoutGpsForIndex(
             next,
             destinationGroupId
-          )
+          ),
+          onRenameProgress: options?.onRenameProgress,
+          onIndexCheckpoint: (partialIndex) => this.libraryIndexStore.save(partialIndex)
         })
       }
 

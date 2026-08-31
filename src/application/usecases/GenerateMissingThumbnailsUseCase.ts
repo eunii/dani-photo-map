@@ -10,11 +10,7 @@ import { defaultOrganizationRules } from '@domain/policies/OrganizationRules'
 import type { LibraryIndex } from '@domain/entities/LibraryIndex'
 import type { Photo } from '@domain/entities/Photo'
 import { isVideoLibraryFileName } from '@shared/constants/mediaExtensions'
-import {
-  NO_OUTPUT_PATH_SEGMENT,
-  ROOT_LEVEL_FILES_SEGMENT,
-  parseOutputDir
-} from '@shared/utils/outputRelativePath'
+import { matchesOutputPath } from '@shared/utils/outputRelativePath'
 import { joinPathSegments, normalizePathSeparators } from '@shared/utils/path'
 import { mapWithConcurrencyLimit } from '@shared/utils/mapWithConcurrencyLimit'
 
@@ -28,24 +24,7 @@ export interface GenerateMissingThumbnailsResult {
 }
 
 function matchesRequestedPath(photo: Photo, pathSegments: string[]): boolean {
-  const parsed = parseOutputDir(photo.outputRelativePath)
-
-  if (pathSegments.length === 1 && pathSegments[0] === NO_OUTPUT_PATH_SEGMENT) {
-    return parsed.kind === 'orphan'
-  }
-
-  if (pathSegments.length === 1 && pathSegments[0] === ROOT_LEVEL_FILES_SEGMENT) {
-    return parsed.kind === 'rootFile'
-  }
-
-  if (parsed.kind !== 'nested') {
-    return false
-  }
-
-  return (
-    parsed.segments.length === pathSegments.length &&
-    parsed.segments.every((segment, index) => segment === pathSegments[index])
-  )
+  return matchesOutputPath(photo.outputRelativePath, pathSegments)
 }
 
 export class GenerateMissingThumbnailsUseCase {

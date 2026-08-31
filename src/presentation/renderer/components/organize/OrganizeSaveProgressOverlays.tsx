@@ -19,7 +19,6 @@ interface OrganizeSaveProgressOverlaysProps {
   photoFlowTotal: number
   totalPhotosInPreview: number
   photosSavedCount: number
-  prepareProgress: { completed: number; total: number } | null
   groupSavePhaseByKey: Record<string, GroupSavePhase>
   runningSaveTarget: string | null
   activeSaveJobMeta: {
@@ -41,7 +40,6 @@ export function OrganizeSaveProgressOverlays({
   photoFlowTotal,
   totalPhotosInPreview,
   photosSavedCount,
-  prepareProgress,
   groupSavePhaseByKey,
   runningSaveTarget,
   activeSaveJobMeta,
@@ -82,11 +80,6 @@ export function OrganizeSaveProgressOverlays({
           <SaveProgressCard
             title="이후 그룹 일괄 저장 진행 중"
             description="현재 위저드 위치부터 남은 그룹만 복사·인덱스에 반영합니다. 막대에는 원본 읽기·해시와 복사·썸네일이 함께 반영됩니다."
-            prepareProgressText={
-              prepareProgress
-                ? `원본 읽기·해시 (현재 그룹) ${prepareProgress.completed} / ${prepareProgress.total}장`
-                : null
-            }
             overallPct={overallPct}
             processedCount={photosSavedCount}
             totalCount={denom}
@@ -132,11 +125,6 @@ export function OrganizeSaveProgressOverlays({
         return (
           <SaveProgressCard
             title="저장 진행 중"
-            prepareProgressText={
-              prepareProgress
-                ? `원본 읽기·해시 (현재 그룹) ${prepareProgress.completed} / ${prepareProgress.total}장`
-                : null
-            }
             overallPct={overallPct}
             processedCount={photosSavedCount}
             totalCount={denom}

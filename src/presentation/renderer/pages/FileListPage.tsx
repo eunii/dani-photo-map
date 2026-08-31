@@ -128,7 +128,8 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
     canRenameGroupFolderFromTree,
     groupsInCurrentFolder,
     renamePreviewRows,
-    renamePreviewSummary
+    renamePreviewSummary,
+    renameScope
   } = useFileListRenamePreview({
     outputRoot,
     libraryIndex,
@@ -320,6 +321,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
         destinationSelect={destinationSelect}
         manualDestinationFolder={manualDestinationFolder}
         isMovingPhotos={mutations.isMovingPhotos}
+        moveProgress={mutations.moveProgress}
         selectedForMoveSize={mutations.selectedForMove.size}
         onMoveOverlayClick={() => {
           if (!mutations.isMovingPhotos) {
@@ -333,11 +335,13 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
         onMoveConfirm={() => void mutations.handleConfirmMoveToGroup()}
         renameDialogOpen={mutations.renameDialogOpen}
         isRenaming={mutations.isRenaming}
+        renameProgress={mutations.renameProgress}
         renameTargetGroupId={mutations.renameTargetGroupId}
         renameNewTitle={mutations.renameNewTitle}
         groupsInCurrentFolder={groupsInCurrentFolder}
         renamePreviewSummary={renamePreviewSummary}
         renamePreviewRows={renamePreviewRows}
+        hasPhotosOutsideCurrentFolder={renameScope.hasPhotosOutsideCurrentFolder}
         onRenameOverlayClick={() => {
           if (!mutations.isRenaming) {
             mutations.setRenameDialogOpen(false)
@@ -347,7 +351,7 @@ export function FileListPage({ onNavigateToSettings }: FileListPageProps) {
         onRenameTargetGroupIdChange={mutations.setRenameTargetGroupId}
         onRenameNewTitleChange={mutations.setRenameNewTitle}
         onRenameCancel={() => mutations.setRenameDialogOpen(false)}
-        onRenameConfirm={() => void mutations.handleConfirmRename()}
+        onRenameConfirm={() => void mutations.handleConfirmRename(renameScope)}
         deletePhotosConfirmOpen={mutations.deletePhotosConfirmOpen}
         isDeletingPhotos={mutations.isDeletingPhotos}
         onDeletePhotosOverlayClick={() => {

@@ -12,14 +12,18 @@ export const photoAppInvokeChannels = {
   generateMissingThumbnails: 'photo-app/generate-missing-thumbnails',
   startOrganizeJob: 'photo-app/start-organize-job',
   getOrganizeJobStatus: 'photo-app/get-organize-job-status',
-  cancelOrganizeJob: 'photo-app/cancel-organize-job'
+  cancelOrganizeJob: 'photo-app/cancel-organize-job',
+  getOrganizeFileOutcomeLog: 'photo-app/get-organize-file-outcome-log',
+  getSaveHistory: 'photo-app/get-save-history'
 } as const
 
 export const photoAppEventChannels = {
   scanPhotoLibraryProgress: 'photo-app/scan-photo-library-progress',
   previewPendingOrganizationProgress:
     'photo-app/preview-pending-organization-progress',
-  organizeJobStatusChanged: 'photo-app/organize-job-status-changed'
+  organizeJobStatusChanged: 'photo-app/organize-job-status-changed',
+  organizeFileOutcome: 'photo-app/organize-file-outcome',
+  renamePlanProgress: 'photo-app/rename-plan-progress'
 } as const
 
 export type PhotoAppInvokeChannel =

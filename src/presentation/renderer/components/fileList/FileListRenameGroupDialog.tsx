@@ -1,5 +1,7 @@
 import type { MouseEvent } from 'react'
 
+import type { RenamePlanProgressPayload } from '@shared/types/preload'
+
 export interface FileListRenameGroupFolderOption {
   id: string
   title: string
@@ -15,11 +17,13 @@ export interface FileListRenamePreviewRow {
 
 export interface FileListRenameGroupDialogProps {
   isRenaming: boolean
+  renameProgress: RenamePlanProgressPayload | null
   renameTargetGroupId: string
   renameNewTitle: string
   groupsInCurrentFolder: FileListRenameGroupFolderOption[]
   renamePreviewSummary: { changedCount: number; unchangedCount: number }
   renamePreviewRows: FileListRenamePreviewRow[]
+  hasPhotosOutsideCurrentFolder: boolean
   onOverlayClick: () => void
   onContentClick: (event: MouseEvent) => void
   onRenameTargetGroupIdChange: (groupId: string) => void
@@ -30,11 +34,13 @@ export interface FileListRenameGroupDialogProps {
 
 export function FileListRenameGroupDialog({
   isRenaming,
+  renameProgress,
   renameTargetGroupId,
   renameNewTitle,
   groupsInCurrentFolder,
   renamePreviewSummary,
   renamePreviewRows,
+  hasPhotosOutsideCurrentFolder,
   onOverlayClick,
   onContentClick,
   onRenameTargetGroupIdChange,
@@ -64,6 +70,13 @@ export function FileListRenameGroupDialog({
           이 경로 목록에 나온 폴더(그룹)의 표시 이름을 바꿉니다. 파일이 디스크에서 해당
           이름 폴더로 다시 정리될 수 있습니다.
         </p>
+        {hasPhotosOutsideCurrentFolder ? (
+          <p className="mt-2 rounded-[10px] bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+            이 그룹은 다른 폴더에도 사진이 있습니다. 지금 보고 있는 폴더의 사진만 새
+            이름의 별도 그룹으로 분리되고, 다른 폴더의 사진은 기존 이름 그대로
+            유지됩니다.
+          </p>
+        ) : null}
         <label className="mt-4 block text-sm text-[var(--app-foreground)]">
           <span className="mb-1 block font-medium">대상 폴더</span>
           <select
@@ -159,6 +172,33 @@ export function FileListRenameGroupDialog({
             )}
           </div>
         </div>
+        {isRenaming && renameProgress ? (
+          <div className="sticky bottom-[52px] bg-[var(--app-surface)] pt-2">
+            <div className="flex items-center justify-between text-[11px] text-[var(--app-muted)]">
+              <span>
+                이동 중 {renameProgress.completed} / {renameProgress.total}장
+              </span>
+              <span>
+                {Math.min(
+                  100,
+                  Math.round(
+                    (renameProgress.completed / Math.max(1, renameProgress.total)) *
+                      100
+                  )
+                )}
+                %
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--app-border)_42%,transparent)]">
+              <div
+                className="h-full rounded-full bg-[var(--app-accent-strong)] transition-[width] duration-300"
+                style={{
+                  width: `${Math.min(100, Math.round((renameProgress.completed / Math.max(1, renameProgress.total)) * 100))}%`
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
         <div className="sticky bottom-0 mt-6 flex justify-end gap-2 bg-[var(--app-surface)] pt-2">
           <button
             type="button"
@@ -174,7 +214,11 @@ export function FileListRenameGroupDialog({
             disabled={isRenaming || !renameTargetGroupId}
             onClick={onConfirm}
           >
-            {isRenaming ? '저장 중…' : '이름 저장'}
+            {isRenaming
+              ? renameProgress
+                ? `저장 중… (${renameProgress.completed}/${renameProgress.total})`
+                : '저장 중…'
+              : '이름 저장'}
           </button>
         </div>
       </div>

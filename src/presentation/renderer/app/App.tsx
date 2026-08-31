@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   DashboardIcon,
@@ -9,6 +9,7 @@ import {
 } from '@presentation/renderer/components/app/AppIcons'
 import { AppSidebar } from '@presentation/renderer/components/app/AppSidebar'
 import { AppTopbar } from '@presentation/renderer/components/app/AppTopbar'
+import { OrganizeJobLogDrawer } from '@presentation/renderer/components/organize/OrganizeJobLogDrawer'
 import { SettingsDrawer } from '@presentation/renderer/components/settings/SettingsDrawer'
 import { BrowsePage } from '@presentation/renderer/pages/BrowsePage'
 import { DashboardPage } from '@presentation/renderer/pages/DashboardPage'
@@ -105,6 +106,16 @@ export function App() {
   )
   const organizeJobStatus = useOrganizeJobStore((state) => state.status)
   const setOrganizeJobStatus = useOrganizeJobStore((state) => state.setStatus)
+  const appendOrganizeFileOutcome = useOrganizeJobStore(
+    (state) => state.appendFileOutcome
+  )
+  const setOrganizeFileOutcomeLog = useOrganizeJobStore(
+    (state) => state.setFileOutcomeLog
+  )
+  const clearOrganizeFileOutcomeLog = useOrganizeJobStore(
+    (state) => state.clearFileOutcomeLog
+  )
+  const [isOrganizeLogOpen, setIsOrganizeLogOpen] = useState(false)
   const [route, setRoute] = useState<AppRoute>(() =>
     getInitialRoute(window.location.hash, outputRoot)
   )
@@ -176,26 +187,67 @@ export function App() {
     }
   }, [setOrganizeJobStatus])
 
+  useEffect(() => {
+    let unmounted = false
+
+    void window.photoApp.getOrganizeFileOutcomeLog().then((log) => {
+      if (!unmounted) {
+        setOrganizeFileOutcomeLog(log)
+      }
+    })
+
+    const unsubscribe = window.photoApp.onOrganizeFileOutcome((payload) => {
+      appendOrganizeFileOutcome(payload)
+    })
+
+    return () => {
+      unmounted = true
+      unsubscribe()
+    }
+  }, [setOrganizeFileOutcomeLog, appendOrganizeFileOutcome])
+
+  const lastClearedJobIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (
+      organizeJobStatus.mode !== 'save-bulk' ||
+      organizeJobStatus.phase !== 'save-running' ||
+      !organizeJobStatus.jobId
+    ) {
+      return
+    }
+
+    if (lastClearedJobIdRef.current === organizeJobStatus.jobId) {
+      return
+    }
+
+    lastClearedJobIdRef.current = organizeJobStatus.jobId
+    clearOrganizeFileOutcomeLog()
+  }, [organizeJobStatus.mode, organizeJobStatus.phase, organizeJobStatus.jobId, clearOrganizeFileOutcomeLog])
+
   const routeMeta = useMemo(() => ROUTE_META[route], [route])
   const organizeJobBadgeText = useMemo(() => {
-    if (
-      organizeJobStatus.phase !== 'preview-running' &&
-      organizeJobStatus.phase !== 'save-running'
-    ) {
-      return undefined
+    switch (organizeJobStatus.phase) {
+      case 'preview-running':
+        return '정리 후보 불러오는 중'
+      case 'save-running': {
+        const total =
+          organizeJobStatus.progress.total > 0 ? organizeJobStatus.progress.total : 1
+        const percent = Math.min(
+          100,
+          Math.round((organizeJobStatus.progress.completed / total) * 100)
+        )
+        return `백그라운드 저장 ${percent}%`
+      }
+      case 'completed':
+        return organizeJobStatus.mode === 'save-bulk' ? '정리 저장 완료' : undefined
+      case 'failed':
+        return organizeJobStatus.mode === 'save-bulk' ? '정리 저장 실패' : undefined
+      case 'cancelled':
+        return '정리 저장 취소됨'
+      default:
+        return undefined
     }
-
-    if (organizeJobStatus.phase === 'preview-running') {
-      return '정리 후보 불러오는 중'
-    }
-
-    const total = organizeJobStatus.progress.total > 0 ? organizeJobStatus.progress.total : 1
-    const percent = Math.min(
-      100,
-      Math.round((organizeJobStatus.progress.completed / total) * 100)
-    )
-
-    return `백그라운드 저장 ${percent}%`
   }, [organizeJobStatus])
 
   function navigate(nextRoute: AppRoute): void {
@@ -277,6 +329,7 @@ export function App() {
             title={routeMeta.title}
             description={routeMeta.description}
             organizeJobBadgeText={organizeJobBadgeText}
+            onOrganizeJobBadgeClick={() => setIsOrganizeLogOpen(true)}
           />
 
           <section className="app-page-section flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] p-0.5 lg:p-1">
@@ -289,6 +342,7 @@ export function App() {
             ) : route === 'organize' ? (
               <OrganizePage
                 onNavigateToSettings={openSettings}
+                onOpenSaveHistory={() => setIsOrganizeLogOpen(true)}
               />
             ) : route === 'files' ? (
               <FileListPage onNavigateToSettings={openSettings} />
@@ -330,6 +384,12 @@ export function App() {
 
             closeSettings()
           }}
+        />
+
+        <OrganizeJobLogDrawer
+          isOpen={isOrganizeLogOpen}
+          onOpenChange={setIsOrganizeLogOpen}
+          outputRoot={outputRoot}
         />
       </section>
     </main>

@@ -10,7 +10,6 @@ import {
   effectiveGroupTitle,
   formatGroupSavePhaseLabel
 } from '@presentation/renderer/pages/organize/organizeGroupForm'
-import type { OrganizeSaveJob } from '@presentation/renderer/pages/organize/useOrganizeSaveJobs'
 import type { Dispatch, SetStateAction } from 'react'
 
 function formatPreviewSkipStageLabel(
@@ -43,7 +42,6 @@ interface OrganizePagePreviewSectionProps {
   photosSavedCount: number
   groupSavePhaseByKey: Record<string, GroupSavePhase>
   runningSaveTarget: string | null
-  saveJobQueue: OrganizeSaveJob[]
   groupTitleInputs: Record<string, string>
   setGroupTitleInputs: Dispatch<SetStateAction<Record<string, string>>>
   groupCompanionsInputs: Record<string, string>
@@ -69,7 +67,6 @@ export function OrganizePagePreviewSection({
   photosSavedCount,
   groupSavePhaseByKey,
   runningSaveTarget,
-  saveJobQueue,
   groupTitleInputs,
   setGroupTitleInputs,
   groupCompanionsInputs,
@@ -215,7 +212,6 @@ export function OrganizePagePreviewSection({
                 missingGpsGroupingBasis={missingGpsGroupingBasis}
                 orderedPreviewGroups={orderedPreviewGroups}
                 wizardStepIndex={wizardStepIndex}
-                saveJobQueue={saveJobQueue}
                 runningSaveTarget={runningSaveTarget}
                 groupSavePhaseByKey={groupSavePhaseByKey}
                 groupTitleInputs={groupTitleInputs}

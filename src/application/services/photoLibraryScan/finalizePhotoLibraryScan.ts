@@ -1,4 +1,7 @@
-import type { ScanPhotoLibraryExecuteOptions } from '@application/dto/ScanPhotoLibraryProgress'
+import type {
+  FileOutcomePayload,
+  ScanPhotoLibraryExecuteOptions
+} from '@application/dto/ScanPhotoLibraryProgress'
 import type {
   InBatchDuplicateDetail,
   ExistingOutputSkipDetail,
@@ -82,7 +85,8 @@ export async function finalizePreparedPhotos(
   photoIdToGroupFileLabel: Map<string, string>,
   onScanProgress: ScanPhotoLibraryExecuteOptions['onScanProgress'] | undefined,
   dependencies: ScanPhotoLibraryDependencies,
-  rules: OrganizationRules
+  rules: OrganizationRules,
+  onFileOutcome?: ScanPhotoLibraryExecuteOptions['onFileOutcome']
 ): Promise<FinalizedScanResult> {
   const photosForCanonical = preparedPhotoRecords
     .filter((record) => photoRecordMatchesCopyFilter(record, copyFilter))
@@ -168,6 +172,7 @@ export async function finalizePreparedPhotos(
       completed: finalizeCompleted,
       total: finalizeTotal
     })
+    onFileOutcome?.(toFileOutcomePayload(preparedPhotoRecord, finalizedPhoto, issues))
 
     if (finalizedPhoto === 'duplicate') {
       duplicateCount += 1
@@ -196,6 +201,46 @@ export async function finalizePreparedPhotos(
     skippedExistingCount,
     inBatchDuplicateDetails,
     existingOutputSkipDetails
+  }
+}
+
+function toFileOutcomePayload(
+  preparedPhotoRecord: PreparedPhotoRecord,
+  finalizedPhoto: Photo | 'duplicate' | 'existing-output-duplicate' | null,
+  issues: ScanPhotoLibraryIssue[]
+): FileOutcomePayload {
+  const sourcePath = preparedPhotoRecord.context.sourcePath
+  const sourceFileName = preparedPhotoRecord.photo.sourceFileName
+  const photoId = preparedPhotoRecord.photo.id
+
+  if (finalizedPhoto === 'duplicate') {
+    return { sourcePath, sourceFileName, status: 'duplicate', photoId }
+  }
+
+  if (finalizedPhoto === 'existing-output-duplicate') {
+    return { sourcePath, sourceFileName, status: 'existing-output-duplicate', photoId }
+  }
+
+  if (finalizedPhoto) {
+    return {
+      sourcePath,
+      sourceFileName,
+      status: 'saved',
+      photoId,
+      outputRelativePath: finalizedPhoto.outputRelativePath
+    }
+  }
+
+  const matchingIssue = [...issues]
+    .reverse()
+    .find((issue) => issue.sourcePath === sourcePath && issue.severity === 'error')
+
+  return {
+    sourcePath,
+    sourceFileName,
+    status: 'failed',
+    photoId,
+    message: matchingIssue?.message
   }
 }
 

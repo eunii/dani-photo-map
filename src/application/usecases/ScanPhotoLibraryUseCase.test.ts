@@ -124,6 +124,61 @@ describe('ScanPhotoLibraryUseCase', () => {
     expect(getSavedIndex()?.photos[0]?.sourceFileName).toBe('IMG_0002.JPG')
   })
 
+  it('emits onFileOutcome once per record with the resolved status', async () => {
+    const { dependencies } = createUseCaseDependencies()
+
+    dependencies.fileSystem.listPhotoFiles.mockResolvedValue([
+      'C:\\source\\IMG_0001.JPG',
+      'C:\\source\\IMG_0002.JPG'
+    ])
+    dependencies.metadataReader.read.mockResolvedValue({})
+    dependencies.hasher.createSha256
+      .mockResolvedValueOnce('hash-1')
+      .mockResolvedValueOnce('hash-2')
+    dependencies.fileSystem.copyFile
+      .mockRejectedValueOnce(
+        new PhotoFileConflictError(
+          'C:/output/0000/00/0000-00-00_000000_base.JPG'
+        )
+      )
+      .mockResolvedValueOnce(undefined)
+    dependencies.thumbnailGenerator.generateForPhoto.mockResolvedValue('thumb.webp')
+
+    const outcomes: Array<{
+      sourceFileName: string
+      status: string
+      hasMessage: boolean
+    }> = []
+    const useCase = new ScanPhotoLibraryUseCase(dependencies)
+    await useCase.execute(
+      {
+        sourceRoot: 'C:\\source',
+        outputRoot: 'C:\\output'
+      },
+      {
+        onFileOutcome: (payload) => {
+          outcomes.push({
+            sourceFileName: payload.sourceFileName,
+            status: payload.status,
+            hasMessage: Boolean(payload.message)
+          })
+        }
+      }
+    )
+
+    expect(outcomes).toHaveLength(2)
+    expect(outcomes).toContainEqual({
+      sourceFileName: 'IMG_0001.JPG',
+      status: 'failed',
+      hasMessage: true
+    })
+    expect(outcomes).toContainEqual({
+      sourceFileName: 'IMG_0002.JPG',
+      status: 'saved',
+      hasMessage: false
+    })
+  })
+
   it('marks later files as duplicates when hashes match', async () => {
     const { dependencies, getSavedIndex } = createUseCaseDependencies()
 

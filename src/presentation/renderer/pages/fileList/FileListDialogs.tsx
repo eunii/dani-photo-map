@@ -4,7 +4,7 @@ import { FileListMovePhotosDialog } from '@presentation/renderer/components/file
 import { FileListRenameGroupDialog } from '@presentation/renderer/components/fileList/FileListRenameGroupDialog'
 import { folderRenameLabelWithoutDate } from '@presentation/renderer/pages/fileList/fileListPageFormat'
 import type { MoveDestinationFolderOption } from '@presentation/renderer/pages/fileList/useFileListMoveDestination'
-import type { LibraryIndexView } from '@shared/types/preload'
+import type { LibraryIndexView, RenamePlanProgressPayload } from '@shared/types/preload'
 
 interface RenamePreviewRow {
   photoId: string
@@ -25,6 +25,7 @@ interface FileListDialogsProps {
   destinationSelect: string
   manualDestinationFolder: string
   isMovingPhotos: boolean
+  moveProgress: RenamePlanProgressPayload | null
   selectedForMoveSize: number
   onMoveOverlayClick: () => void
   onMoveContentClick: (event: React.MouseEvent) => void
@@ -34,11 +35,13 @@ interface FileListDialogsProps {
   onMoveConfirm: () => void
   renameDialogOpen: boolean
   isRenaming: boolean
+  renameProgress: RenamePlanProgressPayload | null
   renameTargetGroupId: string
   renameNewTitle: string
   groupsInCurrentFolder: { id: string; title: string }[]
   renamePreviewSummary: { changedCount: number; unchangedCount: number }
   renamePreviewRows: RenamePreviewRow[]
+  hasPhotosOutsideCurrentFolder: boolean
   onRenameOverlayClick: () => void
   onRenameContentClick: (event: React.MouseEvent) => void
   onRenameTargetGroupIdChange: (id: string) => void
@@ -71,6 +74,7 @@ export function FileListDialogs({
   destinationSelect,
   manualDestinationFolder,
   isMovingPhotos,
+  moveProgress,
   selectedForMoveSize,
   onMoveOverlayClick,
   onMoveContentClick,
@@ -80,11 +84,13 @@ export function FileListDialogs({
   onMoveConfirm,
   renameDialogOpen,
   isRenaming,
+  renameProgress,
   renameTargetGroupId,
   renameNewTitle,
   groupsInCurrentFolder,
   renamePreviewSummary,
   renamePreviewRows,
+  hasPhotosOutsideCurrentFolder,
   onRenameOverlayClick,
   onRenameContentClick,
   onRenameTargetGroupIdChange,
@@ -117,6 +123,7 @@ export function FileListDialogs({
           destinationSelect={destinationSelect}
           manualDestinationFolder={manualDestinationFolder}
           isMovingPhotos={isMovingPhotos}
+          moveProgress={moveProgress}
           onOverlayClick={onMoveOverlayClick}
           onContentClick={onMoveContentClick}
           onDestinationSelectChange={onDestinationSelectChange}
@@ -129,11 +136,13 @@ export function FileListDialogs({
       {renameDialogOpen && libraryIndex && outputRoot ? (
         <FileListRenameGroupDialog
           isRenaming={isRenaming}
+          renameProgress={renameProgress}
           renameTargetGroupId={renameTargetGroupId}
           renameNewTitle={renameNewTitle}
           groupsInCurrentFolder={groupsInCurrentFolder}
           renamePreviewSummary={renamePreviewSummary}
           renamePreviewRows={renamePreviewRows}
+          hasPhotosOutsideCurrentFolder={hasPhotosOutsideCurrentFolder}
           onOverlayClick={onRenameOverlayClick}
           onContentClick={onRenameContentClick}
           onRenameTargetGroupIdChange={(id) => {

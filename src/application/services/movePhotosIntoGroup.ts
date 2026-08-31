@@ -1,3 +1,4 @@
+import type { RenamePlanExecuteOptions } from '@application/dto/RenamePlanProgress'
 import type { PhotoLibraryFileSystemPort } from '@application/ports/PhotoLibraryFileSystemPort'
 import {
   applyRenamePlan,
@@ -149,6 +150,9 @@ export async function movePhotosIntoGroup(params: {
   rules: OrganizationRules
   /** When true, merges into the destination even if it has no representative GPS (region from folder/path). */
   allowDestinationWithoutGps?: boolean
+  onRenameProgress?: RenamePlanExecuteOptions['onRenameProgress']
+  /** 이동 도중 일부가 완료될 때마다 그 시점까지 반영된 인덱스를 저장하고 싶을 때 사용. */
+  onIndexCheckpoint?: (partialIndex: LibraryIndex) => Promise<void>
 }): Promise<LibraryIndex> {
   const {
     allowDestinationWithoutGps = false,
@@ -158,7 +162,9 @@ export async function movePhotosIntoGroup(params: {
     outputRoot,
     photoIds,
     rules,
-    sourceGroupId
+    sourceGroupId,
+    onRenameProgress,
+    onIndexCheckpoint
   } = params
 
   if (sourceGroupId === destinationGroupId) {
@@ -275,19 +281,12 @@ export async function movePhotosIntoGroup(params: {
     rules
   })
 
-  await applyRenamePlan(renamePlan, fileSystem)
-
-  const renamedPhotos = updatedPhotosBeforeRename.map((photo) => {
-    const plannedRename = renamePlan.find((plan) => plan.photoId === photo.id)
-
-    return plannedRename
-      ? {
-          ...photo,
-          outputRelativePath: plannedRename.nextOutputRelativePath
-        }
-      : photo
-  })
-  const renamedPhotosById = new Map(renamedPhotos.map((photo) => [photo.id, photo] as const))
+  // 그룹 소속(대표 사진 포함)은 물리적 이동 완료 여부와 무관하게 결정되므로,
+  // 파일 이동을 시작하기 전에 미리 계산해 둔다 — 이렇게 하면 이동 도중 중간
+  // 저장을 하더라도 그룹 구조는 항상 최종 상태와 동일하게 유지된다.
+  const photosByIdBeforeRename = new Map(
+    updatedPhotosBeforeRename.map((photo) => [photo.id, photo] as const)
+  )
   const sourcePhotoIdSet = new Set(sourceGroup.photoIds)
   const destinationPhotoIdSet = new Set(destinationGroup.photoIds)
 
@@ -304,14 +303,14 @@ export async function movePhotosIntoGroup(params: {
   const updatedGroups = index.groups
     .map((group) => {
       if (group.id === sourceGroup.id) {
-        return rebuildGroup(group, [...sourcePhotoIdSet], renamedPhotosById)
+        return rebuildGroup(group, [...sourcePhotoIdSet], photosByIdBeforeRename)
       }
 
       if (group.id === destinationGroup.id) {
         return rebuildGroup(
           group,
           [...destinationPhotoIdSet],
-          renamedPhotosById,
+          photosByIdBeforeRename,
           destinationTitles
         )
       }
@@ -319,6 +318,40 @@ export async function movePhotosIntoGroup(params: {
       return group
     })
     .filter((group): group is PhotoGroup => group !== null)
+
+  let checkpointedPhotos = updatedPhotosBeforeRename
+
+  await applyRenamePlan(renamePlan, fileSystem, {
+    onProgress: onRenameProgress,
+    onBatchComplete: onIndexCheckpoint
+      ? async ({ completedRenames }) => {
+          const patch = new Map(
+            completedRenames.map((plan) => [plan.photoId, plan.nextOutputRelativePath])
+          )
+
+          checkpointedPhotos = checkpointedPhotos.map((photo) =>
+            patch.has(photo.id)
+              ? { ...photo, outputRelativePath: patch.get(photo.id)! }
+              : photo
+          )
+
+          await onIndexCheckpoint({
+            ...index,
+            photos: checkpointedPhotos,
+            groups: updatedGroups
+          })
+        }
+      : undefined
+  })
+
+  const finalPatch = new Map(
+    renamePlan.map((plan) => [plan.photoId, plan.nextOutputRelativePath])
+  )
+  const renamedPhotos = updatedPhotosBeforeRename.map((photo) =>
+    finalPatch.has(photo.id)
+      ? { ...photo, outputRelativePath: finalPatch.get(photo.id)! }
+      : photo
+  )
 
   return {
     ...index,

@@ -343,4 +343,30 @@ describe('MovePhotosToGroupUseCase', () => {
     expect(store.save).toHaveBeenCalled()
     expect(fileSystem.moveFile).toHaveBeenCalled()
   })
+
+  it('carries companions/notes over onto a newly created group (folder-scoped rename split)', async () => {
+    const fileSystem = createFileSystem()
+    const store = {
+      load: vi.fn().mockResolvedValue(createLibraryIndex()),
+      save: vi.fn()
+    }
+    const useCase = new MovePhotosToGroupUseCase(store, fileSystem)
+
+    const title = 'x-new-manual-group-unique-002'
+    const updatedIndex = await useCase.execute({
+      outputRoot: 'C:/photos/output',
+      sourceGroupId: 'group-source',
+      newGroup: { title, companions: ['Alice', 'Bob'], notes: '메모' },
+      photoIds: ['source-photo-1']
+    })
+
+    const manualGroup = updatedIndex.groups.find(
+      (group) => group.title === title && group.id.startsWith('group|manual-')
+    )
+
+    expect(manualGroup).toMatchObject({
+      companions: ['Alice', 'Bob'],
+      notes: '메모'
+    })
+  })
 })

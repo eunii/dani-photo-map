@@ -10,7 +10,10 @@ export const movePhotosToGroupCommandSchema = z
     newGroup: z
       .object({
         /** 비어 있으면 `년/월` 바로 아래(그룹 폴더 없음)로 정리됩니다. */
-        title: z.string()
+        title: z.string(),
+        /** 생략 시 빈 배열(동행자 없음). 그룹 분리 이름 변경 등에서 원본 그룹 값을 이어받을 때 사용. */
+        companions: z.array(z.string()).optional(),
+        notes: z.string().optional()
       })
       .optional()
   })

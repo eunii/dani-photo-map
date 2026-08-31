@@ -16,6 +16,7 @@ import {
   createLoadLibraryIndexUseCase,
   createMovePhotosToGroupUseCase,
   createPreviewPendingOrganizationUseCase,
+  createSaveHistoryStore,
   createScanPhotoLibraryUseCase,
   createUpdatePhotoGroupUseCase
 } from '@presentation/electron/main/factories/createPhotoAppUseCases'
@@ -26,11 +27,14 @@ import {
 import { appLog } from '@shared/logging/appLog'
 import { normalizePathSeparators } from '@shared/utils/path'
 import { isResolvedPathUnderRoot } from '@shared/utils/pathScope'
+import type { FileOutcomePayload } from '@application/dto/ScanPhotoLibraryProgress'
+import type { SaveHistoryEntry } from '@application/dto/SaveHistoryEntry'
 import type {
   DeleteOutputFolderSubtreeRequest,
   DeletePhotosFromLibraryRequest,
   DirectorySelectionOptions,
   GenerateMissingThumbnailsRequest,
+  GetSaveHistoryRequest,
   LoadLibraryGroupDetailRequest,
   LoadLibraryIndexRequest,
   MovePhotosToGroupRequest,
@@ -46,6 +50,8 @@ import type {
 type OrganizeTaskKind = 'preview-load' | 'scan-save'
 type OrganizeJobMode = StartOrganizeJobRequest['mode']
 
+const ORGANIZE_FILE_OUTCOME_LOG_LIMIT = 5000
+
 let organizeJobStatus: OrganizeJobStatus = {
   jobId: null,
   phase: 'idle',
@@ -55,6 +61,49 @@ let organizeJobStatus: OrganizeJobStatus = {
   progress: {
     completed: 0,
     total: 0
+  }
+}
+
+let organizeFileOutcomeLog: FileOutcomePayload[] = []
+
+function appendOrganizeFileOutcome(payload: FileOutcomePayload): void {
+  organizeFileOutcomeLog.push(payload)
+  if (organizeFileOutcomeLog.length > ORGANIZE_FILE_OUTCOME_LOG_LIMIT) {
+    organizeFileOutcomeLog = organizeFileOutcomeLog.slice(
+      organizeFileOutcomeLog.length - ORGANIZE_FILE_OUTCOME_LOG_LIMIT
+    )
+  }
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send(photoAppEventChannels.organizeFileOutcome, payload)
+  }
+}
+
+async function recordSaveHistoryEntry(params: {
+  jobId: string
+  startedAtIso: string
+  sourceRoot: string
+  outputRoot: string
+  phase: SaveHistoryEntry['phase']
+  message?: string
+  summary: ScanPhotoLibrarySummary | null
+}): Promise<void> {
+  try {
+    await createSaveHistoryStore().append(params.outputRoot, {
+      jobId: params.jobId,
+      startedAtIso: params.startedAtIso,
+      completedAtIso: new Date().toISOString(),
+      sourceRoot: params.sourceRoot,
+      outputRoot: params.outputRoot,
+      phase: params.phase,
+      message: params.message,
+      copiedCount: params.summary?.copiedCount ?? 0,
+      duplicateCount: params.summary?.duplicateCount ?? 0,
+      skippedExistingCount: params.summary?.skippedExistingCount ?? 0,
+      warningCount: params.summary?.warningCount ?? 0,
+      failureCount: params.summary?.failureCount ?? 0
+    })
+  } catch (error) {
+    appLog('warn', 'failed to record save history', error)
   }
 }
 
@@ -190,6 +239,7 @@ function toErrorMessage(error: unknown): string {
 
 async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
   const jobId = `organize-${Date.now()}`
+  const startedAtIso = new Date().toISOString()
   let mergedSummary: ScanPhotoLibrarySummary | null = null
   const shouldNotifyPreviewCompletion =
     request.mode !== 'preview' || request.notifyCompletion !== false
@@ -200,7 +250,7 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
     mode: request.mode,
     sourceRoot: request.sourceRoot,
     outputRoot: request.outputRoot,
-    startedAtIso: new Date().toISOString(),
+    startedAtIso,
     updatedAtIso: new Date().toISOString(),
     isCancelRequested: false,
     message: undefined,
@@ -216,6 +266,10 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
     summary: undefined
   }
   emitOrganizeJobStatus()
+
+  if (request.mode === 'save-bulk') {
+    organizeFileOutcomeLog = []
+  }
 
   try {
     if (request.mode === 'preview') {
@@ -267,6 +321,15 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
           phase: 'cancelled',
           message: '사용자 요청으로 작업이 취소되었습니다.'
         })
+        await recordSaveHistoryEntry({
+          jobId,
+          startedAtIso,
+          sourceRoot: request.sourceRoot,
+          outputRoot: request.outputRoot,
+          phase: 'cancelled',
+          message: '사용자 요청으로 작업이 취소되었습니다.',
+          summary: mergedSummary
+        })
         return
       }
 
@@ -314,6 +377,12 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
                 currentGroupKey
               }
             })
+          },
+          onFileOutcome: (payload) => {
+            if (organizeJobStatus.jobId !== jobId) {
+              return
+            }
+            appendOrganizeFileOutcome(payload)
           }
         }
       )
@@ -342,6 +411,14 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
         body: `복사 ${summary.copiedCount}장, 경고 ${summary.warningCount}건, 오류 ${summary.failureCount}건`
       })
     }
+    await recordSaveHistoryEntry({
+      jobId,
+      startedAtIso,
+      sourceRoot: request.sourceRoot,
+      outputRoot: request.outputRoot,
+      phase: 'completed',
+      summary: mergedSummary
+    })
   } catch (error) {
     appLog('error', `organize job failed mode=${request.mode}`, error)
     updateOrganizeJobStatus({
@@ -353,6 +430,17 @@ async function runOrganizeJob(request: StartOrganizeJobRequest): Promise<void> {
         kind: request.mode === 'preview' ? 'preview-load' : 'scan-save',
         ok: false,
         body: toErrorMessage(error)
+      })
+    }
+    if (request.mode === 'save-bulk') {
+      await recordSaveHistoryEntry({
+        jobId,
+        startedAtIso,
+        sourceRoot: request.sourceRoot,
+        outputRoot: request.outputRoot,
+        phase: 'failed',
+        message: toErrorMessage(error),
+        summary: mergedSummary
       })
     }
   }
@@ -513,6 +601,19 @@ function registerIpcHandlers(): void {
     return organizeJobStatus
   })
 
+  ipcMain.removeHandler(photoAppInvokeChannels.getOrganizeFileOutcomeLog)
+  ipcMain.handle(photoAppInvokeChannels.getOrganizeFileOutcomeLog, async () => {
+    return organizeFileOutcomeLog
+  })
+
+  ipcMain.removeHandler(photoAppInvokeChannels.getSaveHistory)
+  ipcMain.handle(
+    photoAppInvokeChannels.getSaveHistory,
+    async (_event, request: GetSaveHistoryRequest) => {
+      return createSaveHistoryStore().load(request.outputRoot)
+    }
+  )
+
   ipcMain.removeHandler(photoAppInvokeChannels.cancelOrganizeJob)
   ipcMain.handle(photoAppInvokeChannels.cancelOrganizeJob, async () => {
     if (
@@ -537,9 +638,13 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(photoAppInvokeChannels.updatePhotoGroup)
   ipcMain.handle(
     photoAppInvokeChannels.updatePhotoGroup,
-    async (_event, command: UpdatePhotoGroupRequest) => {
+    async (event, command: UpdatePhotoGroupRequest) => {
       const useCase = createUpdatePhotoGroupUseCase()
-      const index = await useCase.execute(command)
+      const index = await useCase.execute(command, {
+        onRenameProgress: (payload) => {
+          event.sender.send(photoAppEventChannels.renamePlanProgress, payload)
+        }
+      })
 
       return toLibraryIndexView(index)
     }
@@ -548,9 +653,13 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(photoAppInvokeChannels.movePhotosToGroup)
   ipcMain.handle(
     photoAppInvokeChannels.movePhotosToGroup,
-    async (_event, command: MovePhotosToGroupRequest) => {
+    async (event, command: MovePhotosToGroupRequest) => {
       const useCase = createMovePhotosToGroupUseCase()
-      const index = await useCase.execute(command)
+      const index = await useCase.execute(command, {
+        onRenameProgress: (payload) => {
+          event.sender.send(photoAppEventChannels.renamePlanProgress, payload)
+        }
+      })
 
       return toLibraryIndexView(index)
     }
